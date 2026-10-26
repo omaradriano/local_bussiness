@@ -52,7 +52,7 @@ jobs:
         with:
           node-version: 24
           cache: pnpm
-      - run: npm i -g vercel@59.23.2
+      - run: npm i -g vercel@65.3.1
       # The staging Vercel project's "production" target is the staging site.
       - run: vercel pull --yes --environment=production --token="$VERCEL_TOKEN"
       - run: vercel build --prod --token="$VERCEL_TOKEN"
