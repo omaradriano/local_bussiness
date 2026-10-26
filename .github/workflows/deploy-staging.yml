@@ -1,0 +1,59 @@
+name: deploy-staging
+
+on:
+  push:
+    branches: [main]
+  workflow_dispatch:
+
+concurrency:
+  group: deploy-staging
+  cancel-in-progress: false
+
+permissions:
+  contents: read
+
+# Order: migrations (phase 1) -> api + worker -> web, so the new web never talks to an old API.
+jobs:
+  api:
+    name: railway api + worker
+    runs-on: ubuntu-latest
+    environment: staging
+    env:
+      RAILWAY_TOKEN: ${{ secrets.RAILWAY_TOKEN }}
+    steps:
+      - uses: actions/checkout@v5
+      - run: npm i -g @railway/cli@5.49.6
+      - run: railway up services/api --path-as-root --service api --ci
+      - run: railway up services/api --path-as-root --service worker --ci
+      - name: healthcheck
+        run: |
+          for i in $(seq 1 20); do
+            curl -fsS "${{ vars.API_URL }}/healthz" && exit 0
+            sleep 6
+          done
+          exit 1
+
+  web:
+    name: vercel web
+    needs: api
+    runs-on: ubuntu-latest
+    environment: staging
+    env:
+      VERCEL_TOKEN: ${{ secrets.VERCEL_TOKEN }}
+      VERCEL_ORG_ID: ${{ secrets.VERCEL_ORG_ID }}
+      VERCEL_PROJECT_ID: ${{ secrets.VERCEL_PROJECT_ID }}
+    defaults:
+      run:
+        working-directory: apps/client
+    steps:
+      - uses: actions/checkout@v5
+      - uses: pnpm/action-setup@v4
+      - uses: actions/setup-node@v5
+        with:
+          node-version: 24
+          cache: pnpm
+      - run: npm i -g vercel@65.3.1
+      # The staging Vercel project's "production" target is the staging site.
+      - run: vercel pull --yes --environment=production --token="$VERCEL_TOKEN"
+      - run: vercel build --prod --token="$VERCEL_TOKEN"
+      - run: vercel deploy --prebuilt --prod --token="$VERCEL_TOKEN"

@@ -1,0 +1,13 @@
+{
+  "$schema": "https://openapi.vercel.sh/vercel.json",
+  "framework": null,
+  "installCommand": "pnpm install --frozen-lockfile",
+  "buildCommand": "pnpm expo export --platform web",
+  "outputDirectory": "dist",
+  "git": { "deploymentEnabled": false },
+  "rewrites": [{ "source": "/(.*)", "destination": "/index.html" }],
+  "headers": [
+    { "source": "/sw.js", "headers": [{ "key": "Cache-Control", "value": "no-cache" }] },
+    { "source": "/manifest.json", "headers": [{ "key": "Cache-Control", "value": "no-cache" }] }
+  ]
+}
