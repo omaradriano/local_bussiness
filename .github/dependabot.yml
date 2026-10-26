@@ -1,0 +1,17 @@
+version: 2
+updates:
+  - package-ecosystem: npm
+    directory: /
+    schedule:
+      interval: weekly
+    groups:
+      expo:
+        patterns: ["expo*", "react", "react-dom", "react-native*", "@expo/*"]
+  - package-ecosystem: gomod
+    directory: /services/api
+    schedule:
+      interval: weekly
+  - package-ecosystem: github-actions
+    directory: /
+    schedule:
+      interval: weekly
