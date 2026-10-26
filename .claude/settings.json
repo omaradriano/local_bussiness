@@ -41,7 +41,6 @@
       "Bash(supabase link *)",
       "Bash(eas build *)",
       "Bash(eas update *)",
-      "Bash(wrangler deploy *)",
       "Bash(tofu apply *)",
       "Bash(terraform apply *)"
     ],
@@ -50,7 +49,6 @@
       "Bash(railway *production*)",
       "Bash(eas *production*)",
       "Bash(supabase *production*)",
-      "Bash(wrangler *production*)",
       "Bash(eas submit *)",
       "Bash(aws s3 rm *)",
       "Bash(aws s3api delete-*)",
