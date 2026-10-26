@@ -1,0 +1,61 @@
+{
+  "$schema": "https://json.schemastore.org/claude-code-settings.json",
+  "attribution": {
+    "commit": "",
+    "pr": ""
+  },
+  "permissions": {
+    "allow": [
+      "Bash(pnpm *)",
+      "Bash(make -C services/api *)",
+      "Bash(go test *)",
+      "Bash(go build *)",
+      "Bash(go vet *)",
+      "Bash(supabase start)",
+      "Bash(supabase stop)",
+      "Bash(supabase status)",
+      "Bash(supabase db reset)",
+      "Bash(supabase migration new *)",
+      "Bash(supabase gen types *)",
+      "Bash(gh pr *)",
+      "Bash(gh run *)",
+      "Bash(railway status)",
+      "Bash(railway logs *)",
+      "Bash(vercel ls *)",
+      "Bash(vercel inspect *)",
+      "Bash(vercel logs *)",
+      "Bash(aws s3 ls *)"
+    ],
+    "ask": [
+      "Bash(git push *)",
+      "Bash(gh pr merge *)",
+      "Bash(gh release *)",
+      "Bash(git tag *)",
+      "Bash(railway up *)",
+      "Bash(railway variables *)",
+      "Bash(vercel deploy *)",
+      "Bash(vercel env *)",
+      "Bash(supabase db push *)",
+      "Bash(supabase link *)",
+      "Bash(eas build *)",
+      "Bash(eas update *)",
+      "Bash(wrangler deploy *)",
+      "Bash(tofu apply *)",
+      "Bash(terraform apply *)"
+    ],
+    "deny": [
+      "Bash(* --prod*)",
+      "Bash(railway *production*)",
+      "Bash(eas *production*)",
+      "Bash(supabase *production*)",
+      "Bash(wrangler *production*)",
+      "Bash(eas submit *)",
+      "Bash(aws s3 rm *)",
+      "Bash(aws s3api delete-*)",
+      "Bash(aws iam *)",
+      "Read(./.env.local)",
+      "Edit(./.env.local)",
+      "Write(./.env.local)"
+    ]
+  }
+}
