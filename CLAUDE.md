@@ -9,6 +9,9 @@ Plataforma multi-negocio de reservas, pedidos y rentas (uñas, florería, renta 
 - `services/api`: Go (chi, pgx, sqlc); binarios `cmd/api` y `cmd/worker`.
 - `supabase/`: única fuente de verdad del esquema (migraciones, RLS, seed). Sin Supabase local ni Docker: el desarrollo usa el proyecto en la nube `local-bussiness-staging` (ref `upsolqbrrpvhiusnlsfh`), vinculado con `supabase link`.
 - Hosting: Railway (api, worker), Vercel (web), Supabase, AWS S3 + Cloudflare.
+  - Railway: proyecto `local-bussiness`, entorno `staging`, servicios `api` y `worker` (misma imagen de `services/api`, us-west2). Su configuración vive en `.railway/railway.ts` (Infrastructure as Code; `railway.json` está obsoleto desde 2026-12-01): `railway config plan` para ver cambios, `railway config apply` para aplicarlos. El código se sube con `railway up services/api --path-as-root --service <api|worker>`.
+  - API staging: https://api-staging-4e97e.up.railway.app
+  - Vercel: proyecto `local-bussiness-staging` ligado a `apps/client` (`vercel.json` ahí). Despliegue solo desde GitHub Actions (deploy por Git desactivado).
 
 ## Comandos
 

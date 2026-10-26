@@ -30,3 +30,6 @@ supabase/.temp/
 .DS_Store
 .vscode/
 .idea/
+
+# vercel link metadata
+.vercel/
