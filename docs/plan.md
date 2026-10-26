@@ -681,10 +681,10 @@ Cinco decisiones conviene cerrarlas antes de la fase 1; el resto del plan ya se 
 
 **Decisiones pendientes**
 
-- [ ] **Web pública:** Expo web (un solo proyecto, propuesta por defecto) o Next.js para el catálogo si el SEO resulta prioritario.
-- [ ] **URL de cada negocio:** ruta `dominio.com/<slug>` (más simple, propuesta) o subdominio `<slug>.dominio.com`.
-- [ ] **Acceso de clientes finales:** solo nombre y teléfono (propuesta) o verificación por código SMS/WhatsApp para reducir apartados falsos.
-- [ ] **Cola de jobs:** tabla propia con `SKIP LOCKED` o librería River.
+- [x] **Web pública:** Expo web (decidido 2026-10-26). Si el SEO llega a ser prioritario, el catálogo migra a Next.js reutilizando `packages/shared`.
+- [x] **URL de cada negocio:** ruta `dominio.com/<slug>` (decidido 2026-10-26).
+- [x] **Acceso de clientes finales:** solo nombre y teléfono (decidido 2026-10-26); apartados falsos se controlan con rate limit, límite de pendientes por teléfono y expiración sin anticipo.
+- [x] **Cola de jobs:** librería River sobre Postgres (decidido 2026-10-26).
 - [ ] **Pagos en línea (fase 7):** Mercado Pago, Stripe o Conekta, según comisiones y lo que usen los negocios piloto.
 
 **Instrucciones para Claude Code** (copiar a `CLAUDE.md`)
