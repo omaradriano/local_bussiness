@@ -1,3 +1,5 @@
 packages:
   - apps/*
   - packages/*
+  # Go service: package.json only wraps make so turbo runs it with dev/test/lint
+  - services/*

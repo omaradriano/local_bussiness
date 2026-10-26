@@ -1,7 +1,10 @@
 .PHONY: run worker test lint build
 
+# Don't depend on the caller's env: turbo filters it and a global GO111MODULE=off breaks module builds.
+export GO111MODULE=on
+
 run:
-	go run ./cmd/api
+	PORT=$${PORT:-8090} go run ./cmd/api
 
 worker:
 	go run ./cmd/worker

@@ -12,7 +12,8 @@ Plataforma multi-negocio de reservas, pedidos y rentas (uñas, florería, renta 
 
 ## Comandos
 
-- `pnpm dev`, `pnpm test`, `pnpm typecheck`, `pnpm lint`
+- `pnpm dev`: API en `localhost:8090` y cliente Expo en `localhost:8082` (puertos fijos para no chocar con otros proyectos en 8080/8081)
+- `pnpm test`, `pnpm typecheck`, `pnpm lint` (incluyen Go vía `services/api/package.json` → `make`)
 - `pnpm gen`: tipos de Supabase + cliente OpenAPI
 - `make -C services/api test`
 
