@@ -7,7 +7,7 @@ Plataforma multi-negocio de reservas, pedidos y rentas (uñas, florería, renta 
 - `apps/client`: Expo + Expo Router (iOS, Android, web: catálogo público `/<slug>` y PWA `/admin`).
 - `packages/shared` (zod, enums, terminología por giro, fechas), `packages/api-client` (generado de `openapi.yaml`), `packages/ui`.
 - `services/api`: Go (chi, pgx, sqlc); binarios `cmd/api` y `cmd/worker`.
-- `supabase/`: única fuente de verdad del esquema (migraciones, RLS, seed).
+- `supabase/`: única fuente de verdad del esquema (migraciones, RLS, seed). Sin Supabase local ni Docker: el desarrollo usa el proyecto en la nube `local-bussiness-staging` (ref `upsolqbrrpvhiusnlsfh`), vinculado con `supabase link`.
 - Hosting: Railway (api, worker), Vercel (web), Supabase, AWS S3 + Cloudflare.
 
 ## Comandos
@@ -38,7 +38,7 @@ Plataforma multi-negocio de reservas, pedidos y rentas (uñas, florería, renta 
 | `gh` | ramas, PRs, leer checks y logs | tags de release, merge a `main` |
 | `railway` | `status`, `logs`, leer variables, `up` a staging | cambiar variables, cualquier acción en production |
 | `vercel` | `ls`, `inspect`, `logs`, deploy de preview | `env add/rm`, `--prod` |
-| `supabase` | `start`, `db reset`, `migration new`, `gen types` local; `db push` a staging | `db push` a production |
+| `supabase` | `migration new`, `migration list`, `gen types --linked` | `db push` y `db reset` (staging), cualquier acción en production |
 | `aws` | `s3 ls`, revisar políticas y CORS en staging, `plan` de `infra/aws/` | crear o cambiar buckets o IAM, borrar objetos, production |
 | `eas` | `build` de prueba, `update` a preview | `submit`, `update` a production |
 
