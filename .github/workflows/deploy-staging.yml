@@ -21,10 +21,26 @@ concurrency:
 permissions:
   contents: read
 
-# Order: migrations (phase 1) -> api + worker -> web, so the new web never talks to an old API.
+# Order: migrations -> api + worker -> web, so the new web never talks to an old API.
 jobs:
+  migrations:
+    name: supabase migrations
+    runs-on: ubuntu-latest
+    environment: staging
+    env:
+      SUPABASE_ACCESS_TOKEN: ${{ secrets.SUPABASE_ACCESS_TOKEN }}
+      SUPABASE_DB_PASSWORD: ${{ secrets.SUPABASE_DB_PASSWORD }}
+    steps:
+      - uses: actions/checkout@v7
+      - uses: supabase/setup-cli@v1
+        with:
+          version: 2.120.0
+      - run: supabase link --project-ref "${{ vars.SUPABASE_PROJECT_REF }}"
+      - run: supabase db push
+
   api:
     name: railway api + worker
+    needs: migrations
     runs-on: ubuntu-latest
     environment: staging
     env:
