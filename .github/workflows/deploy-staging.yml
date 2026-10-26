@@ -3,6 +3,15 @@ name: deploy-staging
 on:
   push:
     branches: [main]
+    # Only redeploy when something that ships changes (docs-only merges skip it).
+    paths:
+      - services/api/**
+      - apps/client/**
+      - packages/**
+      - supabase/**
+      - package.json
+      - pnpm-lock.yaml
+      - .github/workflows/deploy-staging.yml
   workflow_dispatch:
 
 concurrency:

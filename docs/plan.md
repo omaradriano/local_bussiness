@@ -48,7 +48,7 @@ Un solo código TypeScript con Expo genera la app iOS/Android y la web (catálog
 | API | Go 1.23+, chi, pgx, sqlc, en contenedor Docker | Disponibilidad, creación de reservas sin choques, cambios de estado, pagos, enlaces de WhatsApp, URLs prefirmadas de S3, endpoints públicos del catálogo |
 | Worker | Mismo binario Go con otro comando | Jobs programados: recordatorios, rentas vencidas, expiración de apartados sin anticipo, purga de INE |
 | Base de datos y auth | Supabase (Postgres, Auth) | Datos multi-negocio con RLS y login de dueños y empleados |
-| Archivos | AWS S3 + Cloudflare como CDN, AWS SDK for Go v2, libvips | Fotos del catálogo, INE y evidencias de renta; subida directa con URL prefirmada |
+| Archivos | AWS S3 + CloudFront como CDN, AWS SDK for Go v2, libvips | Fotos del catálogo, INE y evidencias de renta; subida directa con URL prefirmada |
 | Hosting de la API | Railway | Servicios `api` y `worker` desde la misma imagen Docker, entornos staging y production |
 | Hosting web | Vercel | Export web estático de Expo (catálogo público + PWA admin), CDN, dominio propio y preview por cada PR |
 | CI/CD | GitHub Actions | Checks en cada PR y despliegues a staging y production (ver CI/CD y despliegue) |
@@ -97,8 +97,7 @@ Un repositorio con pnpm workspaces + Turborepo para TypeScript y un módulo Go i
 ├─ supabase/
 │  ├─ migrations/          # esquema, RLS, funciones, triggers
 │  └─ seed.sql             # negocios demo: uñas, flores, herramienta
-├─ infra/aws/              # buckets S3, IAM y CORS como código
-├─ infra/cloudflare/       # Worker de imágenes, DNS y reglas de caché (wrangler)
+├─ infra/aws/              # buckets S3, IAM, CORS y CloudFront como código
 ├─ openapi.yaml            # contrato de la API
 ├─ CLAUDE.md               # convenciones para Claude Code
 └─ .github/workflows/      # ci.yml, deploy-staging.yml, deploy-production.yml, mobile.yml
@@ -124,7 +123,7 @@ Todas las tablas de negocio llevan `business_id`, y el choque de horarios o unid
 | `business_hours` | business\_id, staff\_id nullable, weekday, opens\_at, closes\_at | Horario general o por empleada |
 | `blackouts` | business\_id, staff\_id / item\_unit\_id nullable, starts\_at, ends\_at, reason | Días cerrados, vacaciones, unidad en reparación |
 | `catalog_items` | business\_id, kind (`service` \| `product` \| `rental`), name, description, price, active, sort, campos por tipo (abajo) | Un solo catálogo para los tres giros |
-| `catalog_item_images` | item\_id, s3\_key, variants jsonb, width, height, blurhash, status, sort | Bucket de catálogo en S3, servido por Cloudflare; miniaturas en \`variants\` |
+| `catalog_item_images` | item\_id, s3\_key, variants jsonb, width, height, blurhash, status, sort | Bucket de catálogo en S3, servido por CloudFront; miniaturas en \`variants\` |
 | `item_options` | item\_id, name, type (`text` \| `choice`), choices jsonb, extra\_price, required | Personalización: mensaje de tarjeta, color, tamaño |
 | `staff_services` | staff\_id, item\_id | Qué servicios hace cada empleada |
 | `item_units` | item\_id, code (número de serie o etiqueta), status (`available` \| `maintenance` \| `retired`), notes | Cada pieza física rentable |
@@ -360,7 +359,7 @@ Ningún negocio debe poder ver datos de otro, y eso se garantiza en la base de d
 
 | Bucket (uno por entorno) | Acceso | Contenido |
 | --- | --- | --- |
-| `catalog` | Privado en S3; lectura pública solo a través del Worker de Cloudflare; escritura con URL prefirmada | Fotos de artículos y logo |
+| `catalog` | Privado en S3; lectura pública solo a través de CloudFront (Origin Access Control); escritura con URL prefirmada | Fotos de artículos y logo |
 | `private-docs` | Privado; lectura con URL prefirmada de 5 minutos | INE de clientes de renta |
 | `rental-evidence` | Privado; lectura con URL prefirmada | Fotos de salida y devolución |
 
@@ -370,16 +369,16 @@ Ningún negocio debe poder ver datos de otro, y eso se garantiza en la base de d
 - Block Public Access activo en los tres buckets, cifrado SSE-S3 y versionado en los privados.
 - Usuario o rol IAM exclusivo de la API con permisos mínimos (`s3:PutObject`, `s3:GetObject`, `s3:DeleteObject`) sobre sus buckets; credenciales solo en variables de Railway.
 - CORS de los buckets limitado a los dominios de Vercel del entorno.
-- Configuración de buckets e IAM versionada en `infra/aws/` (Terraform u OpenTofu), y la de Cloudflare en infra/cloudflare/.
+- Configuración de buckets e IAM versionada en `infra/aws/` (Terraform u OpenTofu), incluida la distribución de CloudFront.
 
-**Imágenes: Cloudflare como CDN y miniaturas**
+**Imágenes: CloudFront como CDN y miniaturas**
 
-Las imágenes públicas se sirven desde Cloudflare con caché de larga duración, y cada foto se guarda en varios tamaños para que listas, catálogo y detalle descarguen solo lo que muestran.
+Las imágenes públicas se sirven desde CloudFront con caché de larga duración, y cada foto se guarda en varios tamaños para que listas, catálogo y detalle descarguen solo lo que muestran.
 
 | Pieza | Detalle |
 | --- | --- |
-| Dominio | `img.<dominio>` en Cloudflare con proxy activo; los registros de Vercel quedan en "solo DNS" para no duplicar CDN |
-| Worker de imágenes | Cloudflare Worker en `infra/cloudflare/` que recibe `img.<dominio>/<llave>`, firma la petición al bucket privado de catálogo (aws4fetch con credenciales de solo lectura) y guarda la respuesta en la caché de Cloudflare. El bucket nunca es público |
+| Dominio | Mientras no haya dominio propio, el dominio `*.cloudfront.net` de la distribución; después `img.<dominio>` con certificado de ACM (us-east-1) |
+| Distribución | CloudFront con el bucket de catálogo como origen privado vía Origin Access Control (OAC); la política del bucket solo permite `s3:GetObject` a esa distribución. El bucket nunca es público |
 | Caché | Llaves inmutables (cada versión de una foto tiene su propio uuid), así se usa `Cache-Control: public, max-age=31536000, immutable` y nunca hace falta purgar |
 | Variantes | `thumb` 160 px, `card` 480 px, `detail` 1080 px y el original; en WebP (y AVIF cuando convenga), sin metadatos EXIF |
 | Generación | Job `generate_image_variants` del worker con libvips (govips): al confirmar la subida, descarga el original, crea las variantes, las sube a S3 y llena `variants`, `width`, `height` y `blurhash` |
@@ -388,9 +387,9 @@ Las imágenes públicas se sirven desde Cloudflare con caché de larga duración
 - Flujo de subida: `POST /v1/b/{id}/uploads` devuelve la URL prefirmada → el cliente sube el original → `POST /v1/b/{id}/uploads/{uploadId}/complete` valida que el objeto exista y encola el job. Mientras se generan las variantes, la imagen queda en `status = processing` y el panel muestra el marcador.
 - El cliente reduce la foto antes de subirla (lado mayor de 2048 px) para ahorrar datos móviles y tiempo de procesamiento.
 - Las fotos privadas (INE y evidencias de renta) también tienen miniatura para que el panel cargue rápido, pero se quedan en sus buckets privados y se leen con URL prefirmada, nunca por el CDN.
-- Credenciales nuevas en `.env.local` y Railway: `CLOUDFLARE_API_TOKEN` (solo Workers y DNS de la zona del proyecto) y `CLOUDFLARE_ACCOUNT_ID`; el Worker usa un usuario IAM propio con `s3:GetObject` solo sobre el bucket de catálogo.
-- CLI `wrangler`: Claude Code puede desplegar el Worker a staging y leer sus logs; cambios de DNS, reglas de caché y cualquier acción en producción requieren tu aprobación.
-- Tests: el job genera las variantes esperadas con dimensiones y formato correctos, rechaza archivos que no son imagen y es idempotente si se ejecuta dos veces; el Worker responde 404 a llaves fuera del bucket de catálogo.
+- Sin credenciales nuevas: CloudFront se configura con las mismas credenciales de AWS (`infra/aws/`); la API recibe solo la URL base pública del CDN (`CATALOG_CDN_URL`).
+- Claude Code puede hacer `plan` de la distribución en staging; crear o cambiar la distribución, invalidaciones y cualquier acción en producción requieren tu aprobación.
+- Tests: el job genera las variantes esperadas con dimensiones y formato correctos, rechaza archivos que no son imagen y es idempotente si se ejecuta dos veces; CloudFront no sirve llaves fuera del bucket de catálogo y el bucket rechaza lecturas directas.
 
 **Endpoints públicos**
 
@@ -495,7 +494,7 @@ Tú colocas las credenciales en un archivo local que nunca se sube al repo; Clau
 | 3 | Railway staging | Proyecto, servicios `api` y `worker`, healthcheck | 0 |
 | 4 | Vercel | Proyecto web, preview por PR, despliegue desde Actions | 0 |
 | 5 | Supabase staging | Proyecto remoto, migraciones con `db push` | 1 |
-| 6 | AWS S3 y Cloudflare (staging) | Buckets e IAM desde `infra/aws/`; Cloudflare (DNS y Worker de imágenes) desde `infra/cloudflare/` | 1 |
+| 6 | AWS S3 y CloudFront (staging) | Buckets, IAM y distribución de CloudFront desde `infra/aws/` | 1 |
 | 7 | Expo / EAS | Builds de prueba y push | 5 |
 | 8 | Producción | Proyectos de producción y secretos en el Environment `production` de GitHub | 6 |
 
@@ -575,7 +574,7 @@ Monorepo, Supabase local, API Go con `/healthz`, Expo corriendo en iOS, Android 
 
 **Fase 1 — Esquema, RLS y auth**
 
-Migraciones de todas las tablas, exclusiones, RLS, buckets de S3 con IAM, Cloudflare frente al bucket de catálogo, y seed con tres negocios demo.
+Migraciones de todas las tablas, exclusiones, RLS, buckets de S3 con IAM, CloudFront frente al bucket de catálogo, y seed con tres negocios demo.
 
 - [ ] Un usuario de un negocio no puede leer ni escribir datos de otro (tests de RLS).
 - [ ] Insertar dos `booking_resources` cruzados para la misma empleada o unidad falla.

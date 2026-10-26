@@ -8,7 +8,7 @@ Plataforma multi-negocio de reservas, pedidos y rentas (uñas, florería, renta 
 - `packages/shared` (zod, enums, terminología por giro, fechas), `packages/api-client` (generado de `openapi.yaml`), `packages/ui`.
 - `services/api`: Go (chi, pgx, sqlc); binarios `cmd/api` y `cmd/worker`.
 - `supabase/`: única fuente de verdad del esquema (migraciones, RLS, seed). Sin Supabase local ni Docker: el desarrollo usa el proyecto en la nube `local-bussiness-staging` (ref `upsolqbrrpvhiusnlsfh`), vinculado con `supabase link`.
-- Hosting: Railway (api, worker), Vercel (web), Supabase, AWS S3 + Cloudflare.
+- Hosting: Railway (api, worker), Vercel (web), Supabase, AWS S3 + CloudFront.
   - Railway: proyecto `local-bussiness`, entorno `staging`, servicios `api` y `worker` (misma imagen de `services/api`, us-west2). Su configuración vive en `.railway/railway.ts` (Infrastructure as Code; `railway.json` está obsoleto desde 2026-12-01): `railway config plan` para ver cambios, `railway config apply` para aplicarlos. El código se sube con `railway up services/api --path-as-root --service <api|worker>`.
   - API staging: https://api-staging-4e97e.up.railway.app
   - Vercel: proyecto `local-bussiness-staging` ligado a `apps/client` (`vercel.json` ahí). Despliegue solo desde GitHub Actions (deploy por Git desactivado).
@@ -33,7 +33,7 @@ Plataforma multi-negocio de reservas, pedidos y rentas (uñas, florería, renta 
 9. Nunca subas secretos; usa `.env.example`, variables de Railway y Vercel, y secretos de GitHub. Nunca imprimas, copies ni edites `.env.local`.
 10. Si algo del plan es ambiguo o contradictorio, pregunta antes de construir.
 11. Commits y PRs sin ninguna atribución a Claude (nada de `Co-Authored-By: Claude` ni "Generated with Claude Code"). Mensajes en Conventional Commits (`feat:`, `fix:`, `test:`, `chore:`).
-12. Cada vez que un servicio requiera autenticación (Vercel, Railway, Supabase, AWS, Cloudflare, Expo…), detente y avisa qué comando correr; después verifica con un comando de solo lectura (`whoami`, `status`, `ls`) y reporta.
+12. Cada vez que un servicio requiera autenticación (Vercel, Railway, Supabase, AWS, Expo…), detente y avisa qué comando correr; después verifica con un comando de solo lectura (`whoami`, `status`, `ls`) y reporta.
 
 ## CLIs y aprobaciones
 
