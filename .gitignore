@@ -1,0 +1,32 @@
+# deps
+node_modules/
+
+# build
+dist/
+.turbo/
+.expo/
+web-build/
+*.tsbuildinfo
+
+# env: only *.example files are committed
+.env
+.env.*
+!.env.example
+!.env.*.example
+.envrc
+
+# go
+services/api/bin/
+coverage.out
+
+# supabase local
+supabase/.branches/
+supabase/.temp/
+
+# claude code personal settings
+.claude/settings.local.json
+
+# os / editor
+.DS_Store
+.vscode/
+.idea/
