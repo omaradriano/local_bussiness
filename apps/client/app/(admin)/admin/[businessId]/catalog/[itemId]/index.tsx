@@ -5,6 +5,7 @@ import { useCallback, useEffect, useState } from 'react';
 import { ActivityIndicator, Button, Pressable, ScrollView, Text, TextInput, View } from 'react-native';
 import { ItemPhotos } from '../../../../../../components/ItemPhotos';
 import { api } from '../../../../../../lib/api';
+import { uploadPhotos, type PickedPhoto } from '../../../../../../lib/photos';
 import { errorText, fieldErrors } from '../../../../../../lib/errors';
 import { useBusiness } from '../../../../../../lib/useMe';
 
@@ -55,14 +56,15 @@ function toFields(f: Form, kind: ItemKind): { fields?: Fields; errors?: Record<s
 }
 
 export default function CatalogItemForm() {
-  const { businessId, itemId } = useLocalSearchParams<{ businessId: string; itemId: string }>();
+  const { businessId, itemId, error: carriedError } = useLocalSearchParams<{ businessId: string; itemId: string; error?: string }>();
   const { business } = useBusiness(businessId);
   const isNew = itemId === 'new';
   const [item, setItem] = useState<Item | null>(null);
   const [form, setForm] = useState<Form | null>(isNew ? empty : null);
   const [errors, setErrors] = useState<Record<string, string>>({});
-  const [message, setMessage] = useState<string | null>(null);
+  const [message, setMessage] = useState<string | null>(carriedError ?? null);
   const [busy, setBusy] = useState(false);
+  const [pending, setPending] = useState<PickedPhoto[]>([]); // photos chosen before the item exists
 
   useEffect(() => {
     if (isNew) return;
@@ -95,10 +97,22 @@ export default function CatalogItemForm() {
     const res = isNew
       ? await api.POST('/v1/b/{businessId}/catalog', { params: { path: { businessId } }, body: { ...fields, kind, name: fields.name!, price: fields.price! } })
       : await api.PATCH('/v1/b/{businessId}/catalog/{itemId}', { params: { path: { businessId, itemId } }, body: fields });
+    if (!res.data) {
+      setBusy(false);
+      setErrors(fieldErrors(res.error));
+      return setMessage(errorText(res.error, res.response.status));
+    }
+    if (isNew && pending.length) {
+      setMessage(strings.photos.uploading);
+      const err = await uploadPhotos(businessId, res.data.id, pending);
+      if (err) {
+        // The item exists now: continue on its edit screen so the photo can be retried.
+        setBusy(false);
+        return router.replace({ pathname: '/admin/[businessId]/catalog/[itemId]', params: { businessId, itemId: res.data.id, error: err } });
+      }
+    }
     setBusy(false);
-    if (res.data) return router.back();
-    setErrors(fieldErrors(res.error));
-    setMessage(errorText(res.error, res.response.status));
+    router.back();
   }
 
   const field = (key: keyof Form, apiKey: string, label: string, numeric = false) => (
@@ -142,7 +156,7 @@ export default function CatalogItemForm() {
       {item ? (
         <ItemPhotos businessId={businessId} itemId={item.id} images={item.images ?? []} reload={reloadItem} editable={business.role === 'owner'} />
       ) : (
-        <Text style={{ opacity: 0.7 }}>{strings.photos.saveFirst}</Text>
+        <ItemPhotos businessId={businessId} pending={pending} onPendingChange={setPending} editable={business.role === 'owner'} />
       )}
       {message && <Text accessibilityRole="alert">{message}</Text>}
       <Button title={t.save} onPress={save} disabled={busy} />

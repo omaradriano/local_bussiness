@@ -4,11 +4,14 @@ import * as ImagePicker from 'expo-image-picker';
 import { api } from './api';
 import { errorText, fieldErrors } from './errors';
 
+/** A photo chosen and already shrunk on the device, not uploaded yet. */
+export type PickedPhoto = { uri: string };
+
 /**
- * Pick a photo, shrink it to 2048 px (JPEG, also applies the phone's EXIF rotation),
- * upload it straight to S3 with the presigned URL and confirm it. Returns an error message or null.
+ * Pick a photo and shrink it to 2048 px (JPEG; also applies the phone's EXIF rotation).
+ * Returns the local photo, 'cancelled', or an error message.
  */
-export async function pickAndUploadPhoto(businessId: string, itemId: string): Promise<string | null | 'cancelled'> {
+export async function pickPhoto(): Promise<PickedPhoto | 'cancelled' | string> {
   const perm = await ImagePicker.requestMediaLibraryPermissionsAsync();
   if (!perm.granted) return strings.photos.permission;
 
@@ -21,8 +24,12 @@ export async function pickAndUploadPhoto(businessId: string, itemId: string): Pr
   if (target) ctx.resize(target);
   const rendered = await ctx.renderAsync();
   const saved = await rendered.saveAsync({ format: SaveFormat.JPEG, compress: 0.85 });
-  const blob = await (await fetch(saved.uri)).blob();
+  return { uri: saved.uri };
+}
 
+/** Upload a picked photo to an existing item: presigned PUT straight to S3, then confirm. Error message or null. */
+export async function uploadPhoto(businessId: string, itemId: string, photo: PickedPhoto): Promise<string | null> {
+  const blob = await (await fetch(photo.uri)).blob();
   const path = { businessId, itemId };
   const created = await api.POST('/v1/b/{businessId}/catalog/{itemId}/images/', {
     params: { path },
@@ -37,4 +44,13 @@ export async function pickAndUploadPhoto(businessId: string, itemId: string): Pr
     params: { path: { ...path, imageId: created.data.image.id } },
   });
   return done.response.ok ? null : fieldErrors(done.error).file ?? errorText(done.error, done.response.status);
+}
+
+/** Upload several photos in order; returns the first error, if any. */
+export async function uploadPhotos(businessId: string, itemId: string, photos: PickedPhoto[]): Promise<string | null> {
+  for (const p of photos) {
+    const err = await uploadPhoto(businessId, itemId, p);
+    if (err) return err;
+  }
+  return null;
 }

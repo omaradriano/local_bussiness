@@ -78,9 +78,8 @@ export const strings = {
     processing: 'Procesando…',
     failed: 'No se pudo procesar',
     remove: 'Quitar',
-    saveFirst: 'Guarda el artículo para poder agregarle fotos.',
     permission: 'Necesitamos permiso para ver tus fotos.',
-    uploading: 'Subiendo…',
+    uploading: 'Subiendo fotos…',
   },
   staff: {
     title: 'Equipo',
