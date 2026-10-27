@@ -74,12 +74,14 @@ export const strings = {
   },
   photos: {
     title: 'Fotos',
-    add: 'Agregar foto',
+    add: 'Agregar fotos',
     processing: 'Procesando…',
     failed: 'No se pudo procesar',
     remove: 'Quitar',
     permission: 'Necesitamos permiso para ver tus fotos.',
     uploading: 'Subiendo fotos…',
+    progress: (n: number, total: number) => `Subiendo foto ${n} de ${total}…`,
+    tooMany: (max: number) => `Solo se agregaron las primeras: el máximo es ${max} fotos por artículo.`,
   },
   staff: {
     title: 'Equipo',

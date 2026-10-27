@@ -5,7 +5,7 @@ import { useEffect, useState } from 'react';
 import { Button, Pressable, Text, View } from 'react-native';
 import { api } from '../lib/api';
 import { errorText } from '../lib/errors';
-import { pickPhoto, uploadPhoto, type PickedPhoto } from '../lib/photos';
+import { pickPhotos, uploadPhoto, type PickedPhoto } from '../lib/photos';
 
 type CatalogImage = components['schemas']['CatalogImage'];
 const t = strings.photos;
@@ -42,16 +42,21 @@ export function ItemPhotos(props: Props) {
   async function add() {
     setBusy(true);
     setMessage(null);
-    const picked = await pickPhoto();
+    const picked = await pickPhotos(MAX_PHOTOS - count);
     if (picked === 'cancelled') return setBusy(false);
     if (typeof picked === 'string') { setBusy(false); return setMessage(picked); }
+    const note = picked.dropped ? t.tooMany(MAX_PHOTOS) : null;
     if (props.itemId) {
-      const err = await uploadPhoto(businessId, props.itemId, picked);
-      if (err) setMessage(err);
+      for (const [i, photo] of picked.photos.entries()) {
+        setMessage(t.progress(i + 1, picked.photos.length));
+        const err = await uploadPhoto(businessId, props.itemId, photo);
+        if (err) { setBusy(false); props.reload(); return setMessage(err); }
+      }
       props.reload();
     } else {
-      props.onPendingChange?.([...pending, picked]);
+      props.onPendingChange?.([...pending, ...picked.photos]);
     }
+    setMessage(note);
     setBusy(false);
   }
 

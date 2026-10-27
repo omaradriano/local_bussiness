@@ -7,24 +7,36 @@ import { errorText, fieldErrors } from './errors';
 /** A photo chosen and already shrunk on the device, not uploaded yet. */
 export type PickedPhoto = { uri: string };
 
-/**
- * Pick a photo and shrink it to 2048 px (JPEG; also applies the phone's EXIF rotation).
- * Returns the local photo, 'cancelled', or an error message.
- */
-export async function pickPhoto(): Promise<PickedPhoto | 'cancelled' | string> {
-  const perm = await ImagePicker.requestMediaLibraryPermissionsAsync();
-  if (!perm.granted) return strings.photos.permission;
-
-  const picked = await ImagePicker.launchImageLibraryAsync({ mediaTypes: 'images', quality: 1 });
-  if (picked.canceled || !picked.assets[0]) return 'cancelled';
-  const asset = picked.assets[0];
-
+/** Shrink to 2048 px as JPEG (also applies the phone's EXIF rotation). */
+async function shrink(asset: ImagePicker.ImagePickerAsset): Promise<PickedPhoto> {
   const ctx = ImageManipulator.manipulate(asset.uri);
   const target = fitWithin(asset.width, asset.height);
   if (target) ctx.resize(target);
   const rendered = await ctx.renderAsync();
   const saved = await rendered.saveAsync({ format: SaveFormat.JPEG, compress: 0.85 });
   return { uri: saved.uri };
+}
+
+/**
+ * Pick up to `limit` photos at once and shrink each one. Returns the photos and how many were left out
+ * because of the limit (web can't cap the selection), 'cancelled', or an error message.
+ */
+export async function pickPhotos(limit: number): Promise<{ photos: PickedPhoto[]; dropped: number } | 'cancelled' | string> {
+  const perm = await ImagePicker.requestMediaLibraryPermissionsAsync();
+  if (!perm.granted) return strings.photos.permission;
+
+  const picked = await ImagePicker.launchImageLibraryAsync({
+    mediaTypes: 'images',
+    quality: 1,
+    allowsMultipleSelection: true,
+    selectionLimit: limit,
+    orderedSelection: true,
+  });
+  if (picked.canceled || !picked.assets.length) return 'cancelled';
+  const chosen = picked.assets.slice(0, limit);
+  const photos: PickedPhoto[] = [];
+  for (const asset of chosen) photos.push(await shrink(asset)); // one at a time: keeps memory low on phones
+  return { photos, dropped: picked.assets.length - chosen.length };
 }
 
 /** Upload a picked photo to an existing item: presigned PUT straight to S3, then confirm. Error message or null. */
