@@ -441,6 +441,56 @@ paths:
         "404": { $ref: "#/components/responses/Error" }
         "422": { $ref: "#/components/responses/Error" }
 
+  /v1/b/{businessId}/bookings:
+    parameters:
+      - $ref: "#/components/parameters/BusinessId"
+    post:
+      operationId: createBooking
+      summary: Alta de cita, pedido o renta en mostrador (dueño o empleado)
+      description: El precio, el anticipo y el estado los calcula el servidor. Un choque responde 409 slot_taken.
+      parameters:
+        - name: Idempotency-Key
+          in: header
+          required: false
+          description: Clave única por intento de alta (8–100 caracteres); un reintento devuelve la misma reserva con 200.
+          schema: { type: string, minLength: 8, maxLength: 100 }
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/BookingInput" }
+      responses:
+        "201":
+          description: Creada
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Booking" }
+        "200":
+          description: Ya existía (misma Idempotency-Key)
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Booking" }
+        "403": { $ref: "#/components/responses/Error" }
+        "409": { $ref: "#/components/responses/Error" }
+        "422": { $ref: "#/components/responses/Error" }
+
+  /v1/b/{businessId}/bookings/{bookingId}:
+    parameters:
+      - $ref: "#/components/parameters/BusinessId"
+      - name: bookingId
+        in: path
+        required: true
+        schema: { type: string, format: uuid }
+    get:
+      operationId: getBooking
+      responses:
+        "200":
+          description: OK
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Booking" }
+        "404": { $ref: "#/components/responses/Error" }
+
 components:
   securitySchemes:
     bearer:
@@ -591,6 +641,84 @@ components:
               available: { type: boolean }
               remaining: { type: integer, description: "-1 = sin límite" }
         free_units: { type: array, items: { type: string, format: uuid } }
+
+    BookingStatus:
+      type: string
+      enum: [pending_deposit, confirmed, in_progress, ready, out_for_delivery, checked_out, overdue, returned, completed, cancelled, expired, no_show]
+
+    BookingInput:
+      type: object
+      required: [customer, item_id, starts_at]
+      properties:
+        customer:
+          type: object
+          description: "`id` de un cliente existente, o `name` + `phone` (10 dígitos de México o E.164)"
+          properties:
+            id: { type: string, format: uuid }
+            name: { type: string }
+            phone: { type: string }
+            email: { type: string }
+        item_id: { type: string, format: uuid }
+        quantity: { type: integer, minimum: 1, maximum: 100, default: 1 }
+        starts_at: { type: string, format: date-time, description: "Servicio: hora de la cita; producto: entrega; renta: salida" }
+        ends_at: { type: string, format: date-time, description: "Renta: regreso" }
+        staff_id: { type: string, format: uuid, description: "Servicio: persona preferida" }
+        fulfillment: { type: string, enum: [pickup, delivery] }
+        delivery_address: { type: string }
+        delivery_zone: { type: string }
+        options: { type: object, additionalProperties: { type: string } }
+        notes: { type: string, maxLength: 1000 }
+
+    Booking:
+      type: object
+      required: [id, kind, status, starts_at, ends_at, customer, items, staff, units, subtotal, deposit_required, total, source, hold_expires_at, public_token, created_at]
+      properties:
+        id: { type: string, format: uuid }
+        kind: { $ref: "#/components/schemas/ItemKind" }
+        status: { $ref: "#/components/schemas/BookingStatus" }
+        starts_at: { type: string, format: date-time }
+        ends_at: { type: [string, "null"], format: date-time }
+        customer:
+          type: object
+          required: [id, name, phone]
+          properties:
+            id: { type: string, format: uuid }
+            name: { type: string }
+            phone: { type: string }
+        items:
+          type: array
+          items:
+            type: object
+            required: [item_id, name, quantity, unit_price, options]
+            properties:
+              item_id: { type: string, format: uuid }
+              name: { type: string }
+              quantity: { type: integer }
+              unit_price: { type: integer, format: int64 }
+              options: { type: object, additionalProperties: true }
+        staff:
+          type: array
+          items: { $ref: "#/components/schemas/Ref" }
+        units:
+          type: array
+          items: { $ref: "#/components/schemas/Ref" }
+        fulfillment: { type: [string, "null"] }
+        delivery_address: { type: [string, "null"] }
+        subtotal: { type: integer, format: int64 }
+        deposit_required: { type: integer, format: int64 }
+        total: { type: integer, format: int64 }
+        notes: { type: [string, "null"] }
+        source: { type: string, enum: [public, admin] }
+        hold_expires_at: { type: [string, "null"], format: date-time }
+        public_token: { type: string }
+        created_at: { type: string, format: date-time }
+
+    Ref:
+      type: object
+      required: [id, name]
+      properties:
+        id: { type: string, format: uuid }
+        name: { type: string }
 
     UnitStatus:
       type: string

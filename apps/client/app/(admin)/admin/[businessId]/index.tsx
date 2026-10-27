@@ -15,6 +15,11 @@ export default function BusinessHome() {
     <View style={{ flex: 1, padding: 16, gap: 12 }}>
       <Stack.Screen options={{ title: business.name }} />
       <Text accessibilityRole="header" style={{ fontSize: 22, fontWeight: '600' }}>{business.name}</Text>
+      <Link href={{ pathname: '/admin/[businessId]/bookings/new', params: { businessId } }}>
+        <Text style={{ textDecorationLine: 'underline', fontSize: 16, fontWeight: '600' }}>
+          {strings.bookings.new(term(business.vertical, 'booking') ?? '')}
+        </Text>
+      </Link>
       <Link href={{ pathname: '/admin/[businessId]/catalog', params: { businessId } }}>
         <Text style={{ textDecorationLine: 'underline', fontSize: 16 }}>{term(business.vertical, 'catalog')}</Text>
       </Link>

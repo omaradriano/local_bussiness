@@ -6,3 +6,4 @@ export * from './money';
 export * from './hours';
 export * from './image';
 export * from './nav';
+export * from './datetime';
