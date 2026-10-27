@@ -96,6 +96,70 @@ paths:
         "401": { $ref: "#/components/responses/Error" }
         "403": { $ref: "#/components/responses/Error" }
 
+  /v1/b/{businessId}/catalog:
+    parameters:
+      - $ref: "#/components/parameters/BusinessId"
+    get:
+      operationId: listCatalog
+      summary: Artículos del negocio (cualquier miembro)
+      responses:
+        "200":
+          description: OK
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [items]
+                properties:
+                  items:
+                    type: array
+                    items: { $ref: "#/components/schemas/CatalogItem" }
+        "401": { $ref: "#/components/responses/Error" }
+        "403": { $ref: "#/components/responses/Error" }
+    post:
+      operationId: createCatalogItem
+      summary: Crea un artículo (solo dueño)
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/CatalogItemInput" }
+      responses:
+        "201":
+          description: Creado
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/CatalogItem" }
+        "400": { $ref: "#/components/responses/Error" }
+        "403": { $ref: "#/components/responses/Error" }
+        "422": { $ref: "#/components/responses/Error" }
+
+  /v1/b/{businessId}/catalog/{itemId}:
+    parameters:
+      - $ref: "#/components/parameters/BusinessId"
+      - name: itemId
+        in: path
+        required: true
+        schema: { type: string, format: uuid }
+    patch:
+      operationId: updateCatalogItem
+      summary: Edita campos del artículo (solo dueño); el tipo no cambia
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/CatalogItemPatch" }
+      responses:
+        "200":
+          description: OK
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/CatalogItem" }
+        "400": { $ref: "#/components/responses/Error" }
+        "403": { $ref: "#/components/responses/Error" }
+        "404": { $ref: "#/components/responses/Error" }
+        "422": { $ref: "#/components/responses/Error" }
+
 components:
   securitySchemes:
     bearer:
@@ -133,6 +197,60 @@ components:
     Vertical:
       type: string
       enum: [nails, flowers, tool_rental]
+
+    ItemKind:
+      type: string
+      enum: [service, product, rental]
+
+    PriceUnit:
+      type: string
+      enum: [day, weekend, week]
+
+    CatalogItemFields:
+      type: object
+      description: Montos en centavos MXN. Cada tipo usa solo sus campos.
+      properties:
+        name: { type: string, maxLength: 120 }
+        description: { type: string }
+        price: { type: integer, format: int64, minimum: 0 }
+        duration_minutes: { type: [integer, "null"], description: "servicio" }
+        buffer_minutes: { type: integer, description: "servicio" }
+        prep_hours: { type: [integer, "null"], description: "producto" }
+        daily_capacity: { type: [integer, "null"], description: "producto" }
+        price_unit: { oneOf: [{ $ref: "#/components/schemas/PriceUnit" }, { type: "null" }], description: "renta" }
+        security_deposit: { type: [integer, "null"], format: int64, description: "renta" }
+        late_fee_per_day: { type: [integer, "null"], format: int64, description: "renta" }
+
+    CatalogItemInput:
+      allOf:
+        - $ref: "#/components/schemas/CatalogItemFields"
+        - type: object
+          required: [kind, name, price]
+          properties:
+            kind: { $ref: "#/components/schemas/ItemKind" }
+
+    CatalogItemPatch:
+      allOf:
+        - $ref: "#/components/schemas/CatalogItemFields"
+        - type: object
+          properties:
+            active: { type: boolean }
+            sort: { type: integer }
+
+    CatalogItem:
+      allOf:
+        - $ref: "#/components/schemas/CatalogItemFields"
+        - type: object
+          required: [id, kind, name, description, price, active, sort, buffer_minutes]
+          properties:
+            id: { type: string, format: uuid }
+            kind: { $ref: "#/components/schemas/ItemKind" }
+            name: { type: string }
+            description: { type: string }
+            price: { type: integer, format: int64 }
+            buffer_minutes: { type: integer }
+            active: { type: boolean }
+            sort: { type: integer }
 
     Membership:
       type: object

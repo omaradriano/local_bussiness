@@ -14,6 +14,7 @@ import (
 
 	"github.com/omaradriano/local_bussiness/services/api/internal/auth"
 	"github.com/omaradriano/local_bussiness/services/api/internal/businesses"
+	"github.com/omaradriano/local_bussiness/services/api/internal/catalog"
 	"github.com/omaradriano/local_bussiness/services/api/internal/httpapi"
 	"github.com/omaradriano/local_bussiness/services/api/internal/store"
 )
@@ -53,6 +54,7 @@ func run(log *slog.Logger) error {
 		Handler: httpapi.NewRouter(httpapi.Deps{
 			Authenticate: auth.Authenticate(keys, supabaseURL+"/auth/v1"),
 			Store:        store.New(pool),
+			Catalog:      catalog.Repo{DB: pool},
 			CreateBusiness: func(ctx context.Context, userID string, in businesses.Input) (businesses.Business, error) {
 				return businesses.Create(ctx, pool, userID, in)
 			},

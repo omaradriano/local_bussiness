@@ -73,6 +73,46 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/v1/b/{businessId}/catalog": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                businessId: components["parameters"]["BusinessId"];
+            };
+            cookie?: never;
+        };
+        /** Artículos del negocio (cualquier miembro) */
+        get: operations["listCatalog"];
+        put?: never;
+        /** Crea un artículo (solo dueño) */
+        post: operations["createCatalogItem"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/b/{businessId}/catalog/{itemId}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                businessId: components["parameters"]["BusinessId"];
+                itemId: string;
+            };
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        /** Edita campos del artículo (solo dueño); el tipo no cambia */
+        patch: operations["updateCatalogItem"];
+        trace?: never;
+    };
 }
 export type webhooks = Record<string, never>;
 export interface components {
@@ -86,6 +126,56 @@ export interface components {
         Role: "owner" | "staff";
         /** @enum {string} */
         Vertical: "nails" | "flowers" | "tool_rental";
+        /** @enum {string} */
+        ItemKind: "service" | "product" | "rental";
+        /** @enum {string} */
+        PriceUnit: "day" | "weekend" | "week";
+        /** @description Montos en centavos MXN. Cada tipo usa solo sus campos. */
+        CatalogItemFields: {
+            name?: string;
+            description?: string;
+            /** Format: int64 */
+            price?: number;
+            /** @description servicio */
+            duration_minutes?: number | null;
+            /** @description servicio */
+            buffer_minutes?: number;
+            /** @description producto */
+            prep_hours?: number | null;
+            /** @description producto */
+            daily_capacity?: number | null;
+            /** @description renta */
+            price_unit?: components["schemas"]["PriceUnit"] | null;
+            /**
+             * Format: int64
+             * @description renta
+             */
+            security_deposit?: number | null;
+            /**
+             * Format: int64
+             * @description renta
+             */
+            late_fee_per_day?: number | null;
+        };
+        CatalogItemInput: components["schemas"]["CatalogItemFields"] & {
+            kind: components["schemas"]["ItemKind"];
+        };
+        CatalogItemPatch: components["schemas"]["CatalogItemFields"] & {
+            active?: boolean;
+            sort?: number;
+        };
+        CatalogItem: components["schemas"]["CatalogItemFields"] & {
+            /** Format: uuid */
+            id: string;
+            kind: components["schemas"]["ItemKind"];
+            name: string;
+            description: string;
+            /** Format: int64 */
+            price: number;
+            buffer_minutes: number;
+            active: boolean;
+            sort: number;
+        };
         Membership: {
             /** Format: uuid */
             business_id: string;
@@ -224,6 +314,92 @@ export interface operations {
             400: components["responses"]["Error"];
             401: components["responses"]["Error"];
             403: components["responses"]["Error"];
+        };
+    };
+    listCatalog: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                businessId: components["parameters"]["BusinessId"];
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        items: components["schemas"]["CatalogItem"][];
+                    };
+                };
+            };
+            401: components["responses"]["Error"];
+            403: components["responses"]["Error"];
+        };
+    };
+    createCatalogItem: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                businessId: components["parameters"]["BusinessId"];
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["CatalogItemInput"];
+            };
+        };
+        responses: {
+            /** @description Creado */
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["CatalogItem"];
+                };
+            };
+            400: components["responses"]["Error"];
+            403: components["responses"]["Error"];
+            422: components["responses"]["Error"];
+        };
+    };
+    updateCatalogItem: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                businessId: components["parameters"]["BusinessId"];
+                itemId: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["CatalogItemPatch"];
+            };
+        };
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["CatalogItem"];
+                };
+            };
+            400: components["responses"]["Error"];
+            403: components["responses"]["Error"];
+            404: components["responses"]["Error"];
+            422: components["responses"]["Error"];
         };
     };
 }
