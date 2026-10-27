@@ -2,6 +2,7 @@ package httpapi
 
 import (
 	"context"
+	"io"
 	"net/http"
 	"net/http/httptest"
 	"strings"
@@ -9,6 +10,7 @@ import (
 
 	"github.com/omaradriano/local_bussiness/services/api/internal/apierr"
 	"github.com/omaradriano/local_bussiness/services/api/internal/auth"
+	"github.com/omaradriano/local_bussiness/services/api/internal/businesses"
 	"github.com/omaradriano/local_bussiness/services/api/internal/store"
 )
 
@@ -45,8 +47,19 @@ func fakeAuth(next http.Handler) http.Handler {
 	})
 }
 
+func fakeCreate(_ context.Context, userID string, in businesses.Input) (businesses.Business, error) {
+	if in.Slug == "ocupado" {
+		return businesses.Business{}, businesses.ErrSlugTaken
+	}
+	return businesses.Business{ID: bizA, Slug: in.Slug, Name: in.Name, Vertical: in.Vertical, Role: "owner"}, nil
+}
+
 func do(method, path, token string, headers ...string) *httptest.ResponseRecorder {
-	req := httptest.NewRequest(method, path, nil)
+	return doBody(method, path, token, nil, headers...)
+}
+
+func doBody(method, path, token string, body io.Reader, headers ...string) *httptest.ResponseRecorder {
+	req := httptest.NewRequest(method, path, body)
 	if token != "" {
 		req.Header.Set("Authorization", "Bearer "+token)
 	}
@@ -57,6 +70,7 @@ func do(method, path, token string, headers ...string) *httptest.ResponseRecorde
 	NewRouter(Deps{
 		Authenticate:   fakeAuth,
 		Store:          fakeStore{},
+		CreateBusiness: fakeCreate,
 		AllowedOrigins: []string{"http://localhost:8082", "https://local-bussiness-staging-*.vercel.app"},
 	}).ServeHTTP(rec, req)
 	return rec
@@ -113,5 +127,27 @@ func TestCORSAllowsOnlyEnvironmentOrigins(t *testing.T) {
 	}
 	if got := preflight("https://evil.example.com"); got != "" {
 		t.Errorf("foreign origin allowed: %q", got)
+	}
+}
+
+func TestCreateBusiness(t *testing.T) {
+	cases := []struct {
+		name, token, body string
+		wantCode          int
+		wantIn            string
+	}{
+		{"alta correcta", "ok", `{"name":" Uñas Bellas ","slug":"unas-bellas","vertical":"nails"}`, http.StatusCreated, `"role":"owner"`},
+		{"sin sesión", "", `{"name":"x","slug":"xyz","vertical":"nails"}`, http.StatusUnauthorized, `"unauthorized"`},
+		{"json inválido", "ok", `{nope`, http.StatusBadRequest, `"invalid_json"`},
+		{"datos inválidos", "ok", `{"name":"","slug":"A B","vertical":"limos"}`, http.StatusUnprocessableEntity, `"slug":`},
+		{"slug ocupado", "ok", `{"name":"Otra","slug":"ocupado","vertical":"flowers"}`, http.StatusConflict, `"slug_taken"`},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			rec := doBody(http.MethodPost, "/v1/businesses", tc.token, strings.NewReader(tc.body))
+			if rec.Code != tc.wantCode || !strings.Contains(rec.Body.String(), tc.wantIn) {
+				t.Fatalf("got %d %s", rec.Code, rec.Body)
+			}
+		})
 	}
 }

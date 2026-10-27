@@ -48,6 +48,33 @@ paths:
                     items: { $ref: "#/components/schemas/Membership" }
         "401": { $ref: "#/components/responses/Error" }
 
+  /v1/businesses:
+    post:
+      operationId: createBusiness
+      summary: Registra un negocio con la plantilla de su giro; el usuario queda como dueño
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [name, slug, vertical]
+              properties:
+                name: { type: string, maxLength: 80 }
+                slug: { type: string, pattern: "^[a-z0-9]+(-[a-z0-9]+)*$", minLength: 3, maxLength: 60 }
+                vertical: { $ref: "#/components/schemas/Vertical" }
+                timezone: { type: string, default: America/Chihuahua }
+      responses:
+        "201":
+          description: Creado
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Membership" }
+        "400": { $ref: "#/components/responses/Error" }
+        "401": { $ref: "#/components/responses/Error" }
+        "409": { $ref: "#/components/responses/Error" }
+        "422": { $ref: "#/components/responses/Error" }
+
   /v1/b/{businessId}/:
     parameters:
       - $ref: "#/components/parameters/BusinessId"
