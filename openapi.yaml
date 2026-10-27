@@ -1,0 +1,118 @@
+openapi: 3.1.0
+info:
+  title: Local Bussiness API
+  version: 0.1.0
+  description: Contrato único de la API. De aquí sale el cliente TypeScript (`pnpm gen`).
+
+servers:
+  - url: https://api-staging-4e97e.up.railway.app
+    description: staging
+  - url: http://localhost:8090
+    description: local
+
+security:
+  - bearer: []
+
+paths:
+  /healthz:
+    get:
+      operationId: healthz
+      security: []
+      responses:
+        "200":
+          description: OK
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [status]
+                properties:
+                  status: { type: string, const: ok }
+
+  /v1/me:
+    get:
+      operationId: getMe
+      summary: Usuario de la sesión y sus negocios con rol
+      responses:
+        "200":
+          description: OK
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [user_id, businesses]
+                properties:
+                  user_id: { type: string, format: uuid }
+                  businesses:
+                    type: array
+                    items: { $ref: "#/components/schemas/Membership" }
+        "401": { $ref: "#/components/responses/Error" }
+
+  /v1/b/{businessId}/:
+    parameters:
+      - $ref: "#/components/parameters/BusinessId"
+    get:
+      operationId: getBusinessRole
+      summary: Rol del usuario en el negocio
+      responses:
+        "200":
+          description: OK
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [business_id, role]
+                properties:
+                  business_id: { type: string, format: uuid }
+                  role: { $ref: "#/components/schemas/Role" }
+        "400": { $ref: "#/components/responses/Error" }
+        "401": { $ref: "#/components/responses/Error" }
+        "403": { $ref: "#/components/responses/Error" }
+
+components:
+  securitySchemes:
+    bearer:
+      type: http
+      scheme: bearer
+      description: Access token de Supabase Auth
+
+  parameters:
+    BusinessId:
+      name: businessId
+      in: path
+      required: true
+      schema: { type: string, format: uuid }
+
+  responses:
+    Error:
+      description: Error con formato único
+      content:
+        application/json:
+          schema: { $ref: "#/components/schemas/Error" }
+
+  schemas:
+    Error:
+      type: object
+      required: [code, message]
+      properties:
+        code: { type: string }
+        message: { type: string }
+        details: {}
+
+    Role:
+      type: string
+      enum: [owner, staff]
+
+    Vertical:
+      type: string
+      enum: [nails, flowers, tool_rental]
+
+    Membership:
+      type: object
+      required: [business_id, slug, name, vertical, role]
+      properties:
+        business_id: { type: string, format: uuid }
+        slug: { type: string }
+        name: { type: string }
+        vertical: { $ref: "#/components/schemas/Vertical" }
+        role: { $ref: "#/components/schemas/Role" }
