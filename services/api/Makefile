@@ -21,5 +21,5 @@ lint:
 	@test -z "$$(gofmt -l .)" || (gofmt -l . && echo "run gofmt -w ." && exit 1)
 
 build:
-	CGO_ENABLED=0 go build -o bin/api ./cmd/api
-	CGO_ENABLED=0 go build -o bin/worker ./cmd/worker
+	CGO_ENABLED=0 go build -tags nodynamic -o bin/api ./cmd/api
+	CGO_ENABLED=0 go build -tags nodynamic -o bin/worker ./cmd/worker
