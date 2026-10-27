@@ -58,6 +58,11 @@ export default function CatalogList() {
             {it.name} · {formatMXN(it.price)} {it.active ? '' : `(${t.inactive})`}
           </Text>
           <Text>{detail(it)}</Text>
+          {it.kind === 'rental' && (
+            <Link href={{ pathname: '/admin/[businessId]/catalog/[itemId]/units', params: { businessId, itemId: it.id } }}>
+              <Text style={{ textDecorationLine: 'underline' }}>{t.units}</Text>
+            </Link>
+          )}
           {isOwner && (
             <View style={{ flexDirection: 'row', gap: 16, marginTop: 4 }}>
               <Link href={{ pathname: '/admin/[businessId]/catalog/[itemId]', params: { businessId, itemId: it.id } }}>

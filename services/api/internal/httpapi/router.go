@@ -36,6 +36,14 @@ type CatalogRepo interface {
 	Get(ctx context.Context, businessID, itemID string) (catalog.Item, error)
 	Create(ctx context.Context, businessID string, it catalog.Item) (catalog.Item, error)
 	Update(ctx context.Context, businessID string, it catalog.Item) (catalog.Item, error)
+	ListUnits(ctx context.Context, businessID, itemID string) ([]catalog.Unit, error)
+	GetUnit(ctx context.Context, businessID, itemID, unitID string) (catalog.Unit, error)
+	CreateUnit(ctx context.Context, businessID string, u catalog.Unit) (catalog.Unit, error)
+	UpdateUnit(ctx context.Context, businessID string, u catalog.Unit) (catalog.Unit, error)
+}
+
+func notFound(w http.ResponseWriter, what string) {
+	apierr.Write(w, http.StatusNotFound, "not_found", what)
 }
 
 // decode reads a JSON body (max 16 KiB); on failure it has already written the 400.
@@ -179,8 +187,83 @@ func NewRouter(d Deps) http.Handler {
 				}
 				apierr.JSON(w, http.StatusOK, updated)
 			})
+
+			r.Get("/catalog/{itemId}/units", func(w http.ResponseWriter, r *http.Request) {
+				m, _ := auth.MemberFrom(r.Context())
+				itemID := chi.URLParam(r, "itemId")
+				units, err := []catalog.Unit(nil), error(catalog.ErrNotFound)
+				if auth.IsUUID(itemID) {
+					units, err = d.Catalog.ListUnits(r.Context(), m.BusinessID, itemID)
+				}
+				if errors.Is(err, catalog.ErrNotFound) {
+					notFound(w, "La herramienta no existe.")
+					return
+				}
+				if err != nil {
+					internalError(w, r, "list units", err)
+					return
+				}
+				apierr.JSON(w, http.StatusOK, map[string]any{"units": units})
+			})
+
+			r.With(auth.RequireRole("owner")).Post("/catalog/{itemId}/units", func(w http.ResponseWriter, r *http.Request) {
+				m, _ := auth.MemberFrom(r.Context())
+				itemID := chi.URLParam(r, "itemId")
+				var p catalog.UnitPatch
+				if !decode(w, r, &p) {
+					return
+				}
+				u := catalog.Unit{ItemID: itemID, Status: "available"}.Apply(p)
+				if errs := u.Validate(); len(errs) > 0 {
+					invalid(w, "Revisa los datos de la unidad.", errs)
+					return
+				}
+				created, err := catalog.Unit{}, error(catalog.ErrNotFound)
+				if auth.IsUUID(itemID) {
+					created, err = d.Catalog.CreateUnit(r.Context(), m.BusinessID, u)
+				}
+				writeUnit(w, r, http.StatusCreated, created, err)
+			})
+
+			r.With(auth.RequireRole("owner")).Patch("/catalog/{itemId}/units/{unitId}", func(w http.ResponseWriter, r *http.Request) {
+				m, _ := auth.MemberFrom(r.Context())
+				itemID, unitID := chi.URLParam(r, "itemId"), chi.URLParam(r, "unitId")
+				var p catalog.UnitPatch
+				if !decode(w, r, &p) {
+					return
+				}
+				current, err := catalog.Unit{}, error(catalog.ErrNotFound)
+				if auth.IsUUID(itemID) && auth.IsUUID(unitID) {
+					current, err = d.Catalog.GetUnit(r.Context(), m.BusinessID, itemID, unitID)
+				}
+				if err != nil {
+					writeUnit(w, r, 0, current, err)
+					return
+				}
+				u := current.Apply(p)
+				if errs := u.Validate(); len(errs) > 0 {
+					invalid(w, "Revisa los datos de la unidad.", errs)
+					return
+				}
+				updated, err := d.Catalog.UpdateUnit(r.Context(), m.BusinessID, u)
+				writeUnit(w, r, http.StatusOK, updated, err)
+			})
 		})
 	})
 
 	return r
+}
+
+func writeUnit(w http.ResponseWriter, r *http.Request, status int, u catalog.Unit, err error) {
+	switch {
+	case errors.Is(err, catalog.ErrNotFound):
+		notFound(w, "La herramienta o la unidad no existe.")
+	case errors.Is(err, catalog.ErrCodeTaken):
+		apierr.JSON(w, http.StatusConflict, apierr.Error{Code: "code_taken", Message: "Ya hay una unidad con esa clave.",
+			Details: map[string]string{"code": "Ya hay una unidad con esa clave."}})
+	case err != nil:
+		internalError(w, r, "unit", err)
+	default:
+		apierr.JSON(w, status, u)
+	}
 }

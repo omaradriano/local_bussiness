@@ -62,6 +62,15 @@ export const strings = {
     invalidMoney: 'Escribe una cantidad válida, por ejemplo 250 o 250.50.',
     invalidNumber: 'Escribe un número entero.',
     onlyOwner: 'Solo el dueño puede editar el catálogo.',
+    units: 'Unidades',
+  },
+  units: {
+    title: 'Unidades',
+    hint: 'Cada pieza física que rentas, con su clave (por ejemplo RM-01).',
+    code: 'Clave',
+    add: 'Agregar unidad',
+    empty: 'Sin unidades: agrega al menos una para poder rentar esta herramienta.',
+    status: { available: 'Disponible', maintenance: 'En mantenimiento', retired: 'Dada de baja' },
   },
   publicCatalog: { placeholder: 'Catálogo público (fase 6).' },
 } as const;

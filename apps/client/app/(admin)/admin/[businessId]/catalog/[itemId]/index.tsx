@@ -3,9 +3,9 @@ import { centavosToInput, kindFor, parsePesos, strings, term, type ItemKind } fr
 import { router, Stack, useLocalSearchParams } from 'expo-router';
 import { useEffect, useState } from 'react';
 import { ActivityIndicator, Button, Pressable, ScrollView, Text, TextInput, View } from 'react-native';
-import { api } from '../../../../../lib/api';
-import { errorText, fieldErrors } from '../../../../../lib/errors';
-import { useBusiness } from '../../../../../lib/useMe';
+import { api } from '../../../../../../lib/api';
+import { errorText, fieldErrors } from '../../../../../../lib/errors';
+import { useBusiness } from '../../../../../../lib/useMe';
 
 type Item = components['schemas']['CatalogItem'];
 type Fields = components['schemas']['CatalogItemFields'];
