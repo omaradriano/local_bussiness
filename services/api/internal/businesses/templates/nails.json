@@ -1,12 +1,49 @@
 {
-  "settings": { "deposit_percent": 30, "cancel_hours": 24, "hold_hours": 4 },
+  "settings": {
+    "deposit_percent": 30,
+    "cancel_hours": 24,
+    "hold_hours": 4
+  },
   "hours": [
-    { "weekdays": [1, 2, 3, 4, 5, 6], "opens_at": "10:00", "closes_at": "19:00" }
+    {
+      "weekdays": [
+        1,
+        2,
+        3,
+        4,
+        5,
+        6
+      ],
+      "opens_at": "10:00",
+      "closes_at": "19:00"
+    }
   ],
   "items": [
-    { "kind": "service", "name": "Gelish en manos", "description": "Esmaltado semipermanente con limado y cutícula.", "price": 25000, "duration_minutes": 60, "buffer_minutes": 10 },
-    { "kind": "service", "name": "Uñas acrílicas", "description": "Aplicación completa con forma a elegir.", "price": 45000, "duration_minutes": 120, "buffer_minutes": 15 },
-    { "kind": "service", "name": "Retiro de gelish", "description": "Retiro sin dañar la uña natural.", "price": 10000, "duration_minutes": 30, "buffer_minutes": 5 }
+    {
+      "kind": "service",
+      "name": "Gelish en manos",
+      "description": "Esmaltado semipermanente con limado y cutícula.",
+      "price": 25000,
+      "duration_minutes": 60,
+      "buffer_minutes": 10
+    },
+    {
+      "kind": "service",
+      "name": "Uñas acrílicas",
+      "description": "Aplicación completa con forma a elegir.",
+      "price": 45000,
+      "duration_minutes": 120,
+      "buffer_minutes": 15
+    },
+    {
+      "kind": "service",
+      "name": "Retiro de gelish",
+      "description": "Retiro sin dañar la uña natural.",
+      "price": 10000,
+      "duration_minutes": 30,
+      "buffer_minutes": 5
+    }
   ],
-  "steps": []
+  "steps": [],
+  "owner_attends": true
 }

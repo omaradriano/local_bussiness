@@ -89,7 +89,13 @@ type Template struct {
 	} `json:"hours"`
 	Items []TemplateItem `json:"items"`
 	Steps []TemplateStep `json:"steps"`
+	// OwnerAttends: the owner is also the person who attends (single-person business);
+	// they get a staff record with every service and the business hours.
+	OwnerAttends bool `json:"owner_attends"`
 }
+
+// OwnerStaffName is the default name of the owner's staff record; they rename it later.
+const OwnerStaffName = "Yo"
 
 type TemplateItem struct {
 	Kind            string  `json:"kind"`
@@ -167,12 +173,31 @@ func Create(ctx context.Context, db Beginner, userID string, in Input) (Business
 		return Business{}, err
 	}
 
+	var ownerStaff *string
+	if tpl.OwnerAttends {
+		var id string
+		if err := tx.QueryRow(ctx, `insert into public.staff (business_id, name) values ($1, $2) returning id::text`, b.ID, OwnerStaffName).Scan(&id); err != nil {
+			return Business{}, err
+		}
+		if _, err := tx.Exec(ctx, `update public.business_members set staff_id = $3 where business_id = $1 and user_id = $2`, b.ID, userID, id); err != nil {
+			return Business{}, err
+		}
+		ownerStaff = &id
+	}
+
+	// General hours, and the same shifts for the owner when they attend.
+	hourOwners := []*string{nil}
+	if ownerStaff != nil {
+		hourOwners = append(hourOwners, ownerStaff)
+	}
 	for _, h := range tpl.Hours {
 		for _, d := range h.Weekdays {
-			if _, err := tx.Exec(ctx,
-				`insert into public.business_hours (business_id, weekday, opens_at, closes_at) values ($1, $2, $3, $4)`,
-				b.ID, d, h.OpensAt, h.ClosesAt); err != nil {
-				return Business{}, err
+			for _, staffID := range hourOwners {
+				if _, err := tx.Exec(ctx,
+					`insert into public.business_hours (business_id, staff_id, weekday, opens_at, closes_at) values ($1, $2, $3, $4, $5)`,
+					b.ID, staffID, d, h.OpensAt, h.ClosesAt); err != nil {
+					return Business{}, err
+				}
 			}
 		}
 	}
@@ -185,6 +210,13 @@ func Create(ctx context.Context, db Beginner, userID string, in Input) (Business
 			values ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12)`,
 			b.ID, it.Kind, it.Name, it.Description, it.Price, i+1, it.DurationMinutes, it.BufferMinutes,
 			it.PrepHours, it.PriceUnit, it.SecurityDeposit, it.LateFeePerDay); err != nil {
+			return Business{}, err
+		}
+	}
+
+	if ownerStaff != nil {
+		if _, err := tx.Exec(ctx, `insert into public.staff_services (business_id, staff_id, item_id)
+			select business_id, $2, id from public.catalog_items where business_id = $1 and kind = 'service'`, b.ID, *ownerStaff); err != nil {
 			return Business{}, err
 		}
 	}

@@ -15,6 +15,7 @@ import (
 	"github.com/omaradriano/local_bussiness/services/api/internal/auth"
 	"github.com/omaradriano/local_bussiness/services/api/internal/businesses"
 	"github.com/omaradriano/local_bussiness/services/api/internal/catalog"
+	"github.com/omaradriano/local_bussiness/services/api/internal/staff"
 	"github.com/omaradriano/local_bussiness/services/api/internal/store"
 )
 
@@ -29,6 +30,17 @@ type Deps struct {
 	AllowedOrigins []string // web origins of this environment; one "*" wildcard per entry allowed
 	CreateBusiness func(ctx context.Context, userID string, in businesses.Input) (businesses.Business, error)
 	Catalog        CatalogRepo
+	Staff          StaffRepo
+}
+
+type StaffRepo interface {
+	List(ctx context.Context, businessID string) ([]staff.Member, error)
+	Get(ctx context.Context, businessID, staffID string) (staff.Member, error)
+	Create(ctx context.Context, businessID string, m staff.Member) (staff.Member, error)
+	Update(ctx context.Context, businessID string, m staff.Member) error
+	SetServices(ctx context.Context, businessID, staffID string, itemIDs []string) error
+	SetHours(ctx context.Context, businessID, staffID string, hs []staff.Hours) error
+	BusinessHours(ctx context.Context, businessID string) ([]staff.Hours, error)
 }
 
 type CatalogRepo interface {
@@ -188,6 +200,111 @@ func NewRouter(d Deps) http.Handler {
 				apierr.JSON(w, http.StatusOK, updated)
 			})
 
+			r.Get("/staff", func(w http.ResponseWriter, r *http.Request) {
+				m, _ := auth.MemberFrom(r.Context())
+				list, err := d.Staff.List(r.Context(), m.BusinessID)
+				if err != nil {
+					internalError(w, r, "list staff", err)
+					return
+				}
+				apierr.JSON(w, http.StatusOK, map[string]any{"staff": list})
+			})
+
+			r.With(auth.RequireRole("owner")).Post("/staff", func(w http.ResponseWriter, r *http.Request) {
+				m, _ := auth.MemberFrom(r.Context())
+				var p staff.Patch
+				if !decode(w, r, &p) {
+					return
+				}
+				s := staff.Member{}.Apply(p)
+				if errs := s.Validate(); len(errs) > 0 {
+					invalid(w, "Revisa los datos.", errs)
+					return
+				}
+				created, err := d.Staff.Create(r.Context(), m.BusinessID, s)
+				if err != nil {
+					internalError(w, r, "create staff", err)
+					return
+				}
+				apierr.JSON(w, http.StatusCreated, created)
+			})
+
+			r.Route("/staff/{staffId}", func(r chi.Router) {
+				r.Use(auth.RequireRole("owner"), requireUUIDParam("staffId", "La persona no existe."))
+
+				r.Patch("/", func(w http.ResponseWriter, r *http.Request) {
+					m, _ := auth.MemberFrom(r.Context())
+					var p staff.Patch
+					if !decode(w, r, &p) {
+						return
+					}
+					current, err := d.Staff.Get(r.Context(), m.BusinessID, chi.URLParam(r, "staffId"))
+					if errors.Is(err, staff.ErrNotFound) {
+						notFound(w, "La persona no existe.")
+						return
+					}
+					if err != nil {
+						internalError(w, r, "get staff", err)
+						return
+					}
+					s := current.Apply(p)
+					if errs := s.Validate(); len(errs) > 0 {
+						invalid(w, "Revisa los datos.", errs)
+						return
+					}
+					if err := d.Staff.Update(r.Context(), m.BusinessID, s); err != nil {
+						internalError(w, r, "update staff", err)
+						return
+					}
+					apierr.JSON(w, http.StatusOK, s)
+				})
+
+				r.Put("/services", func(w http.ResponseWriter, r *http.Request) {
+					m, _ := auth.MemberFrom(r.Context())
+					var body struct {
+						ServiceIDs []string `json:"service_ids"`
+					}
+					if !decode(w, r, &body) {
+						return
+					}
+					for _, id := range body.ServiceIDs {
+						if !auth.IsUUID(id) {
+							invalid(w, "Revisa los servicios.", map[string]string{"service_ids": "Hay un servicio inválido."})
+							return
+						}
+					}
+					err := d.Staff.SetServices(r.Context(), m.BusinessID, chi.URLParam(r, "staffId"), body.ServiceIDs)
+					switch {
+					case errors.Is(err, staff.ErrNotFound):
+						notFound(w, "La persona no existe.")
+					case errors.Is(err, staff.ErrNotAService):
+						invalid(w, "Revisa los servicios.", map[string]string{"service_ids": "Solo se pueden asignar servicios de este negocio."})
+					case err != nil:
+						internalError(w, r, "set staff services", err)
+					default:
+						w.WriteHeader(http.StatusNoContent)
+					}
+				})
+
+				r.Put("/hours", func(w http.ResponseWriter, r *http.Request) {
+					putHours(w, r, d.Staff, chi.URLParam(r, "staffId"))
+				})
+			})
+
+			r.Get("/hours", func(w http.ResponseWriter, r *http.Request) {
+				m, _ := auth.MemberFrom(r.Context())
+				hs, err := d.Staff.BusinessHours(r.Context(), m.BusinessID)
+				if err != nil {
+					internalError(w, r, "business hours", err)
+					return
+				}
+				apierr.JSON(w, http.StatusOK, map[string]any{"hours": hs})
+			})
+
+			r.With(auth.RequireRole("owner")).Put("/hours", func(w http.ResponseWriter, r *http.Request) {
+				putHours(w, r, d.Staff, "")
+			})
+
 			r.Get("/catalog/{itemId}/units", func(w http.ResponseWriter, r *http.Request) {
 				m, _ := auth.MemberFrom(r.Context())
 				itemID := chi.URLParam(r, "itemId")
@@ -265,5 +382,42 @@ func writeUnit(w http.ResponseWriter, r *http.Request, status int, u catalog.Uni
 		internalError(w, r, "unit", err)
 	default:
 		apierr.JSON(w, status, u)
+	}
+}
+
+// putHours replaces the hours of a person (staffID) or of the business ("").
+func putHours(w http.ResponseWriter, r *http.Request, repo StaffRepo, staffID string) {
+	m, _ := auth.MemberFrom(r.Context())
+	var body struct {
+		Hours []staff.Hours `json:"hours"`
+	}
+	if !decode(w, r, &body) {
+		return
+	}
+	if msg := staff.ValidateHours(body.Hours); msg != "" {
+		invalid(w, msg, map[string]string{"hours": msg})
+		return
+	}
+	err := repo.SetHours(r.Context(), m.BusinessID, staffID, body.Hours)
+	switch {
+	case errors.Is(err, staff.ErrNotFound):
+		notFound(w, "La persona no existe.")
+	case err != nil:
+		internalError(w, r, "set hours", err)
+	default:
+		w.WriteHeader(http.StatusNoContent)
+	}
+}
+
+// requireUUIDParam answers 404 when a path id is not a UUID (it can't exist), before touching the DB.
+func requireUUIDParam(name, message string) func(http.Handler) http.Handler {
+	return func(next http.Handler) http.Handler {
+		return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+			if !auth.IsUUID(chi.URLParam(r, name)) {
+				notFound(w, message)
+				return
+			}
+			next.ServeHTTP(w, r)
+		})
 	}
 }

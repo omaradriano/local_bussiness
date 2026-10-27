@@ -12,6 +12,7 @@ import (
 	"github.com/omaradriano/local_bussiness/services/api/internal/auth"
 	"github.com/omaradriano/local_bussiness/services/api/internal/businesses"
 	"github.com/omaradriano/local_bussiness/services/api/internal/catalog"
+	"github.com/omaradriano/local_bussiness/services/api/internal/staff"
 	"github.com/omaradriano/local_bussiness/services/api/internal/store"
 )
 
@@ -133,6 +134,7 @@ func doBody(method, path, token string, body io.Reader, headers ...string) *http
 		Store:          fakeStore{},
 		CreateBusiness: fakeCreate,
 		Catalog:        fakeCatalog{},
+		Staff:          fakeStaff{},
 		AllowedOrigins: []string{"http://localhost:8082", "https://local-bussiness-staging-*.vercel.app"},
 	}).ServeHTTP(rec, req)
 	return rec
@@ -259,6 +261,78 @@ func TestUnitRoutes(t *testing.T) {
 		{"a mantenimiento", http.MethodPatch, units + "/" + unitID, "ok", `{"status":"maintenance"}`, http.StatusOK, `"status":"maintenance"`},
 		{"estado inválido", http.MethodPatch, units + "/" + unitID, "ok", `{"status":"perdida"}`, http.StatusUnprocessableEntity, `"status"`},
 		{"unidad inexistente", http.MethodPatch, units + "/ffffffff-ffff-ffff-ffff-ffffffffffff", "ok", `{"status":"retired"}`, http.StatusNotFound, `"not_found"`},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			rec := doBody(tc.method, tc.path, tc.token, strings.NewReader(tc.body))
+			if rec.Code != tc.wantCode || !strings.Contains(rec.Body.String(), tc.wantIn) {
+				t.Fatalf("got %d %s", rec.Code, rec.Body)
+			}
+		})
+	}
+}
+
+const staffID = "abababab-abab-abab-abab-abababababab"
+
+type fakeStaff struct{}
+
+func (fakeStaff) List(context.Context, string) ([]staff.Member, error) {
+	return []staff.Member{{ID: staffID, Name: "Yo", Active: true, IsOwner: true, ServiceIDs: []string{}, Hours: []staff.Hours{}}}, nil
+}
+func (f fakeStaff) Get(ctx context.Context, b, id string) (staff.Member, error) {
+	if id != staffID {
+		return staff.Member{}, staff.ErrNotFound
+	}
+	l, _ := f.List(ctx, b)
+	return l[0], nil
+}
+func (fakeStaff) Create(_ context.Context, _ string, m staff.Member) (staff.Member, error) {
+	m.ID, m.Active = staffID, true
+	return m, nil
+}
+func (fakeStaff) Update(context.Context, string, staff.Member) error { return nil }
+func (fakeStaff) SetServices(_ context.Context, _, id string, items []string) error {
+	if id != staffID {
+		return staff.ErrNotFound
+	}
+	if len(items) > 0 && items[0] == bizB {
+		return staff.ErrNotAService
+	}
+	return nil
+}
+func (fakeStaff) SetHours(_ context.Context, _, id string, _ []staff.Hours) error {
+	if id != "" && id != staffID {
+		return staff.ErrNotFound
+	}
+	return nil
+}
+func (fakeStaff) BusinessHours(context.Context, string) ([]staff.Hours, error) {
+	return []staff.Hours{{Weekday: 1, OpensAt: "10:00", ClosesAt: "19:00"}}, nil
+}
+
+func TestStaffAndHoursRoutes(t *testing.T) {
+	b := "/v1/b/" + bizA
+	one := b + "/staff/" + staffID
+	cases := []struct {
+		name, method, path, token, body string
+		wantCode                        int
+		wantIn                          string
+	}{
+		{"empleada ve al equipo", http.MethodGet, b + "/staff", "staff", "", http.StatusOK, `"is_owner":true`},
+		{"dueño agrega", http.MethodPost, b + "/staff", "ok", `{"name":" Karla ","color":"#E91E63"}`, http.StatusCreated, `"name":"Karla"`},
+		{"sin nombre", http.MethodPost, b + "/staff", "ok", `{"name":""}`, http.StatusUnprocessableEntity, `"name"`},
+		{"empleada no agrega", http.MethodPost, b + "/staff", "staff", `{"name":"X"}`, http.StatusForbidden, `"forbidden"`},
+		{"renombrar al dueño", http.MethodPatch, one + "/", "ok", `{"name":"Lupita"}`, http.StatusOK, `"name":"Lupita"`},
+		{"persona inexistente", http.MethodPatch, b + "/staff/cdcdcdcd-cdcd-cdcd-cdcd-cdcdcdcdcdcd/", "ok", `{"name":"X"}`, http.StatusNotFound, `"not_found"`},
+		{"id no uuid", http.MethodPut, b + "/staff/abc/hours", "ok", `{"hours":[]}`, http.StatusNotFound, `"not_found"`},
+		{"asignar servicios", http.MethodPut, one + "/services", "ok", `{"service_ids":["` + itemID + `"]}`, http.StatusNoContent, ""},
+		{"servicio de otro tipo", http.MethodPut, one + "/services", "ok", `{"service_ids":["` + bizB + `"]}`, http.StatusUnprocessableEntity, `"service_ids"`},
+		{"id de servicio inválido", http.MethodPut, one + "/services", "ok", `{"service_ids":["x"]}`, http.StatusUnprocessableEntity, `"service_ids"`},
+		{"horario partido", http.MethodPut, one + "/hours", "ok", `{"hours":[{"weekday":1,"opens_at":"09:00","closes_at":"14:00"},{"weekday":1,"opens_at":"16:00","closes_at":"20:00"}]}`, http.StatusNoContent, ""},
+		{"horario encimado", http.MethodPut, one + "/hours", "ok", `{"hours":[{"weekday":1,"opens_at":"09:00","closes_at":"14:00"},{"weekday":1,"opens_at":"13:00","closes_at":"20:00"}]}`, http.StatusUnprocessableEntity, `"hours"`},
+		{"empleada no cambia horarios", http.MethodPut, one + "/hours", "staff", `{"hours":[]}`, http.StatusForbidden, `"forbidden"`},
+		{"horario general visible", http.MethodGet, b + "/hours", "staff", "", http.StatusOK, `"opens_at":"10:00"`},
+		{"dueño cambia horario general", http.MethodPut, b + "/hours", "ok", `{"hours":[{"weekday":0,"opens_at":"09:00","closes_at":"20:00"}]}`, http.StatusNoContent, ""},
 	}
 	for _, tc := range cases {
 		t.Run(tc.name, func(t *testing.T) {
