@@ -413,3 +413,30 @@ enabled = true
 # formatted with uppercase keywords, indent 2, max width 180, trailing commas,
 # and column/key alignment. Set to "null" to emit raw, unformatted SQL.
 # format_options = "{\"keywordCase\":\"upper\",\"indent\":2,\"maxWidth\":180,\"commaStyle\":\"trailing\"}"
+
+# Staging (proyecto en la nube). Solo se sobrescribe lo que difiere del bloque local.
+[remotes.staging]
+project_id = "upsolqbrrpvhiusnlsfh"
+
+[remotes.staging.auth]
+site_url = "https://local-bussiness-staging.vercel.app"
+additional_redirect_urls = [
+  "https://local-bussiness-staging.vercel.app/**",
+  "https://local-bussiness-staging-*-omaradrianos-projects.vercel.app/**",
+  "http://localhost:8082/**",
+  "exp://**",
+  "localbussiness://**",
+]
+
+# Mantener los valores que ya tiene staging (difieren del bloque local de desarrollo).
+[remotes.staging.auth.email]
+enable_confirmations = true
+max_frequency = "1m0s"
+otp_length = 8
+
+[remotes.staging.auth.mfa.totp]
+enroll_enabled = true
+verify_enabled = true
+
+[remotes.staging.storage.vector]
+enabled = false
