@@ -1,35 +1,21 @@
-import type { Membership } from '@lb/api-client';
 import { strings, term } from '@lb/shared';
-import { router, Stack } from 'expo-router';
-import { useCallback, useEffect, useState } from 'react';
+import { Link, router, Stack } from 'expo-router';
 import { ActivityIndicator, Button, Text, View } from 'react-native';
-import { api } from '../../../lib/api';
 import { supabase } from '../../../lib/supabase';
+import { useMe } from '../../../lib/useMe';
 
 const t = strings.admin;
 
 export default function AdminHome() {
-  const [businesses, setBusinesses] = useState<Membership[] | null>(null);
-  const [failed, setFailed] = useState(false);
-
-  const load = useCallback(async () => {
-    setFailed(false);
-    const { data, error } = await api.GET('/v1/me');
-    if (error || !data) return setFailed(true);
-    setBusinesses(data.businesses);
-  }, []);
-
-  useEffect(() => {
-    load();
-  }, [load]);
+  const { businesses, error, reload } = useMe();
 
   return (
     <View style={{ flex: 1, padding: 16, gap: 12 }}>
       <Stack.Screen options={{ title: t.title }} />
-      {failed ? (
+      {error ? (
         <>
-          <Text accessibilityRole="alert">{strings.common.error}</Text>
-          <Button title={strings.common.retry} onPress={load} />
+          <Text accessibilityRole="alert">{error}</Text>
+          <Button title={strings.common.retry} onPress={reload} />
         </>
       ) : businesses === null ? (
         <ActivityIndicator accessibilityLabel={strings.common.loading} />
@@ -42,9 +28,11 @@ export default function AdminHome() {
         <>
           <Text accessibilityRole="header" style={{ fontSize: 18, fontWeight: '600' }}>{t.yourBusinesses}</Text>
           {businesses.map((b) => (
-            <Text key={b.business_id}>
-              {b.name} · {term(b.vertical, 'booking')}s · {t.role[b.role]}
-            </Text>
+            <Link key={b.business_id} href={{ pathname: '/admin/[businessId]', params: { businessId: b.business_id } }}>
+              <Text style={{ textDecorationLine: 'underline' }}>
+                {b.name} · {term(b.vertical, 'catalog')} · {t.role[b.role]}
+              </Text>
+            </Link>
           ))}
         </>
       )}

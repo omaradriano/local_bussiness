@@ -11,13 +11,16 @@ import (
 	"github.com/omaradriano/local_bussiness/services/api/internal/apierr"
 	"github.com/omaradriano/local_bussiness/services/api/internal/auth"
 	"github.com/omaradriano/local_bussiness/services/api/internal/businesses"
+	"github.com/omaradriano/local_bussiness/services/api/internal/catalog"
 	"github.com/omaradriano/local_bussiness/services/api/internal/store"
 )
 
 const (
-	user = "11111111-1111-1111-1111-111111111111"
-	bizA = "aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa"
-	bizB = "bbbbbbbb-bbbb-bbbb-bbbb-bbbbbbbbbbbb"
+	user      = "11111111-1111-1111-1111-111111111111"
+	staffUser = "22222222-2222-2222-2222-222222222222"
+	itemID    = "cccccccc-cccc-cccc-cccc-cccccccccccc"
+	bizA      = "aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa"
+	bizB      = "bbbbbbbb-bbbb-bbbb-bbbb-bbbbbbbbbbbb"
 )
 
 type fakeStore struct{}
@@ -25,6 +28,9 @@ type fakeStore struct{}
 func (fakeStore) Role(_ context.Context, businessID, userID string) (string, error) {
 	if businessID == bizA && userID == user {
 		return "owner", nil
+	}
+	if businessID == bizA && userID == staffUser {
+		return "staff", nil
 	}
 	return "", nil
 }
@@ -36,15 +42,39 @@ func (fakeStore) Memberships(_ context.Context, userID string) ([]store.Membersh
 	return []store.Membership{{BusinessID: bizA, Slug: "demo-unas", Name: "Uñas", Vertical: "nails", Role: "owner"}}, nil
 }
 
-// fakeAuth accepts "Bearer ok" as the test user; anything else is 401.
+// fakeAuth: "Bearer ok" is the owner of bizA, "Bearer staff" its employee; anything else is 401.
 func fakeAuth(next http.Handler) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		if r.Header.Get("Authorization") != "Bearer ok" {
+		id := map[string]string{"Bearer ok": user, "Bearer staff": staffUser}[r.Header.Get("Authorization")]
+		if id == "" {
 			apierr.Write(w, http.StatusUnauthorized, "unauthorized", "x")
 			return
 		}
-		next.ServeHTTP(w, r.WithContext(auth.WithUserID(r.Context(), user)))
+		next.ServeHTTP(w, r.WithContext(auth.WithUserID(r.Context(), id)))
 	})
+}
+
+type fakeCatalog struct{}
+
+func (fakeCatalog) List(context.Context, string) ([]catalog.Item, error) {
+	return []catalog.Item{{ID: itemID, Kind: "service", Name: "Gelish"}}, nil
+}
+
+func (fakeCatalog) Get(_ context.Context, _, id string) (catalog.Item, error) {
+	if id != itemID {
+		return catalog.Item{}, catalog.ErrNotFound
+	}
+	d := 60
+	return catalog.Item{ID: itemID, Kind: "service", Name: "Gelish", Price: 25000, Active: true, DurationMinutes: &d}, nil
+}
+
+func (fakeCatalog) Create(_ context.Context, _ string, it catalog.Item) (catalog.Item, error) {
+	it.ID = itemID
+	return it, nil
+}
+
+func (fakeCatalog) Update(_ context.Context, _ string, it catalog.Item) (catalog.Item, error) {
+	return it, nil
 }
 
 func fakeCreate(_ context.Context, userID string, in businesses.Input) (businesses.Business, error) {
@@ -71,6 +101,7 @@ func doBody(method, path, token string, body io.Reader, headers ...string) *http
 		Authenticate:   fakeAuth,
 		Store:          fakeStore{},
 		CreateBusiness: fakeCreate,
+		Catalog:        fakeCatalog{},
 		AllowedOrigins: []string{"http://localhost:8082", "https://local-bussiness-staging-*.vercel.app"},
 	}).ServeHTTP(rec, req)
 	return rec
@@ -145,6 +176,35 @@ func TestCreateBusiness(t *testing.T) {
 	for _, tc := range cases {
 		t.Run(tc.name, func(t *testing.T) {
 			rec := doBody(http.MethodPost, "/v1/businesses", tc.token, strings.NewReader(tc.body))
+			if rec.Code != tc.wantCode || !strings.Contains(rec.Body.String(), tc.wantIn) {
+				t.Fatalf("got %d %s", rec.Code, rec.Body)
+			}
+		})
+	}
+}
+
+func TestCatalogRoutes(t *testing.T) {
+	base := "/v1/b/" + bizA + "/catalog"
+	svc := `{"kind":"service","name":"Acrílico","price":45000,"duration_minutes":120}`
+	cases := []struct {
+		name, method, path, token, body string
+		wantCode                        int
+		wantIn                          string
+	}{
+		{"empleada lee el catálogo", http.MethodGet, base, "staff", "", http.StatusOK, `"name":"Gelish"`},
+		{"empleada no crea", http.MethodPost, base, "staff", svc, http.StatusForbidden, `"forbidden"`},
+		{"dueño crea", http.MethodPost, base, "ok", svc, http.StatusCreated, `"id":"` + itemID + `"`},
+		{"dueño con datos inválidos", http.MethodPost, base, "ok", `{"kind":"service","name":"X","price":100}`, http.StatusUnprocessableEntity, `"duration_minutes"`},
+		{"negocio ajeno", http.MethodGet, "/v1/b/" + bizB + "/catalog", "ok", "", http.StatusForbidden, `"forbidden"`},
+		{"dueño desactiva", http.MethodPatch, base + "/" + itemID, "ok", `{"active":false}`, http.StatusOK, `"active":false`},
+		{"patch inválido", http.MethodPatch, base + "/" + itemID, "ok", `{"duration_minutes":1}`, http.StatusUnprocessableEntity, `"duration_minutes"`},
+		{"artículo inexistente", http.MethodPatch, base + "/dddddddd-dddd-dddd-dddd-dddddddddddd", "ok", `{"active":false}`, http.StatusNotFound, `"not_found"`},
+		{"id que no es uuid", http.MethodPatch, base + "/abc", "ok", `{"active":false}`, http.StatusNotFound, `"not_found"`},
+		{"empleada no edita", http.MethodPatch, base + "/" + itemID, "staff", `{"active":false}`, http.StatusForbidden, `"forbidden"`},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			rec := doBody(tc.method, tc.path, tc.token, strings.NewReader(tc.body))
 			if rec.Code != tc.wantCode || !strings.Contains(rec.Body.String(), tc.wantIn) {
 				t.Fatalf("got %d %s", rec.Code, rec.Body)
 			}
