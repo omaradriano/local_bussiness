@@ -7,42 +7,77 @@ import (
 	"net/http"
 	"os"
 	"os/signal"
+	"strings"
 	"syscall"
 	"time"
 
+	"github.com/omaradriano/local_bussiness/services/api/internal/auth"
 	"github.com/omaradriano/local_bussiness/services/api/internal/httpapi"
+	"github.com/omaradriano/local_bussiness/services/api/internal/store"
 )
 
 func main() {
 	log := slog.New(slog.NewJSONHandler(os.Stdout, nil))
-
-	port := os.Getenv("PORT") // Railway injects PORT
-	if port == "" {
-		port = "8080"
+	slog.SetDefault(log)
+	if err := run(log); err != nil {
+		log.Error("api", "err", err)
+		os.Exit(1)
 	}
+}
 
-	srv := &http.Server{
-		Addr:              ":" + port,
-		Handler:           httpapi.NewRouter(),
-		ReadHeaderTimeout: 10 * time.Second,
+func run(log *slog.Logger) error {
+	port := env("PORT", "8080") // Railway injects PORT
+	supabaseURL := strings.TrimRight(os.Getenv("SUPABASE_URL"), "/")
+	dbURL := os.Getenv("DATABASE_URL")
+	if supabaseURL == "" || dbURL == "" {
+		return errors.New("SUPABASE_URL and DATABASE_URL are required")
 	}
 
 	ctx, stop := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM)
 	defer stop()
 
+	keys, err := auth.JWKS(ctx, supabaseURL)
+	if err != nil {
+		return err
+	}
+	pool, err := store.Connect(ctx, dbURL)
+	if err != nil {
+		return err
+	}
+	defer pool.Close()
+
+	srv := &http.Server{
+		Addr: ":" + port,
+		Handler: httpapi.NewRouter(httpapi.Deps{
+			Authenticate:   auth.Authenticate(keys, supabaseURL+"/auth/v1"),
+			Store:          store.New(pool),
+			AllowedOrigins: strings.Split(env("CORS_ORIGINS", "http://localhost:8082"), ","),
+		}),
+		ReadHeaderTimeout: 10 * time.Second,
+	}
+
+	errc := make(chan error, 1)
 	go func() {
 		log.Info("api listening", "addr", srv.Addr)
 		if err := srv.ListenAndServe(); err != nil && !errors.Is(err, http.ErrServerClosed) {
-			log.Error("listen", "err", err)
-			os.Exit(1)
+			errc <- err
 		}
 	}()
 
-	<-ctx.Done()
+	select {
+	case err := <-errc:
+		return err
+	case <-ctx.Done():
+	}
 	shutdownCtx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
 	defer cancel()
-	if err := srv.Shutdown(shutdownCtx); err != nil {
-		log.Error("shutdown", "err", err)
+	log.Info("api stopping")
+	return srv.Shutdown(shutdownCtx)
+}
+
+func env(key, fallback string) string {
+	if v := os.Getenv(key); v != "" {
+		return v
 	}
-	log.Info("api stopped")
+	return fallback
 }
