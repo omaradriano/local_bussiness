@@ -2,7 +2,7 @@
   "name": "@lb/api",
   "private": true,
   "scripts": {
-    "dev": "make run",
+    "dev": "make -j2 run worker",
     "test": "make test",
     "lint": "make lint",
     "build": "make build"

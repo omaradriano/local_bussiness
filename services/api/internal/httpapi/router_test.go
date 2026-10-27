@@ -12,6 +12,8 @@ import (
 	"github.com/omaradriano/local_bussiness/services/api/internal/auth"
 	"github.com/omaradriano/local_bussiness/services/api/internal/businesses"
 	"github.com/omaradriano/local_bussiness/services/api/internal/catalog"
+	"github.com/omaradriano/local_bussiness/services/api/internal/files"
+	"github.com/omaradriano/local_bussiness/services/api/internal/media"
 	"github.com/omaradriano/local_bussiness/services/api/internal/staff"
 	"github.com/omaradriano/local_bussiness/services/api/internal/store"
 )
@@ -135,6 +137,7 @@ func doBody(method, path, token string, body io.Reader, headers ...string) *http
 		CreateBusiness: fakeCreate,
 		Catalog:        fakeCatalog{},
 		Staff:          fakeStaff{},
+		Photos:         &Photos{Media: fakeMedia{}, Files: fakeFiles{}, EnqueueImage: fakeEnqueue, CDNBase: "https://cdn.test"},
 		AllowedOrigins: []string{"http://localhost:8082", "https://local-bussiness-staging-*.vercel.app"},
 	}).ServeHTTP(rec, req)
 	return rec
@@ -352,5 +355,102 @@ func TestStaffAndHoursRoutes(t *testing.T) {
 				t.Fatalf("got %d %s", rec.Code, rec.Body)
 			}
 		})
+	}
+}
+
+const imageID = "99999999-9999-9999-9999-999999999999"
+
+type fakeMedia struct{}
+
+func (fakeMedia) CreatePending(_ context.Context, _, item, _ string) (media.Image, error) {
+	if item != itemID {
+		return media.Image{}, media.ErrNotFound
+	}
+	return media.Image{ID: imageID, ItemID: itemID, Status: "processing"}, nil
+}
+func (fakeMedia) Get(_ context.Context, _, item, img string) (media.Image, error) {
+	if item != itemID || img != imageID {
+		return media.Image{}, media.ErrNotFound
+	}
+	return media.Image{ID: imageID, ItemID: itemID, Status: "processing"}, nil
+}
+func (fakeMedia) ListForBusiness(context.Context, string) (map[string][]media.Image, error) {
+	return map[string][]media.Image{itemID: {{ID: imageID, ItemID: itemID, Status: "ready"}}}, nil
+}
+func (f fakeMedia) Delete(ctx context.Context, b, item, img string) (media.Image, error) {
+	return f.Get(ctx, b, item, img)
+}
+
+// fakeFiles: the object "exists" unless the test turned uploaded off.
+type fakeFiles struct{}
+
+var uploaded = true
+
+func (fakeFiles) PresignPut(_ context.Context, bucket, key, _ string, _ int64) (string, error) {
+	return "https://s3.test/" + bucket + "/" + key + "?sig=x", nil
+}
+func (fakeFiles) Head(context.Context, string, string) (int64, string, error) {
+	if !uploaded {
+		return 0, "", files.ErrNoObject
+	}
+	return 500_000, "image/jpeg", nil
+}
+func (fakeFiles) Delete(context.Context, string, string) error { return nil }
+
+var enqueued []string
+
+func fakeEnqueue(_ context.Context, id string) error {
+	enqueued = append(enqueued, id)
+	return nil
+}
+
+func TestCatalogImageRoutes(t *testing.T) {
+	base := "/v1/b/" + bizA + "/catalog/" + itemID + "/images/"
+	jpg := `{"content_type":"image/jpeg","size":800000}`
+	cases := []struct {
+		name, method, path, token, body string
+		uploaded                        bool
+		wantCode                        int
+		wantIn                          string
+	}{
+		{"pedir subida", http.MethodPost, base, "ok", jpg, true, http.StatusCreated, `"upload_url":"https://s3.test/`},
+		{"tipo no permitido", http.MethodPost, base, "ok", `{"content_type":"image/gif","size":1000}`, true, http.StatusUnprocessableEntity, `"file"`},
+		{"muy pesada", http.MethodPost, base, "ok", `{"content_type":"image/jpeg","size":6000000}`, true, http.StatusUnprocessableEntity, `"file"`},
+		{"artículo de otro negocio o lleno", http.MethodPost, "/v1/b/" + bizA + "/catalog/dddddddd-dddd-dddd-dddd-dddddddddddd/images/", "ok", jpg, true, http.StatusUnprocessableEntity, `"file"`},
+		{"empleada no sube", http.MethodPost, base, "staff", jpg, true, http.StatusForbidden, `"forbidden"`},
+		{"confirmar sin archivo", http.MethodPost, base + imageID + "/complete", "ok", "", false, http.StatusUnprocessableEntity, `no se terminó de subir`},
+		{"confirmar subida", http.MethodPost, base + imageID + "/complete", "ok", "", true, http.StatusAccepted, `"status":"processing"`},
+		{"foto inexistente", http.MethodPost, base + "abc/complete", "ok", "", true, http.StatusNotFound, `"not_found"`},
+		{"borrar", http.MethodDelete, base + imageID, "ok", "", true, http.StatusNoContent, ""},
+		{"borrar inexistente", http.MethodDelete, base + "88888888-8888-8888-8888-888888888888", "ok", "", true, http.StatusNotFound, `"not_found"`},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			uploaded, enqueued = tc.uploaded, nil
+			rec := doBody(tc.method, tc.path, tc.token, strings.NewReader(tc.body))
+			if rec.Code != tc.wantCode || !strings.Contains(rec.Body.String(), tc.wantIn) {
+				t.Fatalf("got %d %s", rec.Code, rec.Body)
+			}
+			if tc.name == "confirmar subida" && (len(enqueued) != 1 || enqueued[0] != imageID) {
+				t.Fatalf("job not enqueued: %v", enqueued)
+			}
+		})
+	}
+}
+
+func TestCatalogListIncludesImages(t *testing.T) {
+	rec := do(http.MethodGet, "/v1/b/"+bizA+"/catalog", "staff")
+	if rec.Code != http.StatusOK || !strings.Contains(rec.Body.String(), `"images":[{"id":"`+imageID) {
+		t.Fatalf("got %d %s", rec.Code, rec.Body)
+	}
+}
+
+func TestPhotosDisabledAnswers503(t *testing.T) {
+	req := httptest.NewRequest(http.MethodPost, "/v1/b/"+bizA+"/catalog/"+itemID+"/images/", strings.NewReader(`{}`))
+	req.Header.Set("Authorization", "Bearer ok")
+	rec := httptest.NewRecorder()
+	NewRouter(Deps{Authenticate: fakeAuth, Store: fakeStore{}, Catalog: fakeCatalog{}}).ServeHTTP(rec, req)
+	if rec.Code != http.StatusServiceUnavailable {
+		t.Fatalf("got %d %s", rec.Code, rec.Body)
 	}
 }

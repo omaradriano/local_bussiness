@@ -138,11 +138,19 @@ resource "aws_iam_user_policy" "api" {
   user = aws_iam_user.api.name
   policy = jsonencode({
     Version = "2012-10-17"
-    Statement = [{
-      Effect   = "Allow"
-      Action   = ["s3:PutObject", "s3:GetObject", "s3:DeleteObject"]
-      Resource = [for b in aws_s3_bucket.this : "${b.arn}/*"]
-    }]
+    Statement = [
+      {
+        Effect   = "Allow"
+        Action   = ["s3:PutObject", "s3:GetObject", "s3:DeleteObject"]
+        Resource = [for b in aws_s3_bucket.this : "${b.arn}/*"]
+      },
+      {
+        # Needed so a missing object answers 404 (not 403) and for the startup HeadBucket check.
+        Effect   = "Allow"
+        Action   = ["s3:ListBucket"]
+        Resource = [for b in aws_s3_bucket.this : b.arn]
+      },
+    ]
   })
 }
 

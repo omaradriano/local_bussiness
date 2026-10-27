@@ -253,6 +253,67 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/v1/b/{businessId}/catalog/{itemId}/images/": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                businessId: components["parameters"]["BusinessId"];
+                itemId: components["parameters"]["ItemId"];
+            };
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Registra una foto y devuelve una URL prefirmada para subirla directo a S3 (solo dueño) */
+        post: operations["createImageUpload"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/b/{businessId}/catalog/{itemId}/images/{imageId}/complete": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                businessId: components["parameters"]["BusinessId"];
+                itemId: components["parameters"]["ItemId"];
+                imageId: components["parameters"]["ImageId"];
+            };
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Confirma la subida y encola la generación de tamaños */
+        post: operations["completeImageUpload"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/b/{businessId}/catalog/{itemId}/images/{imageId}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                businessId: components["parameters"]["BusinessId"];
+                itemId: components["parameters"]["ItemId"];
+                imageId: components["parameters"]["ImageId"];
+            };
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post?: never;
+        delete: operations["deleteImage"];
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
 }
 export type webhooks = Record<string, never>;
 export interface components {
@@ -315,6 +376,22 @@ export interface components {
             buffer_minutes: number;
             active: boolean;
             sort: number;
+            images?: components["schemas"]["CatalogImage"][];
+        };
+        CatalogImage: {
+            /** Format: uuid */
+            id: string;
+            /** Format: uuid */
+            item_id: string;
+            /** @enum {string} */
+            status: "processing" | "ready" | "failed";
+            width: number | null;
+            height: number | null;
+            blurhash: string | null;
+            /** @description Variante (thumb 160 px, card 480 px, detail 1080 px) -> URL del CDN */
+            urls: {
+                [key: string]: string;
+            } | null;
         };
         /** @enum {string} */
         UnitStatus: "available" | "maintenance" | "retired";
@@ -378,6 +455,7 @@ export interface components {
         };
     };
     parameters: {
+        ImageId: string;
         StaffId: string;
         ItemId: string;
         BusinessId: string;
@@ -863,6 +941,97 @@ export interface operations {
             };
             403: components["responses"]["Error"];
             422: components["responses"]["Error"];
+        };
+    };
+    createImageUpload: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                businessId: components["parameters"]["BusinessId"];
+                itemId: components["parameters"]["ItemId"];
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": {
+                    /** @enum {string} */
+                    content_type: "image/jpeg" | "image/png" | "image/webp";
+                    size: number;
+                };
+            };
+        };
+        responses: {
+            /** @description Subir con PUT a upload_url con estos headers, y luego llamar a complete */
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        image: components["schemas"]["CatalogImage"];
+                        upload_url: string;
+                        upload_headers: {
+                            [key: string]: string;
+                        };
+                    };
+                };
+            };
+            403: components["responses"]["Error"];
+            422: components["responses"]["Error"];
+            503: components["responses"]["Error"];
+        };
+    };
+    completeImageUpload: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                businessId: components["parameters"]["BusinessId"];
+                itemId: components["parameters"]["ItemId"];
+                imageId: components["parameters"]["ImageId"];
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description En proceso */
+            202: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        image: components["schemas"]["CatalogImage"];
+                    };
+                };
+            };
+            404: components["responses"]["Error"];
+            422: components["responses"]["Error"];
+        };
+    };
+    deleteImage: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                businessId: components["parameters"]["BusinessId"];
+                itemId: components["parameters"]["ItemId"];
+                imageId: components["parameters"]["ImageId"];
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Borrada */
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            404: components["responses"]["Error"];
         };
     };
 }

@@ -4,3 +4,5 @@ export * from './auth';
 export * from './slug';
 export * from './money';
 export * from './hours';
+export * from './image';
+export * from './nav';

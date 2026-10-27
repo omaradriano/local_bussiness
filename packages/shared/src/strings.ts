@@ -6,6 +6,7 @@ export const strings = {
     retry: 'Reintentar',
     error: 'Algo salió mal. Intenta de nuevo.',
     notFound: 'No se encontró.',
+    back: 'Volver',
   },
   admin: {
     title: 'Panel',
@@ -71,6 +72,17 @@ export const strings = {
     add: 'Agregar unidad',
     empty: 'Sin unidades: agrega al menos una para poder rentar esta herramienta.',
     status: { available: 'Disponible', maintenance: 'En mantenimiento', retired: 'Dada de baja' },
+  },
+  photos: {
+    title: 'Fotos',
+    add: 'Agregar fotos',
+    processing: 'Procesando…',
+    failed: 'No se pudo procesar',
+    remove: 'Quitar',
+    permission: 'Necesitamos permiso para ver tus fotos.',
+    uploading: 'Subiendo fotos…',
+    progress: (n: number, total: number) => `Subiendo foto ${n} de ${total}…`,
+    tooMany: (max: number) => `Solo se agregaron las primeras: el máximo es ${max} fotos por artículo.`,
   },
   staff: {
     title: 'Equipo',
