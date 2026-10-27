@@ -338,6 +338,47 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/v1/b/{businessId}/bookings": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                businessId: components["parameters"]["BusinessId"];
+            };
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Alta de cita, pedido o renta en mostrador (dueño o empleado)
+         * @description El precio, el anticipo y el estado los calcula el servidor. Un choque responde 409 slot_taken.
+         */
+        post: operations["createBooking"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/b/{businessId}/bookings/{bookingId}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                businessId: components["parameters"]["BusinessId"];
+                bookingId: string;
+            };
+            cookie?: never;
+        };
+        get: operations["getBooking"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
 }
 export type webhooks = Record<string, never>;
 export interface components {
@@ -435,6 +476,95 @@ export interface components {
                 remaining: number;
             }[];
             free_units?: string[];
+        };
+        /** @enum {string} */
+        BookingStatus: "pending_deposit" | "confirmed" | "in_progress" | "ready" | "out_for_delivery" | "checked_out" | "overdue" | "returned" | "completed" | "cancelled" | "expired" | "no_show";
+        BookingInput: {
+            /** @description `id` de un cliente existente, o `name` + `phone` (10 dígitos de México o E.164) */
+            customer: {
+                /** Format: uuid */
+                id?: string;
+                name?: string;
+                phone?: string;
+                email?: string;
+            };
+            /** Format: uuid */
+            item_id: string;
+            /** @default 1 */
+            quantity: number;
+            /**
+             * Format: date-time
+             * @description Servicio: hora de la cita; producto: entrega; renta: salida
+             */
+            starts_at: string;
+            /**
+             * Format: date-time
+             * @description Renta: regreso
+             */
+            ends_at?: string;
+            /**
+             * Format: uuid
+             * @description Servicio: persona preferida
+             */
+            staff_id?: string;
+            /** @enum {string} */
+            fulfillment?: "pickup" | "delivery";
+            delivery_address?: string;
+            delivery_zone?: string;
+            options?: {
+                [key: string]: string;
+            };
+            notes?: string;
+        };
+        Booking: {
+            /** Format: uuid */
+            id: string;
+            kind: components["schemas"]["ItemKind"];
+            status: components["schemas"]["BookingStatus"];
+            /** Format: date-time */
+            starts_at: string;
+            /** Format: date-time */
+            ends_at: string | null;
+            customer: {
+                /** Format: uuid */
+                id: string;
+                name: string;
+                phone: string;
+            };
+            items: {
+                /** Format: uuid */
+                item_id: string;
+                name: string;
+                quantity: number;
+                /** Format: int64 */
+                unit_price: number;
+                options: {
+                    [key: string]: unknown;
+                };
+            }[];
+            staff: components["schemas"]["Ref"][];
+            units: components["schemas"]["Ref"][];
+            fulfillment?: string | null;
+            delivery_address?: string | null;
+            /** Format: int64 */
+            subtotal: number;
+            /** Format: int64 */
+            deposit_required: number;
+            /** Format: int64 */
+            total: number;
+            notes?: string | null;
+            /** @enum {string} */
+            source: "public" | "admin";
+            /** Format: date-time */
+            hold_expires_at: string | null;
+            public_token: string;
+            /** Format: date-time */
+            created_at: string;
+        };
+        Ref: {
+            /** Format: uuid */
+            id: string;
+            name: string;
         };
         /** @enum {string} */
         UnitStatus: "available" | "maintenance" | "retired";
@@ -1107,6 +1237,71 @@ export interface operations {
             403: components["responses"]["Error"];
             404: components["responses"]["Error"];
             422: components["responses"]["Error"];
+        };
+    };
+    createBooking: {
+        parameters: {
+            query?: never;
+            header?: {
+                /** @description Clave única por intento de alta (8–100 caracteres); un reintento devuelve la misma reserva con 200. */
+                "Idempotency-Key"?: string;
+            };
+            path: {
+                businessId: components["parameters"]["BusinessId"];
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["BookingInput"];
+            };
+        };
+        responses: {
+            /** @description Ya existía (misma Idempotency-Key) */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Booking"];
+                };
+            };
+            /** @description Creada */
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Booking"];
+                };
+            };
+            403: components["responses"]["Error"];
+            409: components["responses"]["Error"];
+            422: components["responses"]["Error"];
+        };
+    };
+    getBooking: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                businessId: components["parameters"]["BusinessId"];
+                bookingId: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Booking"];
+                };
+            };
+            404: components["responses"]["Error"];
         };
     };
 }

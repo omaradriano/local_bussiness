@@ -16,6 +16,7 @@ import (
 	"github.com/omaradriano/local_bussiness/services/api/internal/apierr"
 	"github.com/omaradriano/local_bussiness/services/api/internal/auth"
 	"github.com/omaradriano/local_bussiness/services/api/internal/availability"
+	"github.com/omaradriano/local_bussiness/services/api/internal/bookings"
 	"github.com/omaradriano/local_bussiness/services/api/internal/businesses"
 	"github.com/omaradriano/local_bussiness/services/api/internal/catalog"
 	"github.com/omaradriano/local_bussiness/services/api/internal/media"
@@ -37,7 +38,20 @@ type Deps struct {
 	Staff          StaffRepo
 	Photos         *Photos
 	Availability   AvailabilityAnswerer
+	Bookings       BookingsRepo
 	Now            func() time.Time // injectable clock; nil = time.Now
+}
+
+type BookingsRepo interface {
+	Create(ctx context.Context, businessID string, in bookings.CreateInput, now time.Time) (bookings.Booking, bool, error)
+	Get(ctx context.Context, businessID, id string) (bookings.Booking, error)
+}
+
+func (d Deps) now() time.Time {
+	if d.Now != nil {
+		return d.Now()
+	}
+	return time.Now()
 }
 
 type AvailabilityAnswerer interface {
@@ -227,6 +241,52 @@ func NewRouter(d Deps) http.Handler {
 
 			mountImages(r, d.Photos)
 
+			// Counter booking: owner and staff can take it.
+			r.Post("/bookings", func(w http.ResponseWriter, r *http.Request) {
+				m, _ := auth.MemberFrom(r.Context())
+				var in bookings.CreateInput
+				if !decode(w, r, &in) {
+					return
+				}
+				if !auth.IsUUID(in.ItemID) || (in.StaffID != "" && !auth.IsUUID(in.StaffID)) || (in.Customer.ID != "" && !auth.IsUUID(in.Customer.ID)) {
+					invalid(w, "Revisa los datos.", map[string]string{"item_id": "Elige un artículo válido."})
+					return
+				}
+				in.Source, in.CreatedBy = "admin", m.UserID
+				in.IdempotencyKey = r.Header.Get("Idempotency-Key")
+				if k := in.IdempotencyKey; k != "" && (len(k) < 8 || len(k) > 100) {
+					invalid(w, "Idempotency-Key inválida.", map[string]string{"idempotency_key": "Debe tener de 8 a 100 caracteres."})
+					return
+				}
+				b, existed, err := d.Bookings.Create(r.Context(), m.BusinessID, in, d.now())
+				var bad bookings.Invalid
+				switch {
+				case errors.As(err, &bad):
+					invalid(w, bad.Message, map[string]string{bad.Field: bad.Message})
+				case errors.Is(err, bookings.ErrSlotTaken):
+					apierr.Write(w, http.StatusConflict, "slot_taken", "Ya no está disponible; elige otro horario, fecha o cantidad.")
+				case err != nil:
+					internalError(w, r, "create booking", err)
+				case existed:
+					apierr.JSON(w, http.StatusOK, b)
+				default:
+					apierr.JSON(w, http.StatusCreated, b)
+				}
+			})
+
+			r.With(requireUUIDParam("bookingId", "La reserva no existe.")).Get("/bookings/{bookingId}", func(w http.ResponseWriter, r *http.Request) {
+				m, _ := auth.MemberFrom(r.Context())
+				b, err := d.Bookings.Get(r.Context(), m.BusinessID, chi.URLParam(r, "bookingId"))
+				switch {
+				case errors.Is(err, bookings.ErrNotFound):
+					notFound(w, "La reserva no existe.")
+				case err != nil:
+					internalError(w, r, "get booking", err)
+				default:
+					apierr.JSON(w, http.StatusOK, b)
+				}
+			})
+
 			r.Get("/availability", func(w http.ResponseWriter, r *http.Request) {
 				m, _ := auth.MemberFrom(r.Context())
 				q := r.URL.Query()
@@ -243,11 +303,7 @@ func NewRouter(d Deps) http.Handler {
 					}
 					req.Quantity = n
 				}
-				now := time.Now
-				if d.Now != nil {
-					now = d.Now
-				}
-				res, err := d.Availability.Answer(r.Context(), m.BusinessID, req, now())
+				res, err := d.Availability.Answer(r.Context(), m.BusinessID, req, d.now())
 				var bad availability.BadRequest
 				switch {
 				case errors.As(err, &bad):

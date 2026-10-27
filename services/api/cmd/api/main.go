@@ -15,6 +15,7 @@ import (
 	"github.com/jackc/pgx/v5/pgxpool"
 	"github.com/omaradriano/local_bussiness/services/api/internal/auth"
 	"github.com/omaradriano/local_bussiness/services/api/internal/availability"
+	"github.com/omaradriano/local_bussiness/services/api/internal/bookings"
 	"github.com/omaradriano/local_bussiness/services/api/internal/businesses"
 
 	"github.com/omaradriano/local_bussiness/services/api/internal/catalog"
@@ -69,6 +70,7 @@ func run(log *slog.Logger) error {
 			Catalog:      catalog.Repo{DB: pool},
 			Staff:        staff.Repo{DB: pool},
 			Availability: availability.Loader{DB: pool},
+			Bookings:     bookings.Repo{DB: pool},
 			CreateBusiness: func(ctx context.Context, userID string, in businesses.Input) (businesses.Business, error) {
 				return businesses.Create(ctx, pool, userID, in)
 			},
