@@ -3,6 +3,10 @@
 # Don't depend on the caller's env: turbo filters it and a global GO111MODULE=off breaks module builds.
 export GO111MODULE=on
 
+# Local secrets (DATABASE_URL, ...) live in services/api/.env, never committed.
+-include .env
+export
+
 run:
 	PORT=$${PORT:-8090} go run ./cmd/api
 

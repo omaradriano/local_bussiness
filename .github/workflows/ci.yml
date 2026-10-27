@@ -50,6 +50,15 @@ jobs:
           version: 2.120.0
       - run: supabase db start
       - run: supabase test db
+      - uses: actions/setup-go@v7
+        with:
+          go-version-file: services/api/go.mod
+          cache-dependency-path: services/api/go.sum
+      - name: go integration tests
+        working-directory: services/api
+        run: go test -run Integration ./...
+        env:
+          TEST_DATABASE_URL: postgresql://postgres:postgres@127.0.0.1:54322/postgres
 
   secrets:
     name: gitleaks
