@@ -36,7 +36,7 @@ jobs:
         with:
           version: 2.120.0
       - run: supabase link --project-ref "${{ vars.SUPABASE_PROJECT_REF }}"
-      - run: supabase db push
+      - run: supabase db push --include-seed
 
   api:
     name: railway api + worker

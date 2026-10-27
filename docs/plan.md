@@ -351,7 +351,8 @@ Ningún negocio debe poder ver datos de otro, y eso se garantiza en la base de d
 **RLS en Supabase**
 
 - RLS activo en todas las tablas. Función `is_member(business_id, roles[])` basada en `business_members` y `auth.uid()`.
-- `owner`: lectura y escritura completa de su negocio. `staff`: lectura del catálogo y de las reservas, escritura solo en estados y pagos de las reservas que atiende.
+- RLS da **solo lectura** (decidido 2026-10-27): `anon` y `authenticated` no tienen permisos de escritura en `public`; toda escritura pasa por la API Go con la service role, que aplica los permisos por rol (`owner`: todo su negocio; `staff`: estados y pagos de las reservas que atiende).
+- Lectura: cualquier miembro lee los datos de su negocio; avisos y equipo completo solo el `owner`.
 - El rol `anon` no lee tablas directamente; el catálogo público se sirve desde la API.
 - Tests de RLS en SQL (pgTAP o scripts con dos usuarios de negocios distintos) como parte del CI.
 
