@@ -6,6 +6,7 @@ export const strings = {
     retry: 'Reintentar',
     error: 'Algo salió mal. Intenta de nuevo.',
     notFound: 'No se encontró.',
+    back: 'Volver',
   },
   admin: {
     title: 'Panel',

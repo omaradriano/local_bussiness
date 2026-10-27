@@ -1,10 +1,11 @@
 import type { components } from '@lb/api-client';
 import { centavosToInput, kindFor, parsePesos, strings, term, type ItemKind } from '@lb/shared';
-import { router, Stack, useLocalSearchParams } from 'expo-router';
+import { router, Stack, useLocalSearchParams, usePathname } from 'expo-router';
 import { useCallback, useEffect, useState } from 'react';
 import { ActivityIndicator, Button, Pressable, ScrollView, Text, TextInput, View } from 'react-native';
 import { ItemPhotos } from '../../../../../../components/ItemPhotos';
 import { api } from '../../../../../../lib/api';
+import { goBack } from '../../../../../../lib/nav';
 import { uploadPhotos, type PickedPhoto } from '../../../../../../lib/photos';
 import { errorText, fieldErrors } from '../../../../../../lib/errors';
 import { useBusiness } from '../../../../../../lib/useMe';
@@ -56,6 +57,7 @@ function toFields(f: Form, kind: ItemKind): { fields?: Fields; errors?: Record<s
 }
 
 export default function CatalogItemForm() {
+  const pathname = usePathname();
   const { businessId, itemId, error: carriedError } = useLocalSearchParams<{ businessId: string; itemId: string; error?: string }>();
   const { business } = useBusiness(businessId);
   const isNew = itemId === 'new';
@@ -112,7 +114,7 @@ export default function CatalogItemForm() {
       }
     }
     setBusy(false);
-    router.back();
+    goBack(pathname);
   }
 
   const field = (key: keyof Form, apiKey: string, label: string, numeric = false) => (
