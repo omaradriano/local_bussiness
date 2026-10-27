@@ -33,3 +33,9 @@ supabase/.temp/
 
 # vercel link metadata
 .vercel/
+
+# opentofu
+.terraform/
+*.tfstate
+*.tfstate.*
+*.tfplan

@@ -23,7 +23,10 @@
       "Bash(vercel ls *)",
       "Bash(vercel inspect *)",
       "Bash(vercel logs *)",
-      "Bash(aws s3 ls *)"
+      "Bash(aws s3 ls *)",
+      "Bash(tofu fmt *)",
+      "Bash(tofu validate*)",
+      "Bash(tofu plan*)"
     ],
     "ask": [
       "Bash(git push *)",
@@ -41,7 +44,8 @@
       "Bash(supabase link *)",
       "Bash(eas build *)",
       "Bash(eas update *)",
-      "Bash(tofu apply *)",
+      "Bash(tofu apply*)",
+      "Bash(tofu destroy*)",
       "Bash(terraform apply *)"
     ],
     "deny": [

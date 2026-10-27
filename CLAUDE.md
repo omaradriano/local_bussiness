@@ -11,6 +11,7 @@ Plataforma multi-negocio de reservas, pedidos y rentas (uñas, florería, renta 
 - Hosting: Railway (api, worker), Vercel (web), Supabase, AWS S3 + CloudFront.
   - Railway: proyecto `local-bussiness`, entorno `staging`, servicios `api` y `worker` (misma imagen de `services/api`, us-west2). Su configuración vive en `.railway/railway.ts` (Infrastructure as Code; `railway.json` está obsoleto desde 2026-12-01): `railway config plan` para ver cambios, `railway config apply` para aplicarlos. El código se sube con `railway up services/api --path-as-root --service <api|worker>`.
   - API staging: https://api-staging-4e97e.up.railway.app
+  - AWS (cuenta personal, perfil `local-bussiness`, sesión con `aws login --profile local-bussiness --region us-west-2`): buckets `local-bussiness-staging-{catalog,private-docs,rental-evidence}` y CloudFront https://d1tklylecl3ocy.cloudfront.net (catálogo), usuario IAM `local-bussiness-staging-api`. Código en `infra/aws/` (OpenTofu, estado en el bucket `local-bussiness-tfstate`). La cuenta tiene recursos de otros proyectos (`loukys-*`, `fastmarketcuu-*`): nunca tocarlos.
   - Vercel: proyecto `local-bussiness-staging` ligado a `apps/client` (`vercel.json` ahí). Despliegue solo desde GitHub Actions (deploy por Git desactivado).
 
 ## Comandos
