@@ -1,4 +1,4 @@
-import { strings, term } from '@lb/shared';
+import { kindFor, strings, term } from '@lb/shared';
 import { Link, Stack, useLocalSearchParams } from 'expo-router';
 import { ActivityIndicator, Text, View } from 'react-native';
 import { useBusiness } from '../../../../lib/useMe';
@@ -17,6 +17,14 @@ export default function BusinessHome() {
       <Text accessibilityRole="header" style={{ fontSize: 22, fontWeight: '600' }}>{business.name}</Text>
       <Link href={{ pathname: '/admin/[businessId]/catalog', params: { businessId } }}>
         <Text style={{ textDecorationLine: 'underline', fontSize: 16 }}>{term(business.vertical, 'catalog')}</Text>
+      </Link>
+      {kindFor(business.vertical) === 'service' && (
+        <Link href={{ pathname: '/admin/[businessId]/staff', params: { businessId } }}>
+          <Text style={{ textDecorationLine: 'underline', fontSize: 16 }}>{strings.business.sections.staff}</Text>
+        </Link>
+      )}
+      <Link href={{ pathname: '/admin/[businessId]/hours', params: { businessId } }}>
+        <Text style={{ textDecorationLine: 'underline', fontSize: 16 }}>{strings.business.sections.hours}</Text>
       </Link>
       <Link href="/admin">
         <Text style={{ opacity: 0.7 }}>← {strings.business.back}</Text>

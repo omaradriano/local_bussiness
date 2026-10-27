@@ -51,6 +51,22 @@ func TestIntegrationCreateAppliesTemplate(t *testing.T) {
 		if role != "owner" || items != len(tpl.Items) || hours == 0 || steps != len(tpl.Steps) {
 			t.Fatalf("%s: role=%s items=%d hours=%d steps=%d", v, role, items, hours, steps)
 		}
+		// Single-person nails business: the owner attends every service with the business hours.
+		var ownerStaff, ownerServices, ownerHours int
+		err = outer.QueryRow(ctx, `
+			select count(m.staff_id),
+			       (select count(*) from public.staff_services ss join public.business_members m2 on m2.staff_id = ss.staff_id where m2.business_id = $1 and m2.user_id = $2),
+			       (select count(*) from public.business_hours h join public.business_members m3 on m3.staff_id = h.staff_id where m3.business_id = $1 and m3.user_id = $2)
+			from public.business_members m where m.business_id = $1 and m.user_id = $2`, b.ID, user).Scan(&ownerStaff, &ownerServices, &ownerHours)
+		if err != nil {
+			t.Fatal(err)
+		}
+		if tpl.OwnerAttends && (ownerStaff != 1 || ownerServices != len(tpl.Items) || ownerHours == 0) {
+			t.Fatalf("%s: owner as staff: staff=%d services=%d hours=%d", v, ownerStaff, ownerServices, ownerHours)
+		}
+		if !tpl.OwnerAttends && ownerStaff != 0 {
+			t.Fatalf("%s: owner should not be staff", v)
+		}
 	}
 
 	_, err = Create(ctx, outer, user, Input{Name: "Otra", Slug: "prueba-unas", Vertical: "nails"}.Normalize())
