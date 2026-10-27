@@ -15,6 +15,7 @@ import (
 	"github.com/omaradriano/local_bussiness/services/api/internal/auth"
 	"github.com/omaradriano/local_bussiness/services/api/internal/businesses"
 	"github.com/omaradriano/local_bussiness/services/api/internal/catalog"
+	"github.com/omaradriano/local_bussiness/services/api/internal/media"
 	"github.com/omaradriano/local_bussiness/services/api/internal/staff"
 	"github.com/omaradriano/local_bussiness/services/api/internal/store"
 )
@@ -31,6 +32,7 @@ type Deps struct {
 	CreateBusiness func(ctx context.Context, userID string, in businesses.Input) (businesses.Business, error)
 	Catalog        CatalogRepo
 	Staff          StaffRepo
+	Photos         *Photos
 }
 
 type StaffRepo interface {
@@ -146,6 +148,20 @@ func NewRouter(d Deps) http.Handler {
 					internalError(w, r, "list catalog", err)
 					return
 				}
+				photos := map[string][]media.Image{}
+				if d.Photos != nil && d.Photos.Media != nil {
+					if photos, err = d.Photos.Media.ListForBusiness(r.Context(), m.BusinessID); err != nil {
+						internalError(w, r, "list images", err)
+						return
+					}
+				}
+				for i := range items {
+					imgs := []media.Image{}
+					for _, img := range photos[items[i].ID] {
+						imgs = append(imgs, img.WithURLs(d.Photos.CDNBase))
+					}
+					items[i].Images = imgs
+				}
 				apierr.JSON(w, http.StatusOK, map[string]any{"items": items})
 			})
 
@@ -199,6 +215,8 @@ func NewRouter(d Deps) http.Handler {
 				}
 				apierr.JSON(w, http.StatusOK, updated)
 			})
+
+			mountImages(r, d.Photos)
 
 			r.Get("/staff", func(w http.ResponseWriter, r *http.Request) {
 				m, _ := auth.MemberFrom(r.Context())

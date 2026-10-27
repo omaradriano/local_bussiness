@@ -1,8 +1,9 @@
 import type { components } from '@lb/api-client';
 import { centavosToInput, kindFor, parsePesos, strings, term, type ItemKind } from '@lb/shared';
 import { router, Stack, useLocalSearchParams } from 'expo-router';
-import { useEffect, useState } from 'react';
+import { useCallback, useEffect, useState } from 'react';
 import { ActivityIndicator, Button, Pressable, ScrollView, Text, TextInput, View } from 'react-native';
+import { ItemPhotos } from '../../../../../../components/ItemPhotos';
 import { api } from '../../../../../../lib/api';
 import { errorText, fieldErrors } from '../../../../../../lib/errors';
 import { useBusiness } from '../../../../../../lib/useMe';
@@ -72,6 +73,13 @@ export default function CatalogItemForm() {
     });
   }, [businessId, itemId, isNew]);
 
+  // Refresh only the item (its photos), never the form, so typing isn't lost while photos process.
+  const reloadItem = useCallback(async () => {
+    const { data } = await api.GET('/v1/b/{businessId}/catalog', { params: { path: { businessId } } });
+    const found = data?.items.find((x) => x.id === itemId);
+    if (found) setItem(found);
+  }, [businessId, itemId]);
+
   if (!business || !form) {
     return message ? <Text style={{ padding: 16 }}>{message}</Text> : <ActivityIndicator style={{ marginTop: 24 }} />;
   }
@@ -130,6 +138,11 @@ export default function CatalogItemForm() {
           {field('deposit', 'security_deposit', t.deposit, true)}
           {field('lateFee', 'late_fee_per_day', t.lateFee, true)}
         </>
+      )}
+      {item ? (
+        <ItemPhotos businessId={businessId} itemId={item.id} images={item.images ?? []} reload={reloadItem} editable={business.role === 'owner'} />
+      ) : (
+        <Text style={{ opacity: 0.7 }}>{strings.photos.saveFirst}</Text>
       )}
       {message && <Text accessibilityRole="alert">{message}</Text>}
       <Button title={t.save} onPress={save} disabled={busy} />

@@ -72,6 +72,16 @@ export const strings = {
     empty: 'Sin unidades: agrega al menos una para poder rentar esta herramienta.',
     status: { available: 'Disponible', maintenance: 'En mantenimiento', retired: 'Dada de baja' },
   },
+  photos: {
+    title: 'Fotos',
+    add: 'Agregar foto',
+    processing: 'Procesando…',
+    failed: 'No se pudo procesar',
+    remove: 'Quitar',
+    saveFirst: 'Guarda el artículo para poder agregarle fotos.',
+    permission: 'Necesitamos permiso para ver tus fotos.',
+    uploading: 'Subiendo…',
+  },
   staff: {
     title: 'Equipo',
     hint: 'Las personas que atienden. Si trabajas solo, ya estás aquí como "Yo": cambia tu nombre, así te verán tus clientes.',

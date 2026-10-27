@@ -1,5 +1,6 @@
 import type { components } from '@lb/api-client';
 import { formatMXN, strings, term } from '@lb/shared';
+import { Image } from 'expo-image';
 import { Link, router, Stack, useFocusEffect, useLocalSearchParams } from 'expo-router';
 import { useCallback, useState } from 'react';
 import { ActivityIndicator, Button, ScrollView, Text, View } from 'react-native';
@@ -54,9 +55,15 @@ export default function CatalogList() {
       {items?.length === 0 && <Text>{t.empty}</Text>}
       {items?.map((it) => (
         <View key={it.id} style={{ borderWidth: 1, borderRadius: 8, padding: 12, gap: 4, opacity: it.active ? 1 : 0.55 }}>
-          <Text style={{ fontWeight: '600' }}>
-            {it.name} · {formatMXN(it.price)} {it.active ? '' : `(${t.inactive})`}
-          </Text>
+          <View style={{ flexDirection: 'row', gap: 10, alignItems: 'center' }}>
+            {it.images?.[0]?.urls?.thumb && (
+              <Image source={it.images[0].urls.thumb} placeholder={it.images[0].blurhash ? { blurhash: it.images[0].blurhash } : undefined}
+                style={{ width: 48, height: 48, borderRadius: 6 }} contentFit="cover" accessibilityLabel={it.name} />
+            )}
+            <Text style={{ fontWeight: '600', flexShrink: 1 }}>
+              {it.name} · {formatMXN(it.price)} {it.active ? '' : `(${t.inactive})`}
+            </Text>
+          </View>
           <Text>{detail(it)}</Text>
           {it.kind === 'rental' && (
             <Link href={{ pathname: '/admin/[businessId]/catalog/[itemId]/units', params: { businessId, itemId: it.id } }}>

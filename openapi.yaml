@@ -349,6 +349,71 @@ paths:
         "403": { $ref: "#/components/responses/Error" }
         "422": { $ref: "#/components/responses/Error" }
 
+  /v1/b/{businessId}/catalog/{itemId}/images/:
+    parameters:
+      - $ref: "#/components/parameters/BusinessId"
+      - $ref: "#/components/parameters/ItemId"
+    post:
+      operationId: createImageUpload
+      summary: Registra una foto y devuelve una URL prefirmada para subirla directo a S3 (solo dueño)
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [content_type, size]
+              properties:
+                content_type: { type: string, enum: [image/jpeg, image/png, image/webp] }
+                size: { type: integer, minimum: 1, maximum: 5242880 }
+      responses:
+        "201":
+          description: Subir con PUT a upload_url con estos headers, y luego llamar a complete
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [image, upload_url, upload_headers]
+                properties:
+                  image: { $ref: "#/components/schemas/CatalogImage" }
+                  upload_url: { type: string }
+                  upload_headers: { type: object, additionalProperties: { type: string } }
+        "403": { $ref: "#/components/responses/Error" }
+        "422": { $ref: "#/components/responses/Error" }
+        "503": { $ref: "#/components/responses/Error" }
+
+  /v1/b/{businessId}/catalog/{itemId}/images/{imageId}/complete:
+    parameters:
+      - $ref: "#/components/parameters/BusinessId"
+      - $ref: "#/components/parameters/ItemId"
+      - $ref: "#/components/parameters/ImageId"
+    post:
+      operationId: completeImageUpload
+      summary: Confirma la subida y encola la generación de tamaños
+      responses:
+        "202":
+          description: En proceso
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [image]
+                properties:
+                  image: { $ref: "#/components/schemas/CatalogImage" }
+        "404": { $ref: "#/components/responses/Error" }
+        "422": { $ref: "#/components/responses/Error" }
+
+  /v1/b/{businessId}/catalog/{itemId}/images/{imageId}:
+    parameters:
+      - $ref: "#/components/parameters/BusinessId"
+      - $ref: "#/components/parameters/ItemId"
+      - $ref: "#/components/parameters/ImageId"
+    delete:
+      operationId: deleteImage
+      responses:
+        "204": { description: Borrada }
+        "404": { $ref: "#/components/responses/Error" }
+
 components:
   securitySchemes:
     bearer:
@@ -357,6 +422,11 @@ components:
       description: Access token de Supabase Auth
 
   parameters:
+    ImageId:
+      name: imageId
+      in: path
+      required: true
+      schema: { type: string, format: uuid }
     StaffId:
       name: staffId
       in: path
@@ -450,6 +520,24 @@ components:
             buffer_minutes: { type: integer }
             active: { type: boolean }
             sort: { type: integer }
+            images:
+              type: array
+              items: { $ref: "#/components/schemas/CatalogImage" }
+
+    CatalogImage:
+      type: object
+      required: [id, item_id, status, width, height, blurhash, urls]
+      properties:
+        id: { type: string, format: uuid }
+        item_id: { type: string, format: uuid }
+        status: { type: string, enum: [processing, ready, failed] }
+        width: { type: [integer, "null"] }
+        height: { type: [integer, "null"] }
+        blurhash: { type: [string, "null"] }
+        urls:
+          type: [object, "null"]
+          description: "Variante (thumb 160 px, card 480 px, detail 1080 px) -> URL del CDN"
+          additionalProperties: { type: string }
 
     UnitStatus:
       type: string

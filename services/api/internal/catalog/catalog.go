@@ -31,6 +31,7 @@ type Item struct {
 	PriceUnit       *string `json:"price_unit"`
 	SecurityDeposit *int64  `json:"security_deposit"`
 	LateFeePerDay   *int64  `json:"late_fee_per_day"`
+	Images          any     `json:"images"` // filled by the handler (media.Image list); never stored here
 }
 
 // Patch: nil fields are left as they are. Kind cannot change.
