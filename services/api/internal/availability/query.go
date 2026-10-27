@@ -116,6 +116,9 @@ func (l Loader) product(ctx context.Context, businessID string, biz Business, it
 }
 
 func (l Loader) rental(ctx context.Context, businessID string, biz Business, item Item, req Request, now time.Time) (Response, error) {
+	if _, isDay := parseDate(biz.Loc, req.From); isDay {
+		return l.rentalDays(ctx, businessID, biz, item, req, now)
+	}
 	from, err1 := time.Parse(time.RFC3339, req.From)
 	to, err2 := time.Parse(time.RFC3339, req.To)
 	if err1 != nil || err2 != nil {
@@ -139,4 +142,33 @@ func (l Loader) rental(ctx context.Context, businessID string, biz Business, ite
 	}
 	free := RentalFreeUnits(RentalQuery{From: from, To: to, Now: now, Quantity: req.Quantity, Inspection: gap, Units: units, Blackouts: blackouts})
 	return Response{Kind: "rental", FreeUnits: free, Available: len(free) >= req.Quantity}, nil
+}
+
+// rentalDays answers the calendar: free units per day between two local dates.
+func (l Loader) rentalDays(ctx context.Context, businessID string, biz Business, item Item, req Request, now time.Time) (Response, error) {
+	from, _ := parseDate(biz.Loc, req.From)
+	to, ok := parseDate(biz.Loc, req.To)
+	if !ok || to.Before(from) {
+		return Response{}, BadRequest{"to", "El último día debe ser igual o posterior al primero."}
+	}
+	if to.Sub(from) > maxDays*24*time.Hour {
+		return Response{}, BadRequest{"to", "Consulta como máximo dos meses."}
+	}
+	gap := time.Duration(biz.InspectionMinutes) * time.Minute
+	w := Interval{from.Add(-gap), to.AddDate(0, 0, 1).Add(gap)}
+	units, err := l.RentalUnits(ctx, businessID, item.ID, w)
+	if err != nil {
+		return Response{}, err
+	}
+	hours, err := l.BusinessHours(ctx, businessID)
+	if err != nil {
+		return Response{}, err
+	}
+	blackouts, err := l.Blackouts(ctx, businessID, w)
+	if err != nil {
+		return Response{}, err
+	}
+	days := RentalDays(RentalDaysQuery{Loc: biz.Loc, From: req.From, To: to.Format("2006-01-02"), Now: now, Quantity: req.Quantity,
+		Inspection: gap, BusinessHours: hours, Units: units, Blackouts: blackouts})
+	return Response{Kind: "rental", Days: days, Available: slices.ContainsFunc(days, func(d Day) bool { return d.Available })}, nil
 }

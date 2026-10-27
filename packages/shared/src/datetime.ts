@@ -27,3 +27,22 @@ export function hhmm(iso: string): string {
   const d = new Date(iso);
   return `${String(d.getHours()).padStart(2, '0')}:${String(d.getMinutes()).padStart(2, '0')}`;
 }
+
+/** Local dates (YYYY-MM-DD) a booking touches, from its start to its end (an end at 00:00 doesn't count that day). */
+export function bookingDays(startISO: string, endISO: string | null): string[] {
+  const start = new Date(startISO);
+  const end = endISO ? new Date(new Date(endISO).getTime() - 1) : start;
+  const days: string[] = [];
+  const d = new Date(start.getFullYear(), start.getMonth(), start.getDate());
+  while (d <= end && days.length < 400) {
+    days.push(todayISO(d));
+    d.setDate(d.getDate() + 1);
+  }
+  return days.length ? days : [todayISO(start)];
+}
+
+/** [start of the month, start of next month) as ISO instants in the device time zone. */
+export function monthWindow(monthStart: string): { from: string; to: string } {
+  const [y, m] = monthStart.split('-').map(Number);
+  return { from: new Date(y, m - 1, 1).toISOString(), to: new Date(y, m, 1).toISOString() };
+}

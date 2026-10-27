@@ -253,3 +253,39 @@ func TestIntegrationCreateBooking(t *testing.T) {
 		}
 	})
 }
+
+func TestIntegrationListBookings(t *testing.T) {
+	p := pool(t)
+	ctx := context.Background()
+	f := setup(t, p, "tool_rental", `{}`)
+	b, _, err := Create(ctx, p, f.business, CreateInput{Customer: cust("6146660001"), ItemID: f.item,
+		StartsAt: at("2026-11-02T15:00:00Z"), EndsAt: at("2026-11-04T15:00:00Z"), Source: "admin"}, now)
+	if err != nil {
+		t.Fatal(err)
+	}
+	win := func(from, to string) ListFilter { return ListFilter{From: *at(from), To: *at(to), OnlyActive: true} }
+
+	// A rental spanning the window is listed even if it started before it.
+	got, err := List(ctx, p, f.business, win("2026-11-03T00:00:00Z", "2026-11-03T23:59:00Z"))
+	if err != nil || len(got) != 1 || got[0].ID != b.ID || got[0].Units[0] != "RM-01" || got[0].Items != "1 × Roto" || got[0].CustomerName != "Ana" {
+		t.Fatalf("overlapping: %+v %v", got, err)
+	}
+	if got, _ := List(ctx, p, f.business, win("2026-11-05T00:00:00Z", "2026-11-06T00:00:00Z")); len(got) != 0 {
+		t.Fatalf("after it ended: %+v", got)
+	}
+	if got, _ := List(ctx, p, f.business, ListFilter{From: *at("2026-11-01T00:00:00Z"), To: *at("2026-11-30T00:00:00Z"), Kind: "service"}); len(got) != 0 {
+		t.Fatalf("kind filter: %+v", got)
+	}
+	// Cancelled rentals leave the active list but stay in "all".
+	if _, err := p.Exec(ctx, `update public.bookings set status = 'cancelled' where id = $1`, b.ID); err != nil {
+		t.Fatal(err)
+	}
+	if got, _ := List(ctx, p, f.business, win("2026-11-01T00:00:00Z", "2026-11-30T00:00:00Z")); len(got) != 0 {
+		t.Fatalf("cancelled still active: %+v", got)
+	}
+	all := win("2026-11-01T00:00:00Z", "2026-11-30T00:00:00Z")
+	all.OnlyActive = false
+	if got, _ := List(ctx, p, f.business, all); len(got) != 1 || got[0].Status != "cancelled" {
+		t.Fatalf("all statuses: %+v", got)
+	}
+}

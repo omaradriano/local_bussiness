@@ -20,6 +20,9 @@ export default function BusinessHome() {
           {strings.bookings.new(term(business.vertical, 'booking') ?? '')}
         </Text>
       </Link>
+      <Link href={{ pathname: '/admin/[businessId]/calendar', params: { businessId } }}>
+        <Text style={{ textDecorationLine: 'underline', fontSize: 16 }}>{strings.business.sections.calendar}</Text>
+      </Link>
       <Link href={{ pathname: '/admin/[businessId]/catalog', params: { businessId } }}>
         <Text style={{ textDecorationLine: 'underline', fontSize: 16 }}>{term(business.vertical, 'catalog')}</Text>
       </Link>

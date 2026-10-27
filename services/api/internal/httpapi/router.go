@@ -45,6 +45,7 @@ type Deps struct {
 type BookingsRepo interface {
 	Create(ctx context.Context, businessID string, in bookings.CreateInput, now time.Time) (bookings.Booking, bool, error)
 	Get(ctx context.Context, businessID, id string) (bookings.Booking, error)
+	List(ctx context.Context, businessID string, f bookings.ListFilter) ([]bookings.Summary, error)
 }
 
 func (d Deps) now() time.Time {
@@ -272,6 +273,29 @@ func NewRouter(d Deps) http.Handler {
 				default:
 					apierr.JSON(w, http.StatusCreated, b)
 				}
+			})
+
+			// Calendar / agenda: bookings overlapping [from, to), active ones by default.
+			r.Get("/bookings", func(w http.ResponseWriter, r *http.Request) {
+				m, _ := auth.MemberFrom(r.Context())
+				q := r.URL.Query()
+				from, err1 := time.Parse(time.RFC3339, q.Get("from"))
+				to, err2 := time.Parse(time.RFC3339, q.Get("to"))
+				if err1 != nil || err2 != nil || !from.Before(to) || to.Sub(from) > 93*24*time.Hour {
+					invalid(w, "Indica un rango válido (máximo 3 meses).", map[string]string{"from": "Rango inválido."})
+					return
+				}
+				kind := q.Get("kind")
+				if kind != "" && kind != "service" && kind != "product" && kind != "rental" {
+					invalid(w, "Tipo inválido.", map[string]string{"kind": "Tipo inválido."})
+					return
+				}
+				list, err := d.Bookings.List(r.Context(), m.BusinessID, bookings.ListFilter{From: from, To: to, Kind: kind, OnlyActive: q.Get("status") != "all"})
+				if err != nil {
+					internalError(w, r, "list bookings", err)
+					return
+				}
+				apierr.JSON(w, http.StatusOK, map[string]any{"bookings": list})
 			})
 
 			r.With(requireUUIDParam("bookingId", "La reserva no existe.")).Get("/bookings/{bookingId}", func(w http.ResponseWriter, r *http.Request) {

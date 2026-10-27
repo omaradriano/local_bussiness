@@ -275,3 +275,52 @@ func RentalFreeUnits(q RentalQuery) []string {
 	}
 	return out
 }
+
+type RentalDaysQuery struct {
+	Loc           *time.Location
+	From, To      string // local dates, inclusive
+	Now           time.Time
+	Quantity      int
+	Inspection    time.Duration
+	BusinessHours []Shift
+	Units         []Unit // only units in status "available"
+	Blackouts     []Blackout
+}
+
+// RentalDays paints a calendar: a day is available when the business opens and at least Quantity units
+// are free during its open hours (plus the inspection gap). Remaining = free units that day.
+// The exact pick-up/return range is still checked with RentalFreeUnits before booking.
+func RentalDays(q RentalDaysQuery) []Day {
+	from, ok1 := parseDate(q.Loc, q.From)
+	to, ok2 := parseDate(q.Loc, q.To)
+	if !ok1 || !ok2 || to.Before(from) {
+		return nil
+	}
+	var out []Day
+	for d, n := from, 0; !d.After(to) && n < maxDays; d, n = d.AddDate(0, 0, 1), n+1 {
+		day := Day{Date: d.Format("2006-01-02")}
+		shifts := shiftsOn(q.Loc, d, q.BusinessHours)
+		if len(shifts) > 0 {
+			open := Interval{shifts[0].Start, shifts[len(shifts)-1].End}
+			for _, s := range shifts {
+				if s.Start.Before(open.Start) {
+					open.Start = s.Start
+				}
+				if s.End.After(open.End) {
+					open.End = s.End
+				}
+			}
+			if open.End.After(q.Now) {
+				want := Interval{open.Start.Add(-q.Inspection), open.End.Add(q.Inspection)}
+				for _, u := range q.Units {
+					if free(want, u.Busy, q.Blackouts, "", u.ID) {
+						day.Remaining++
+					}
+				}
+				day.Available = day.Remaining >= max(q.Quantity, 1)
+			}
+		}
+		out = append(out, day)
+	}
+	return out
+}
