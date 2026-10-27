@@ -81,7 +81,7 @@ func NewRouter(d Deps) http.Handler {
 	r.Use(middleware.RequestID, middleware.Recoverer)
 	r.Use(cors.Handler(cors.Options{
 		AllowedOrigins: d.AllowedOrigins,
-		AllowedMethods: []string{"GET", "POST", "PATCH", "DELETE", "OPTIONS"},
+		AllowedMethods: []string{"GET", "POST", "PUT", "PATCH", "DELETE", "OPTIONS"},
 		AllowedHeaders: []string{"Authorization", "Content-Type", "Idempotency-Key"},
 		MaxAge:         600,
 	}))
