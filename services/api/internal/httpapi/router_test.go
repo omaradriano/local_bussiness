@@ -194,6 +194,17 @@ func TestCORSAllowsOnlyEnvironmentOrigins(t *testing.T) {
 	}
 }
 
+// Every method the API exposes must pass the browser preflight (a missing PUT broke saving hours).
+func TestCORSPreflightAllowsEveryMethodWeUse(t *testing.T) {
+	for _, m := range []string{http.MethodGet, http.MethodPost, http.MethodPut, http.MethodPatch, http.MethodDelete} {
+		rec := do(http.MethodOptions, "/v1/b/"+bizA+"/hours", "", "Origin", "http://localhost:8082",
+			"Access-Control-Request-Method", m, "Access-Control-Request-Headers", "authorization,content-type")
+		if got := rec.Header().Get("Access-Control-Allow-Origin"); got != "http://localhost:8082" {
+			t.Errorf("%s preflight: allow-origin = %q", m, got)
+		}
+	}
+}
+
 func TestCreateBusiness(t *testing.T) {
 	cases := []struct {
 		name, token, body string

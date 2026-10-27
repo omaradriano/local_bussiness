@@ -28,4 +28,14 @@ describe('createApi', () => {
     expect(response.status).toBe(401);
     expect(error?.code).toBe('unauthorized');
   });
+
+  it('turns a network failure into an API error instead of throwing', async () => {
+    const failing = (async () => {
+      throw new TypeError('Failed to fetch');
+    }) as typeof fetch;
+    const api = createApi('https://api.test', async () => 'tok', failing);
+    const { error, response } = await api.GET('/v1/me');
+    expect(response.status).toBe(503);
+    expect(error?.code).toBe('network');
+  });
 });
