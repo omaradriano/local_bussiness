@@ -1,8 +1,9 @@
 /**
- * Resize target so the longest side is at most `max` (keeps aspect: the other side is null).
- * null when the image is already small enough.
+ * Resize target so the longest side is at most `max`, keeping the aspect ratio. Both sides are given
+ * explicitly (expo-image-manipulator on web turns a null side into NaN). null when already small enough.
  */
-export function fitWithin(width: number, height: number, max = 2048): { width: number | null; height: number | null } | null {
+export function fitWithin(width: number, height: number, max = 2048): { width: number; height: number } | null {
   if (width <= max && height <= max) return null;
-  return width >= height ? { width: max, height: null } : { width: null, height: max };
+  const scale = max / Math.max(width, height);
+  return { width: Math.max(1, Math.round(width * scale)), height: Math.max(1, Math.round(height * scale)) };
 }
