@@ -160,6 +160,72 @@ paths:
         "404": { $ref: "#/components/responses/Error" }
         "422": { $ref: "#/components/responses/Error" }
 
+  /v1/b/{businessId}/catalog/{itemId}/units:
+    parameters:
+      - $ref: "#/components/parameters/BusinessId"
+      - $ref: "#/components/parameters/ItemId"
+    get:
+      operationId: listUnits
+      summary: Unidades físicas de una herramienta en renta (cualquier miembro)
+      responses:
+        "200":
+          description: OK
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [units]
+                properties:
+                  units:
+                    type: array
+                    items: { $ref: "#/components/schemas/Unit" }
+        "403": { $ref: "#/components/responses/Error" }
+        "404": { $ref: "#/components/responses/Error" }
+    post:
+      operationId: createUnit
+      summary: Agrega una unidad (solo dueño); la clave se guarda en mayúsculas
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/UnitPatch" }
+      responses:
+        "201":
+          description: Creada
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Unit" }
+        "403": { $ref: "#/components/responses/Error" }
+        "404": { $ref: "#/components/responses/Error" }
+        "409": { $ref: "#/components/responses/Error" }
+        "422": { $ref: "#/components/responses/Error" }
+
+  /v1/b/{businessId}/catalog/{itemId}/units/{unitId}:
+    parameters:
+      - $ref: "#/components/parameters/BusinessId"
+      - $ref: "#/components/parameters/ItemId"
+      - name: unitId
+        in: path
+        required: true
+        schema: { type: string, format: uuid }
+    patch:
+      operationId: updateUnit
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/UnitPatch" }
+      responses:
+        "200":
+          description: OK
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Unit" }
+        "403": { $ref: "#/components/responses/Error" }
+        "404": { $ref: "#/components/responses/Error" }
+        "409": { $ref: "#/components/responses/Error" }
+        "422": { $ref: "#/components/responses/Error" }
+
 components:
   securitySchemes:
     bearer:
@@ -168,6 +234,11 @@ components:
       description: Access token de Supabase Auth
 
   parameters:
+    ItemId:
+      name: itemId
+      in: path
+      required: true
+      schema: { type: string, format: uuid }
     BusinessId:
       name: businessId
       in: path
@@ -251,6 +322,27 @@ components:
             buffer_minutes: { type: integer }
             active: { type: boolean }
             sort: { type: integer }
+
+    UnitStatus:
+      type: string
+      enum: [available, maintenance, retired]
+
+    Unit:
+      type: object
+      required: [id, item_id, code, status, notes]
+      properties:
+        id: { type: string, format: uuid }
+        item_id: { type: string, format: uuid }
+        code: { type: string }
+        status: { $ref: "#/components/schemas/UnitStatus" }
+        notes: { type: string }
+
+    UnitPatch:
+      type: object
+      properties:
+        code: { type: string, maxLength: 40 }
+        status: { $ref: "#/components/schemas/UnitStatus" }
+        notes: { type: string }
 
     Membership:
       type: object

@@ -77,6 +77,37 @@ func (fakeCatalog) Update(_ context.Context, _ string, it catalog.Item) (catalog
 	return it, nil
 }
 
+const unitID = "eeeeeeee-eeee-eeee-eeee-eeeeeeeeeeee"
+
+func (fakeCatalog) ListUnits(_ context.Context, _, item string) ([]catalog.Unit, error) {
+	if item != itemID {
+		return nil, catalog.ErrNotFound
+	}
+	return []catalog.Unit{{ID: unitID, ItemID: itemID, Code: "RM-01", Status: "available"}}, nil
+}
+
+func (fakeCatalog) GetUnit(_ context.Context, _, item, unit string) (catalog.Unit, error) {
+	if item != itemID || unit != unitID {
+		return catalog.Unit{}, catalog.ErrNotFound
+	}
+	return catalog.Unit{ID: unitID, ItemID: itemID, Code: "RM-01", Status: "available"}, nil
+}
+
+func (fakeCatalog) CreateUnit(_ context.Context, _ string, u catalog.Unit) (catalog.Unit, error) {
+	if u.ItemID != itemID {
+		return catalog.Unit{}, catalog.ErrNotFound
+	}
+	if u.Code == "RM-01" {
+		return catalog.Unit{}, catalog.ErrCodeTaken
+	}
+	u.ID = unitID
+	return u, nil
+}
+
+func (fakeCatalog) UpdateUnit(_ context.Context, _ string, u catalog.Unit) (catalog.Unit, error) {
+	return u, nil
+}
+
 func fakeCreate(_ context.Context, userID string, in businesses.Input) (businesses.Business, error) {
 	if in.Slug == "ocupado" {
 		return businesses.Business{}, businesses.ErrSlugTaken
@@ -201,6 +232,33 @@ func TestCatalogRoutes(t *testing.T) {
 		{"artículo inexistente", http.MethodPatch, base + "/dddddddd-dddd-dddd-dddd-dddddddddddd", "ok", `{"active":false}`, http.StatusNotFound, `"not_found"`},
 		{"id que no es uuid", http.MethodPatch, base + "/abc", "ok", `{"active":false}`, http.StatusNotFound, `"not_found"`},
 		{"empleada no edita", http.MethodPatch, base + "/" + itemID, "staff", `{"active":false}`, http.StatusForbidden, `"forbidden"`},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			rec := doBody(tc.method, tc.path, tc.token, strings.NewReader(tc.body))
+			if rec.Code != tc.wantCode || !strings.Contains(rec.Body.String(), tc.wantIn) {
+				t.Fatalf("got %d %s", rec.Code, rec.Body)
+			}
+		})
+	}
+}
+
+func TestUnitRoutes(t *testing.T) {
+	units := "/v1/b/" + bizA + "/catalog/" + itemID + "/units"
+	cases := []struct {
+		name, method, path, token, body string
+		wantCode                        int
+		wantIn                          string
+	}{
+		{"empleada lista unidades", http.MethodGet, units, "staff", "", http.StatusOK, `"code":"RM-01"`},
+		{"artículo inexistente", http.MethodGet, "/v1/b/" + bizA + "/catalog/dddddddd-dddd-dddd-dddd-dddddddddddd/units", "ok", "", http.StatusNotFound, `"not_found"`},
+		{"dueño agrega (clave en mayúsculas)", http.MethodPost, units, "ok", `{"code":" rm-02 "}`, http.StatusCreated, `"code":"RM-02"`},
+		{"clave repetida", http.MethodPost, units, "ok", `{"code":"RM-01"}`, http.StatusConflict, `"code_taken"`},
+		{"clave vacía", http.MethodPost, units, "ok", `{"code":""}`, http.StatusUnprocessableEntity, `"code"`},
+		{"empleada no agrega", http.MethodPost, units, "staff", `{"code":"RM-03"}`, http.StatusForbidden, `"forbidden"`},
+		{"a mantenimiento", http.MethodPatch, units + "/" + unitID, "ok", `{"status":"maintenance"}`, http.StatusOK, `"status":"maintenance"`},
+		{"estado inválido", http.MethodPatch, units + "/" + unitID, "ok", `{"status":"perdida"}`, http.StatusUnprocessableEntity, `"status"`},
+		{"unidad inexistente", http.MethodPatch, units + "/ffffffff-ffff-ffff-ffff-ffffffffffff", "ok", `{"status":"retired"}`, http.StatusNotFound, `"not_found"`},
 	}
 	for _, tc := range cases {
 		t.Run(tc.name, func(t *testing.T) {
