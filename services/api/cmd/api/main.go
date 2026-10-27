@@ -10,8 +10,10 @@ import (
 	"strings"
 	"syscall"
 	"time"
+	_ "time/tzdata" // business time zones must resolve in the distroless image too
 
 	"github.com/omaradriano/local_bussiness/services/api/internal/auth"
+	"github.com/omaradriano/local_bussiness/services/api/internal/businesses"
 	"github.com/omaradriano/local_bussiness/services/api/internal/httpapi"
 	"github.com/omaradriano/local_bussiness/services/api/internal/store"
 )
@@ -49,8 +51,11 @@ func run(log *slog.Logger) error {
 	srv := &http.Server{
 		Addr: ":" + port,
 		Handler: httpapi.NewRouter(httpapi.Deps{
-			Authenticate:   auth.Authenticate(keys, supabaseURL+"/auth/v1"),
-			Store:          store.New(pool),
+			Authenticate: auth.Authenticate(keys, supabaseURL+"/auth/v1"),
+			Store:        store.New(pool),
+			CreateBusiness: func(ctx context.Context, userID string, in businesses.Input) (businesses.Business, error) {
+				return businesses.Create(ctx, pool, userID, in)
+			},
 			AllowedOrigins: strings.Split(env("CORS_ORIGINS", "http://localhost:8082"), ","),
 		}),
 		ReadHeaderTimeout: 10 * time.Second,

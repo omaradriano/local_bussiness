@@ -25,5 +25,15 @@ export const strings = {
     toLogin: '¿Ya tienes cuenta? Inicia sesión',
     checkEmail: 'Te enviamos un correo para confirmar tu cuenta. Ábrelo y después inicia sesión.',
   },
+  onboarding: {
+    title: 'Registra tu negocio',
+    name: 'Nombre del negocio',
+    slug: 'Dirección de tu catálogo',
+    slugHint: 'Así te encontrarán tus clientes: tudominio.com/',
+    vertical: '¿A qué se dedica?',
+    verticals: { nails: 'Uñas y belleza', flowers: 'Florería bajo pedido', tool_rental: 'Renta de herramienta' },
+    submit: 'Crear negocio',
+    templateNote: 'Te dejamos un catálogo y horario de ejemplo; los puedes cambiar después.',
+  },
   publicCatalog: { placeholder: 'Catálogo público (fase 6).' },
 } as const;

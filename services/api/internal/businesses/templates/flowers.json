@@ -1,0 +1,11 @@
+{
+  "settings": { "deposit_percent": 50, "cancel_hours": 48, "hold_hours": 6, "daily_capacity": 20, "delivery_zones": [] },
+  "hours": [
+    { "weekdays": [0, 1, 2, 3, 4, 5, 6], "opens_at": "09:00", "closes_at": "20:00" }
+  ],
+  "items": [
+    { "kind": "product", "name": "Ramo de 12 rosas", "description": "Rosas con follaje y papel coreano.", "price": 65000, "prep_hours": 24 },
+    { "kind": "product", "name": "Arreglo en caja", "description": "Flores de temporada en caja.", "price": 55000, "prep_hours": 24 }
+  ],
+  "steps": []
+}

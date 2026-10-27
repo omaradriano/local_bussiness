@@ -1,6 +1,6 @@
 import type { Membership } from '@lb/api-client';
 import { strings, term } from '@lb/shared';
-import { Stack } from 'expo-router';
+import { router, Stack } from 'expo-router';
 import { useCallback, useEffect, useState } from 'react';
 import { ActivityIndicator, Button, Text, View } from 'react-native';
 import { api } from '../../../lib/api';
@@ -34,7 +34,10 @@ export default function AdminHome() {
       ) : businesses === null ? (
         <ActivityIndicator accessibilityLabel={strings.common.loading} />
       ) : businesses.length === 0 ? (
-        <Text>{t.noBusinesses}</Text>
+        <>
+          <Text>{t.noBusinesses}</Text>
+          <Button title={t.createBusiness} onPress={() => router.push('/onboarding')} />
+        </>
       ) : (
         <>
           <Text accessibilityRole="header" style={{ fontSize: 18, fontWeight: '600' }}>{t.yourBusinesses}</Text>
