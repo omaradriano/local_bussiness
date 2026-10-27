@@ -60,7 +60,11 @@ func TestIntegrationUnitsOnlyForRentalsOfTheBusiness(t *testing.T) {
 	if err != nil || u.ID == "" {
 		t.Fatalf("create: %+v %v", u, err)
 	}
-	if _, err := r.CreateUnit(ctx, bizA, Unit{ItemID: rental.ID, Code: "AN-01", Status: "available"}); !errors.Is(err, ErrCodeTaken) {
+	// A unique violation aborts the transaction, so try it inside a savepoint.
+	sp, _ := tx.Begin(ctx)
+	_, err = Repo{DB: sp}.CreateUnit(ctx, bizA, Unit{ItemID: rental.ID, Code: "AN-01", Status: "available"})
+	sp.Rollback(ctx)
+	if !errors.Is(err, ErrCodeTaken) {
 		t.Fatalf("duplicate code: %v", err)
 	}
 	if _, err := r.CreateUnit(ctx, bizB, Unit{ItemID: rental.ID, Code: "AN-02", Status: "available"}); !errors.Is(err, ErrNotFound) {
