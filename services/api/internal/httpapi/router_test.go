@@ -2,6 +2,7 @@ package httpapi
 
 import (
 	"context"
+	"errors"
 	"io"
 	"net/http"
 	"net/http/httptest"
@@ -12,6 +13,7 @@ import (
 	"github.com/omaradriano/local_bussiness/services/api/internal/apierr"
 	"github.com/omaradriano/local_bussiness/services/api/internal/auth"
 	"github.com/omaradriano/local_bussiness/services/api/internal/availability"
+	"github.com/omaradriano/local_bussiness/services/api/internal/bookings"
 	"github.com/omaradriano/local_bussiness/services/api/internal/businesses"
 	"github.com/omaradriano/local_bussiness/services/api/internal/catalog"
 	"github.com/omaradriano/local_bussiness/services/api/internal/files"
@@ -140,6 +142,7 @@ func doBody(method, path, token string, body io.Reader, headers ...string) *http
 		Catalog:        fakeCatalog{},
 		Staff:          fakeStaff{},
 		Availability:   fakeAvailability{},
+		Bookings:       fakeBookings{},
 		Now:            func() time.Time { return fixedNow },
 		Photos:         &Photos{Media: fakeMedia{}, Files: fakeFiles{}, EnqueueImage: fakeEnqueue, CDNBase: "https://cdn.test"},
 		AllowedOrigins: []string{"http://localhost:8082", "https://local-bussiness-staging-*.vercel.app"},
@@ -494,6 +497,63 @@ func TestAvailabilityRoute(t *testing.T) {
 	for _, tc := range cases {
 		t.Run(tc.name, func(t *testing.T) {
 			rec := do(http.MethodGet, tc.path, tc.token)
+			if rec.Code != tc.wantCode || !strings.Contains(rec.Body.String(), tc.wantIn) {
+				t.Fatalf("got %d %s", rec.Code, rec.Body)
+			}
+		})
+	}
+}
+
+const bookingID = "b0b0b0b0-b0b0-b0b0-b0b0-b0b0b0b0b0b0"
+
+type fakeBookings struct{}
+
+func (fakeBookings) Create(_ context.Context, _ string, in bookings.CreateInput, now time.Time) (bookings.Booking, bool, error) {
+	if err := in.Validate(); err != nil {
+		return bookings.Booking{}, false, err
+	}
+	switch {
+	case in.Notes == "ocupado":
+		return bookings.Booking{}, false, bookings.ErrSlotTaken
+	case in.Source != "admin" || (in.CreatedBy != user && in.CreatedBy != staffUser) || !now.Equal(fixedNow):
+		return bookings.Booking{}, false, errors.New("source, actor or clock not set by the handler")
+	}
+	return bookings.Booking{ID: bookingID, Status: "pending_deposit"}, in.IdempotencyKey == "repetida-123", nil
+}
+
+func (fakeBookings) Get(_ context.Context, _, id string) (bookings.Booking, error) {
+	if id != bookingID {
+		return bookings.Booking{}, bookings.ErrNotFound
+	}
+	return bookings.Booking{ID: bookingID}, nil
+}
+
+func TestBookingRoutes(t *testing.T) {
+	base := "/v1/b/" + bizA + "/bookings"
+	ok := `{"customer":{"name":"Ana","phone":"6141234567"},"item_id":"` + itemID + `","starts_at":"2026-11-02T17:00:00Z"`
+	cases := []struct {
+		name, method, path, token, body, key string
+		wantCode                             int
+		wantIn                               string
+	}{
+		{"empleada captura en mostrador", http.MethodPost, base, "staff", ok + `}`, "", http.StatusCreated, `"status":"pending_deposit"`},
+		{"reintento con la misma clave", http.MethodPost, base, "ok", ok + `}`, "repetida-123", http.StatusOK, bookingID},
+		{"clave inválida", http.MethodPost, base, "ok", ok + `}`, "corta", http.StatusUnprocessableEntity, `"idempotency_key"`},
+		{"teléfono inválido", http.MethodPost, base, "ok", `{"customer":{"name":"Ana","phone":"123"},"item_id":"` + itemID + `","starts_at":"2026-11-02T17:00:00Z"}`, "", http.StatusUnprocessableEntity, `"customer.phone"`},
+		{"sin fecha", http.MethodPost, base, "ok", `{"customer":{"name":"Ana","phone":"6141234567"},"item_id":"` + itemID + `"}`, "", http.StatusUnprocessableEntity, `"starts_at"`},
+		{"artículo inválido", http.MethodPost, base, "ok", `{"item_id":"x"}`, "", http.StatusUnprocessableEntity, `"item_id"`},
+		{"choque", http.MethodPost, base, "ok", ok + `,"notes":"ocupado"}`, "", http.StatusConflict, `"slot_taken"`},
+		{"negocio ajeno", http.MethodPost, "/v1/b/" + bizB + "/bookings", "ok", ok + `}`, "", http.StatusForbidden, `"forbidden"`},
+		{"detalle", http.MethodGet, base + "/" + bookingID, "staff", "", "", http.StatusOK, bookingID},
+		{"detalle inexistente", http.MethodGet, base + "/eeeeeeee-0000-0000-0000-000000000000", "ok", "", "", http.StatusNotFound, `"not_found"`},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			var headers []string
+			if tc.key != "" {
+				headers = []string{"Idempotency-Key", tc.key}
+			}
+			rec := doBody(tc.method, tc.path, tc.token, strings.NewReader(tc.body), headers...)
 			if rec.Code != tc.wantCode || !strings.Contains(rec.Body.String(), tc.wantIn) {
 				t.Fatalf("got %d %s", rec.Code, rec.Body)
 			}
