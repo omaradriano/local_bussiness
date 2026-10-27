@@ -6,6 +6,8 @@ import (
 	"errors"
 	"log/slog"
 	"net/http"
+	"strconv"
+	"time"
 
 	"github.com/go-chi/chi/v5"
 	"github.com/go-chi/chi/v5/middleware"
@@ -13,6 +15,7 @@ import (
 
 	"github.com/omaradriano/local_bussiness/services/api/internal/apierr"
 	"github.com/omaradriano/local_bussiness/services/api/internal/auth"
+	"github.com/omaradriano/local_bussiness/services/api/internal/availability"
 	"github.com/omaradriano/local_bussiness/services/api/internal/businesses"
 	"github.com/omaradriano/local_bussiness/services/api/internal/catalog"
 	"github.com/omaradriano/local_bussiness/services/api/internal/media"
@@ -33,6 +36,12 @@ type Deps struct {
 	Catalog        CatalogRepo
 	Staff          StaffRepo
 	Photos         *Photos
+	Availability   AvailabilityAnswerer
+	Now            func() time.Time // injectable clock; nil = time.Now
+}
+
+type AvailabilityAnswerer interface {
+	Answer(ctx context.Context, businessID string, req availability.Request, now time.Time) (availability.Response, error)
 }
 
 type StaffRepo interface {
@@ -217,6 +226,40 @@ func NewRouter(d Deps) http.Handler {
 			})
 
 			mountImages(r, d.Photos)
+
+			r.Get("/availability", func(w http.ResponseWriter, r *http.Request) {
+				m, _ := auth.MemberFrom(r.Context())
+				q := r.URL.Query()
+				req := availability.Request{ItemID: q.Get("item_id"), Date: q.Get("date"), From: q.Get("from"), To: q.Get("to"), StaffID: q.Get("staff_id")}
+				if !auth.IsUUID(req.ItemID) || (req.StaffID != "" && !auth.IsUUID(req.StaffID)) {
+					invalid(w, "Elige un artículo.", map[string]string{"item_id": "Elige un artículo válido."})
+					return
+				}
+				if s := q.Get("quantity"); s != "" {
+					n, err := strconv.Atoi(s)
+					if err != nil || n < 1 || n > 100 {
+						invalid(w, "Cantidad inválida.", map[string]string{"quantity": "La cantidad debe ser de 1 a 100."})
+						return
+					}
+					req.Quantity = n
+				}
+				now := time.Now
+				if d.Now != nil {
+					now = d.Now
+				}
+				res, err := d.Availability.Answer(r.Context(), m.BusinessID, req, now())
+				var bad availability.BadRequest
+				switch {
+				case errors.As(err, &bad):
+					invalid(w, bad.Message, map[string]string{bad.Field: bad.Message})
+				case errors.Is(err, availability.ErrItemNotFound):
+					notFound(w, "El artículo no existe o está inactivo.")
+				case err != nil:
+					internalError(w, r, "availability", err)
+				default:
+					apierr.JSON(w, http.StatusOK, res)
+				}
+			})
 
 			r.Get("/staff", func(w http.ResponseWriter, r *http.Request) {
 				m, _ := auth.MemberFrom(r.Context())

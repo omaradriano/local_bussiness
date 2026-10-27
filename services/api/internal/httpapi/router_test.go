@@ -7,9 +7,11 @@ import (
 	"net/http/httptest"
 	"strings"
 	"testing"
+	"time"
 
 	"github.com/omaradriano/local_bussiness/services/api/internal/apierr"
 	"github.com/omaradriano/local_bussiness/services/api/internal/auth"
+	"github.com/omaradriano/local_bussiness/services/api/internal/availability"
 	"github.com/omaradriano/local_bussiness/services/api/internal/businesses"
 	"github.com/omaradriano/local_bussiness/services/api/internal/catalog"
 	"github.com/omaradriano/local_bussiness/services/api/internal/files"
@@ -137,6 +139,8 @@ func doBody(method, path, token string, body io.Reader, headers ...string) *http
 		CreateBusiness: fakeCreate,
 		Catalog:        fakeCatalog{},
 		Staff:          fakeStaff{},
+		Availability:   fakeAvailability{},
+		Now:            func() time.Time { return fixedNow },
 		Photos:         &Photos{Media: fakeMedia{}, Files: fakeFiles{}, EnqueueImage: fakeEnqueue, CDNBase: "https://cdn.test"},
 		AllowedOrigins: []string{"http://localhost:8082", "https://local-bussiness-staging-*.vercel.app"},
 	}).ServeHTTP(rec, req)
@@ -452,5 +456,47 @@ func TestPhotosDisabledAnswers503(t *testing.T) {
 	NewRouter(Deps{Authenticate: fakeAuth, Store: fakeStore{}, Catalog: fakeCatalog{}}).ServeHTTP(rec, req)
 	if rec.Code != http.StatusServiceUnavailable {
 		t.Fatalf("got %d %s", rec.Code, rec.Body)
+	}
+}
+
+var fixedNow = time.Date(2026, 11, 1, 18, 0, 0, 0, time.UTC)
+
+type fakeAvailability struct{}
+
+// The fake echoes what reached it, so the test can see the parsed request and the injected clock.
+func (fakeAvailability) Answer(_ context.Context, _ string, req availability.Request, now time.Time) (availability.Response, error) {
+	switch {
+	case req.ItemID != itemID:
+		return availability.Response{}, availability.ErrItemNotFound
+	case req.Date == "mal":
+		return availability.Response{}, availability.BadRequest{Field: "date", Message: "Elige un día (AAAA-MM-DD)."}
+	case !now.Equal(fixedNow):
+		return availability.Response{}, availability.BadRequest{Field: "now", Message: "clock not injected"}
+	}
+	return availability.Response{Kind: "rental", Available: req.Quantity == 2, FreeUnits: []string{"u1", "u2"}}, nil
+}
+
+func TestAvailabilityRoute(t *testing.T) {
+	base := "/v1/b/" + bizA + "/availability?item_id="
+	cases := []struct {
+		name, path, token string
+		wantCode          int
+		wantIn            string
+	}{
+		{"empleada consulta", base + itemID + "&from=2026-11-03T15:00:00Z&to=2026-11-05T15:00:00Z&quantity=2", "staff", http.StatusOK, `"available":true`},
+		{"sin artículo", "/v1/b/" + bizA + "/availability", "ok", http.StatusUnprocessableEntity, `"item_id"`},
+		{"cantidad inválida", base + itemID + "&quantity=0", "ok", http.StatusUnprocessableEntity, `"quantity"`},
+		{"staff_id inválido", base + itemID + "&staff_id=x", "ok", http.StatusUnprocessableEntity, `"item_id"`},
+		{"artículo inexistente", base + "dddddddd-dddd-dddd-dddd-dddddddddddd", "ok", http.StatusNotFound, `"not_found"`},
+		{"fecha mal escrita", base + itemID + "&date=mal", "ok", http.StatusUnprocessableEntity, `"date"`},
+		{"negocio ajeno", "/v1/b/" + bizB + "/availability?item_id=" + itemID, "ok", http.StatusForbidden, `"forbidden"`},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			rec := do(http.MethodGet, tc.path, tc.token)
+			if rec.Code != tc.wantCode || !strings.Contains(rec.Body.String(), tc.wantIn) {
+				t.Fatalf("got %d %s", rec.Code, rec.Body)
+			}
+		})
 	}
 }

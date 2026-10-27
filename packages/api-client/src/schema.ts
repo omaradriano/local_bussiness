@@ -314,6 +314,30 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/v1/b/{businessId}/availability": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                businessId: components["parameters"]["BusinessId"];
+            };
+            cookie?: never;
+        };
+        /**
+         * Qué hay libre para un artículo, según su tipo
+         * @description - Servicio: `date` (AAAA-MM-DD, zona del negocio) y opcional `staff_id` → `slots`.
+         *     - Producto: `from` y opcional `to` (AAAA-MM-DD, máx. 2 meses; por defecto 14 días) y `quantity` → `days`.
+         *     - Renta: `from` y `to` (RFC 3339) y `quantity` → `free_units`.
+         */
+        get: operations["getAvailability"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
 }
 export type webhooks = Record<string, never>;
 export interface components {
@@ -392,6 +416,25 @@ export interface components {
             urls: {
                 [key: string]: string;
             } | null;
+        };
+        Availability: {
+            kind: components["schemas"]["ItemKind"];
+            available: boolean;
+            slots?: {
+                /** Format: date-time */
+                starts_at: string;
+                /** Format: date-time */
+                ends_at: string;
+                staff_ids: string[];
+            }[];
+            days?: {
+                /** Format: date */
+                date: string;
+                available: boolean;
+                /** @description -1 = sin límite */
+                remaining: number;
+            }[];
+            free_units?: string[];
         };
         /** @enum {string} */
         UnitStatus: "available" | "maintenance" | "retired";
@@ -1032,6 +1075,38 @@ export interface operations {
                 content?: never;
             };
             404: components["responses"]["Error"];
+        };
+    };
+    getAvailability: {
+        parameters: {
+            query: {
+                item_id: string;
+                date?: string;
+                from?: string;
+                to?: string;
+                quantity?: number;
+                staff_id?: string;
+            };
+            header?: never;
+            path: {
+                businessId: components["parameters"]["BusinessId"];
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Availability"];
+                };
+            };
+            403: components["responses"]["Error"];
+            404: components["responses"]["Error"];
+            422: components["responses"]["Error"];
         };
     };
 }

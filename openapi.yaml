@@ -414,6 +414,33 @@ paths:
         "204": { description: Borrada }
         "404": { $ref: "#/components/responses/Error" }
 
+  /v1/b/{businessId}/availability:
+    parameters:
+      - $ref: "#/components/parameters/BusinessId"
+    get:
+      operationId: getAvailability
+      summary: Qué hay libre para un artículo, según su tipo
+      description: |
+        - Servicio: `date` (AAAA-MM-DD, zona del negocio) y opcional `staff_id` → `slots`.
+        - Producto: `from` y opcional `to` (AAAA-MM-DD, máx. 2 meses; por defecto 14 días) y `quantity` → `days`.
+        - Renta: `from` y `to` (RFC 3339) y `quantity` → `free_units`.
+      parameters:
+        - { name: item_id, in: query, required: true, schema: { type: string, format: uuid } }
+        - { name: date, in: query, schema: { type: string } }
+        - { name: from, in: query, schema: { type: string } }
+        - { name: to, in: query, schema: { type: string } }
+        - { name: quantity, in: query, schema: { type: integer, minimum: 1, maximum: 100 } }
+        - { name: staff_id, in: query, schema: { type: string, format: uuid } }
+      responses:
+        "200":
+          description: OK
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Availability" }
+        "403": { $ref: "#/components/responses/Error" }
+        "404": { $ref: "#/components/responses/Error" }
+        "422": { $ref: "#/components/responses/Error" }
+
 components:
   securitySchemes:
     bearer:
@@ -538,6 +565,32 @@ components:
           type: [object, "null"]
           description: "Variante (thumb 160 px, card 480 px, detail 1080 px) -> URL del CDN"
           additionalProperties: { type: string }
+
+    Availability:
+      type: object
+      required: [kind, available]
+      properties:
+        kind: { $ref: "#/components/schemas/ItemKind" }
+        available: { type: boolean }
+        slots:
+          type: array
+          items:
+            type: object
+            required: [starts_at, ends_at, staff_ids]
+            properties:
+              starts_at: { type: string, format: date-time }
+              ends_at: { type: string, format: date-time }
+              staff_ids: { type: array, items: { type: string, format: uuid } }
+        days:
+          type: array
+          items:
+            type: object
+            required: [date, available, remaining]
+            properties:
+              date: { type: string, format: date }
+              available: { type: boolean }
+              remaining: { type: integer, description: "-1 = sin límite" }
+        free_units: { type: array, items: { type: string, format: uuid } }
 
     UnitStatus:
       type: string
