@@ -52,6 +52,31 @@ type Booking struct {
 	HoldExpiresAt   *time.Time `json:"hold_expires_at"`
 	PublicToken     string     `json:"public_token"`
 	CreatedAt       time.Time  `json:"created_at"`
+
+	Payments []Payment `json:"payments"`
+	Balance  Balance   `json:"balance"`
+	Events   []Event   `json:"events"`
+	Steps    []Step    `json:"steps"`
+	Next     []string  `json:"next"` // status moves available from the panel
+}
+
+type Event struct {
+	FromStatus *string   `json:"from_status"`
+	ToStatus   string    `json:"to_status"`
+	At         time.Time `json:"at"`
+	Note       *string   `json:"note"`
+}
+
+// Step is a copied workflow step (e.g. "Foto del INE" before checked_out) and its result.
+type Step struct {
+	ID          string     `json:"id"`
+	Label       string     `json:"label"`
+	StepType    string     `json:"step_type"`
+	ToStatus    *string    `json:"to_status"`
+	Required    bool       `json:"required"`
+	Status      string     `json:"status"` // pending | done | skipped
+	CompletedAt *time.Time `json:"completed_at"`
+	Files       []string   `json:"files"` // S3 keys (private buckets)
 }
 
 // Get returns one booking of the business with its customer, lines and assigned staff/units.
@@ -88,6 +113,36 @@ func Get(ctx context.Context, db store.DB, businessID, id string) (Booking, erro
 		if err := json.Unmarshal(x.raw, x.dst); err != nil {
 			return b, err
 		}
+	}
+
+	if b.Payments, err = payments(ctx, db, b.ID); err != nil {
+		return b, err
+	}
+	b.Balance = ComputeBalance(b.Total, b.Payments)
+	b.Next = Next(b.Kind, b.Status)
+	if b.Next == nil {
+		b.Next = []string{}
+	}
+
+	rows, err := db.Query(ctx, `select from_status, to_status, at, note from public.booking_events where booking_id = $1 order by at, id`, b.ID)
+	if err != nil {
+		return b, err
+	}
+	if b.Events, err = pgx.CollectRows(rows, pgx.RowToStructByPos[Event]); err != nil {
+		return b, err
+	}
+
+	rows, err = db.Query(ctx, `select id::text, coalesce(step_snapshot->>'label', ''), coalesce(step_snapshot->>'step_type', ''),
+		step_snapshot->>'to_status', coalesce((step_snapshot->>'required')::boolean, true), status, completed_at, s3_keys
+		from public.booking_steps where booking_id = $1 order by (step_snapshot->>'sort')::int nulls last, id`, b.ID)
+	if err != nil {
+		return b, err
+	}
+	if b.Steps, err = pgx.CollectRows(rows, pgx.RowToStructByPos[Step]); err != nil {
+		return b, err
+	}
+	if b.Steps == nil {
+		b.Steps = []Step{}
 	}
 	return b, nil
 }

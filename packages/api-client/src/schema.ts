@@ -380,6 +380,49 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/v1/b/{businessId}/bookings/{bookingId}/transition": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                businessId: components["parameters"]["BusinessId"];
+                bookingId: string;
+            };
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Cambia el estado (dueño o empleado). La máquina y los requisitos se validan en el servidor.
+         * @description Errores 422: `validation_failed` (transición inválida, falta anticipo o saldo) o `steps_pending` (details.steps).
+         */
+        post: operations["transitionBooking"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/b/{businessId}/bookings/{bookingId}/payments": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                businessId: components["parameters"]["BusinessId"];
+                bookingId: string;
+            };
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Registra un pago; cubrir el anticipo de un apartado lo confirma */
+        post: operations["addPayment"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
 }
 export type webhooks = Record<string, never>;
 export interface components {
@@ -481,6 +524,8 @@ export interface components {
             free_units?: string[];
         };
         /** @enum {string} */
+        PaymentType: "advance" | "balance" | "security_deposit" | "refund" | "late_fee" | "damage_fee";
+        /** @enum {string} */
         BookingStatus: "pending_deposit" | "confirmed" | "in_progress" | "ready" | "out_for_delivery" | "checked_out" | "overdue" | "returned" | "completed" | "cancelled" | "expired" | "no_show";
         BookingInput: {
             /** @description `id` de un cliente existente, o `name` + `phone` (10 dígitos de México o E.164) */
@@ -563,6 +608,50 @@ export interface components {
             public_token: string;
             /** Format: date-time */
             created_at: string;
+            payments: {
+                /** Format: uuid */
+                id: string;
+                type: components["schemas"]["PaymentType"];
+                /** @enum {string} */
+                method: "cash" | "transfer" | "card";
+                /** Format: int64 */
+                amount: number;
+                /** Format: date-time */
+                paid_at: string;
+                recorded_by: string | null;
+                notes: string | null;
+            }[];
+            balance: {
+                /** Format: int64 */
+                paid: number;
+                /** Format: int64 */
+                due: number;
+                /** Format: int64 */
+                deposit_held: number;
+                /** Format: int64 */
+                extra_charges: number;
+            };
+            events: {
+                from_status: string | null;
+                to_status: string;
+                /** Format: date-time */
+                at: string;
+                note: string | null;
+            }[];
+            steps: {
+                /** Format: uuid */
+                id: string;
+                label: string;
+                step_type: string;
+                to_status: string | null;
+                required: boolean;
+                /** @enum {string} */
+                status: "pending" | "done" | "skipped";
+                /** Format: date-time */
+                completed_at: string | null;
+                files: string[];
+            }[];
+            next: components["schemas"]["BookingStatus"][];
         };
         BookingSummary: {
             /** Format: uuid */
@@ -1355,6 +1444,74 @@ export interface operations {
                 };
             };
             404: components["responses"]["Error"];
+        };
+    };
+    transitionBooking: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                businessId: components["parameters"]["BusinessId"];
+                bookingId: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": {
+                    to: components["schemas"]["BookingStatus"];
+                    note?: string;
+                };
+            };
+        };
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Booking"];
+                };
+            };
+            404: components["responses"]["Error"];
+            422: components["responses"]["Error"];
+        };
+    };
+    addPayment: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                businessId: components["parameters"]["BusinessId"];
+                bookingId: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": {
+                    type: components["schemas"]["PaymentType"];
+                    /** @enum {string} */
+                    method: "cash" | "transfer" | "card";
+                    /** Format: int64 */
+                    amount: number;
+                    notes?: string;
+                };
+            };
+        };
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Booking"];
+                };
+            };
+            404: components["responses"]["Error"];
+            422: components["responses"]["Error"];
         };
     };
 }

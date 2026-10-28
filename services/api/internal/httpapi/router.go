@@ -46,6 +46,26 @@ type BookingsRepo interface {
 	Create(ctx context.Context, businessID string, in bookings.CreateInput, now time.Time) (bookings.Booking, bool, error)
 	Get(ctx context.Context, businessID, id string) (bookings.Booking, error)
 	List(ctx context.Context, businessID string, f bookings.ListFilter) ([]bookings.Summary, error)
+	Transition(ctx context.Context, businessID, id, to, actor, note string) (bookings.Booking, error)
+	AddPayment(ctx context.Context, businessID, id string, p bookings.Payment, actor string, now time.Time) (bookings.Booking, error)
+}
+
+// writeBooking maps the bookings errors to HTTP and writes the booking on success.
+func writeBooking(w http.ResponseWriter, r *http.Request, b bookings.Booking, err error) {
+	var bad bookings.Invalid
+	var steps bookings.StepsPending
+	switch {
+	case errors.As(err, &bad):
+		invalid(w, bad.Message, map[string]string{bad.Field: bad.Message})
+	case errors.As(err, &steps):
+		apierr.JSON(w, http.StatusUnprocessableEntity, apierr.Error{Code: "steps_pending", Message: steps.Error(), Details: map[string]any{"steps": steps.Labels}})
+	case errors.Is(err, bookings.ErrNotFound):
+		notFound(w, "La reserva no existe.")
+	case err != nil:
+		internalError(w, r, "booking", err)
+	default:
+		apierr.JSON(w, http.StatusOK, b)
+	}
 }
 
 func (d Deps) now() time.Time {
@@ -312,17 +332,46 @@ func NewRouter(d Deps) http.Handler {
 				apierr.JSON(w, http.StatusOK, map[string]any{"bookings": list})
 			})
 
-			r.With(requireUUIDParam("bookingId", "La reserva no existe.")).Get("/bookings/{bookingId}", func(w http.ResponseWriter, r *http.Request) {
-				m, _ := auth.MemberFrom(r.Context())
-				b, err := d.Bookings.Get(r.Context(), m.BusinessID, chi.URLParam(r, "bookingId"))
-				switch {
-				case errors.Is(err, bookings.ErrNotFound):
-					notFound(w, "La reserva no existe.")
-				case err != nil:
-					internalError(w, r, "get booking", err)
-				default:
-					apierr.JSON(w, http.StatusOK, b)
-				}
+			r.Route("/bookings/{bookingId}", func(r chi.Router) {
+				r.Use(requireUUIDParam("bookingId", "La reserva no existe."))
+
+				r.Get("/", func(w http.ResponseWriter, r *http.Request) {
+					m, _ := auth.MemberFrom(r.Context())
+					b, err := d.Bookings.Get(r.Context(), m.BusinessID, chi.URLParam(r, "bookingId"))
+					writeBooking(w, r, b, err)
+				})
+
+				// Status change (owner or staff); the machine and the requirements are checked in bookings.
+				r.Post("/transition", func(w http.ResponseWriter, r *http.Request) {
+					m, _ := auth.MemberFrom(r.Context())
+					var body struct {
+						To   string `json:"to"`
+						Note string `json:"note"`
+					}
+					if !decode(w, r, &body) {
+						return
+					}
+					if len(body.Note) > 500 {
+						invalid(w, "La nota es muy larga.", map[string]string{"note": "Máximo 500 caracteres."})
+						return
+					}
+					b, err := d.Bookings.Transition(r.Context(), m.BusinessID, chi.URLParam(r, "bookingId"), body.To, m.UserID, body.Note)
+					writeBooking(w, r, b, err)
+				})
+
+				r.Post("/payments", func(w http.ResponseWriter, r *http.Request) {
+					m, _ := auth.MemberFrom(r.Context())
+					var p bookings.Payment
+					if !decode(w, r, &p) {
+						return
+					}
+					if p.Notes != nil && len(*p.Notes) > 500 {
+						invalid(w, "La nota es muy larga.", map[string]string{"notes": "Máximo 500 caracteres."})
+						return
+					}
+					b, err := d.Bookings.AddPayment(r.Context(), m.BusinessID, chi.URLParam(r, "bookingId"), p, m.UserID, d.now())
+					writeBooking(w, r, b, err)
+				})
 			})
 
 			r.Get("/availability", func(w http.ResponseWriter, r *http.Request) {
