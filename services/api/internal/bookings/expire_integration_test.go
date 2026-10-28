@@ -64,7 +64,7 @@ func TestIntegrationRentasVencidas(t *testing.T) {
 		t.Fatalf("not overdue: %s", got.Status)
 	}
 	// It can still be returned.
-	if got, err = Return(ctx, p, f.business, b.ID, "", "", due.Add(26*time.Hour)); err != nil || got.Status != "returned" || got.Rental.LateDays != 1 {
+	if got, err = Return(ctx, p, f.business, b.ID, "", "", due.Add(25*time.Hour)); err != nil || got.Status != "returned" || got.Rental.LateDays != 1 {
 		t.Fatalf("return overdue: %v %+v %v", got.Status, got.Rental, err)
 	}
 }
