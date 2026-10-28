@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"os"
+	"strings"
 	"testing"
 
 	"github.com/jackc/pgx/v5"
@@ -32,7 +33,8 @@ func TestIntegrationCreateAppliesTemplate(t *testing.T) {
 	}
 
 	for _, v := range Verticals {
-		in := Input{Name: "Prueba " + v, Slug: "prueba-" + map[string]string{"nails": "unas", "flowers": "flores", "tool_rental": "renta"}[v], Vertical: v}.Normalize()
+		// Any giro, present or future: the slug comes from its key ("tool_rental" -> "prueba-tool-rental").
+		in := Input{Name: "Prueba " + v, Slug: "prueba-" + strings.ReplaceAll(v, "_", "-"), Vertical: v}.Normalize()
 		b, err := Create(ctx, outer, user, in)
 		if err != nil {
 			t.Fatalf("%s: %v", v, err)
