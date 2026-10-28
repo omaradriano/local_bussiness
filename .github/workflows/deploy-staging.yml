@@ -47,9 +47,26 @@ jobs:
       RAILWAY_TOKEN: ${{ secrets.RAILWAY_TOKEN }}
     steps:
       - uses: actions/checkout@v7
-      - run: npm i -g @railway/cli@5.49.6
-      - run: railway up services/api --path-as-root --service api --ci
-      - run: railway up services/api --path-as-root --service worker --ci
+        with:
+          fetch-depth: 0
+      # Client-only merges don't rebuild the API (each Railway build is slow and sometimes flaky).
+      - id: changed
+        run: |
+          if [ "${{ github.event_name }}" != "push" ] || ! git cat-file -e "${{ github.event.before }}" 2>/dev/null \
+             || ! git diff --quiet "${{ github.event.before }}" "${{ github.sha }}" -- services/api; then
+            echo "api=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "api=false" >> "$GITHUB_OUTPUT"
+          fi
+      - if: steps.changed.outputs.api == 'true'
+        run: npm i -g @railway/cli@5.49.6
+      # Railway's builder sometimes fails before building (no logs); one retry covers it.
+      - if: steps.changed.outputs.api == 'true'
+        run: |
+          for service in api worker; do
+            railway up services/api --path-as-root --service "$service" --ci \
+              || { echo "retrying $service"; sleep 20; railway up services/api --path-as-root --service "$service" --ci; } || exit 1
+          done
       - name: healthcheck
         run: |
           for i in $(seq 1 20); do
