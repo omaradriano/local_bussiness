@@ -332,3 +332,18 @@ func OpenOn(loc *time.Location, t time.Time, hours []Shift) bool {
 	l := t.In(loc)
 	return len(shiftsOn(loc, time.Date(l.Year(), l.Month(), l.Day(), 0, 0, 0, 0, loc), hours)) > 0
 }
+
+// ClosedDaysBetween counts the local dates strictly between start's and end's dates on which the
+// business doesn't open (e.g. the Sunday of a Saturday-to-Monday rental).
+func ClosedDaysBetween(loc *time.Location, start, end time.Time, hours []Shift) int {
+	s, e := start.In(loc), end.In(loc)
+	d := time.Date(s.Year(), s.Month(), s.Day(), 0, 0, 0, 0, loc).AddDate(0, 0, 1)
+	last := time.Date(e.Year(), e.Month(), e.Day(), 0, 0, 0, 0, loc)
+	n := 0
+	for ; d.Before(last); d = d.AddDate(0, 0, 1) {
+		if len(shiftsOn(loc, d, hours)) == 0 {
+			n++
+		}
+	}
+	return n
+}

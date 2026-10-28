@@ -314,6 +314,26 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/v1/b/{businessId}/settings": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                businessId: components["parameters"]["BusinessId"];
+            };
+            cookie?: never;
+        };
+        /** Ajustes del negocio (cualquier miembro) */
+        get: operations["getSettings"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        /** Cambia ajustes (solo dueño); lo que no se manda se conserva */
+        patch: operations["updateSettings"];
+        trace?: never;
+    };
     "/v1/b/{businessId}/availability": {
         parameters: {
             query?: never;
@@ -604,6 +624,20 @@ export interface components {
             urls: {
                 [key: string]: string;
             } | null;
+        };
+        Settings: {
+            rentals: {
+                /** @description Pedir depósito de garantía reembolsable */
+                security_deposit_enabled: boolean;
+                /** @description Un día atrasado cuesta el precio por día × esto */
+                late_fee_multiplier: number;
+                /** @description Una renta puede incluir días cerrados */
+                rentals_span_closed_days: boolean;
+                /** @description Esos días cerrados se cobran */
+                charge_closed_days: boolean;
+                /** @description Revisión entre rentas de una unidad */
+                inspection_minutes: number;
+            };
         };
         Availability: {
             kind: components["schemas"]["ItemKind"];
@@ -1435,6 +1469,64 @@ export interface operations {
                 content?: never;
             };
             404: components["responses"]["Error"];
+        };
+    };
+    getSettings: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                businessId: components["parameters"]["BusinessId"];
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Settings"];
+                };
+            };
+        };
+    };
+    updateSettings: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                businessId: components["parameters"]["BusinessId"];
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": {
+                    rentals?: {
+                        security_deposit_enabled?: boolean;
+                        late_fee_multiplier?: number;
+                        rentals_span_closed_days?: boolean;
+                        charge_closed_days?: boolean;
+                        inspection_minutes?: number;
+                    };
+                };
+            };
+        };
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Settings"];
+                };
+            };
+            403: components["responses"]["Error"];
+            422: components["responses"]["Error"];
         };
     };
     getAvailability: {

@@ -414,6 +414,45 @@ paths:
         "204": { description: Borrada }
         "404": { $ref: "#/components/responses/Error" }
 
+  /v1/b/{businessId}/settings:
+    parameters:
+      - $ref: "#/components/parameters/BusinessId"
+    get:
+      operationId: getSettings
+      summary: Ajustes del negocio (cualquier miembro)
+      responses:
+        "200":
+          description: OK
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Settings" }
+    patch:
+      operationId: updateSettings
+      summary: Cambia ajustes (solo dueño); lo que no se manda se conserva
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                rentals:
+                  type: object
+                  properties:
+                    security_deposit_enabled: { type: boolean }
+                    late_fee_multiplier: { type: number, minimum: 0, maximum: 10 }
+                    rentals_span_closed_days: { type: boolean }
+                    charge_closed_days: { type: boolean }
+                    inspection_minutes: { type: integer, minimum: 0, maximum: 1440 }
+      responses:
+        "200":
+          description: OK
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Settings" }
+        "403": { $ref: "#/components/responses/Error" }
+        "422": { $ref: "#/components/responses/Error" }
+
   /v1/b/{businessId}/availability:
     parameters:
       - $ref: "#/components/parameters/BusinessId"
@@ -823,6 +862,20 @@ components:
           type: [object, "null"]
           description: "Variante (thumb 160 px, card 480 px, detail 1080 px) -> URL del CDN"
           additionalProperties: { type: string }
+
+    Settings:
+      type: object
+      required: [rentals]
+      properties:
+        rentals:
+          type: object
+          required: [security_deposit_enabled, late_fee_multiplier, rentals_span_closed_days, charge_closed_days, inspection_minutes]
+          properties:
+            security_deposit_enabled: { type: boolean, description: "Pedir depósito de garantía reembolsable" }
+            late_fee_multiplier: { type: number, description: "Un día atrasado cuesta el precio por día × esto" }
+            rentals_span_closed_days: { type: boolean, description: "Una renta puede incluir días cerrados" }
+            charge_closed_days: { type: boolean, description: "Esos días cerrados se cobran" }
+            inspection_minutes: { type: integer, description: "Revisión entre rentas de una unidad" }
 
     Availability:
       type: object

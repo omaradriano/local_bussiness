@@ -18,6 +18,7 @@ import (
 	"github.com/omaradriano/local_bussiness/services/api/internal/catalog"
 	"github.com/omaradriano/local_bussiness/services/api/internal/files"
 	"github.com/omaradriano/local_bussiness/services/api/internal/media"
+	"github.com/omaradriano/local_bussiness/services/api/internal/settings"
 	"github.com/omaradriano/local_bussiness/services/api/internal/staff"
 	"github.com/omaradriano/local_bussiness/services/api/internal/steps"
 	"github.com/omaradriano/local_bussiness/services/api/internal/store"
@@ -147,6 +148,7 @@ func doBody(method, path, token string, body io.Reader, headers ...string) *http
 		Staff:          fakeStaff{},
 		Availability:   fakeAvailability{},
 		Bookings:       fakeBookings{},
+		Settings:       &fakeSettings{r: settings.DefaultRentals()},
 		Now:            func() time.Time { return fixedNow },
 		Photos:         &Photos{Media: fakeMedia{}, Files: fakeFiles{}, EnqueueImage: fakeEnqueue, CDNBase: "https://cdn.test"},
 		AllowedOrigins: []string{"http://localhost:8082", "https://local-bussiness-staging-*.vercel.app"},
@@ -733,4 +735,29 @@ func TestRentalFlowRoutes(t *testing.T) {
 		})
 	}
 	uploaded = true
+}
+
+type fakeSettings struct{ r settings.Rentals }
+
+func (f *fakeSettings) Rentals(context.Context, string) (settings.Rentals, error) { return f.r, nil }
+func (f *fakeSettings) SaveRentals(_ context.Context, _ string, r settings.Rentals) error {
+	f.r = r
+	return nil
+}
+
+func TestSettingsRoutes(t *testing.T) {
+	path := "/v1/b/" + bizA + "/settings"
+	if rec := do(http.MethodGet, path, "staff"); rec.Code != http.StatusOK || !strings.Contains(rec.Body.String(), `"late_fee_multiplier":1`) {
+		t.Fatalf("get: %d %s", rec.Code, rec.Body)
+	}
+	if rec := doBody(http.MethodPatch, path, "staff", strings.NewReader(`{"rentals":{"late_fee_multiplier":2}}`)); rec.Code != http.StatusForbidden {
+		t.Fatalf("staff patch: %d", rec.Code)
+	}
+	rec := doBody(http.MethodPatch, path, "ok", strings.NewReader(`{"rentals":{"late_fee_multiplier":2,"security_deposit_enabled":false}}`))
+	if rec.Code != http.StatusOK || !strings.Contains(rec.Body.String(), `"late_fee_multiplier":2`) || !strings.Contains(rec.Body.String(), `"security_deposit_enabled":false`) || !strings.Contains(rec.Body.String(), `"rentals_span_closed_days":true`) {
+		t.Fatalf("owner patch: %d %s", rec.Code, rec.Body)
+	}
+	if rec := doBody(http.MethodPatch, path, "ok", strings.NewReader(`{"rentals":{"late_fee_multiplier":20}}`)); rec.Code != http.StatusUnprocessableEntity {
+		t.Fatalf("invalid multiplier: %d", rec.Code)
+	}
 }

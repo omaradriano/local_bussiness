@@ -110,8 +110,10 @@ export default function BookingDetail() {
   b.balance ??= { paid: 0, due: b.total, deposit_held: 0, extra_charges: 0 };
   const security = Number(b.items[0]?.options?.security_deposit ?? 0);
   const bookingTerm = term(business.vertical, 'booking') ?? t.detail;
-  const payTypes: PaymentType[] = b.kind === 'rental'
-    ? ['advance', 'balance', 'security_deposit', 'refund', 'late_fee', 'damage_fee'] : ['advance', 'balance'];
+  const payTypes: PaymentType[] = b.kind !== 'rental' ? ['advance', 'balance']
+    : (['advance', 'balance', 'security_deposit', 'refund', 'late_fee', 'damage_fee'] as PaymentType[])
+      .filter((p) => p !== 'security_deposit' || security > 0)
+      .filter((p) => p !== 'refund' || b.balance.deposit_held > 0);
   // Rental check-out/return have their own flow (next part); the rest are plain status moves.
   const actions = b.next.filter((s) => !(b.kind === 'rental' && (s === 'checked_out' || s === 'returned')));
   const waText = t.whatsappText(b.customer.name, bookingTerm, when(b.starts_at), t.status[b.status]);

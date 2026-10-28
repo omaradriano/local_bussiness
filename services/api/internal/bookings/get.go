@@ -8,6 +8,7 @@ import (
 
 	"github.com/jackc/pgx/v5"
 
+	"github.com/omaradriano/local_bussiness/services/api/internal/settings"
 	"github.com/omaradriano/local_bussiness/services/api/internal/steps"
 	"github.com/omaradriano/local_bussiness/services/api/internal/store"
 )
@@ -166,20 +167,23 @@ func Get(ctx context.Context, db store.DB, businessID, id string) (Booking, erro
 	}
 	if b.Kind == "rental" {
 		var r RentalInfo
-		var lateFee int64
+		var dailyPrice int64
 		var qty int
+		var rawSettings []byte
 		err := db.QueryRow(ctx, `
 			select min(rc.out_at), max(rc.returned_at), min(rc.out_condition), min(rc.return_condition),
-			       coalesce(max(i.late_fee_per_day), 0), coalesce(max(bi.quantity), 1)
-			from public.booking_items bi join public.catalog_items i on i.id = bi.item_id
+			       coalesce(max(bi.unit_price), 0), coalesce(max(bi.quantity), 1),
+			       (select settings from public.businesses where id = $2)
+			from public.booking_items bi
 			left join public.rental_checkouts rc on rc.booking_id = bi.booking_id
-			where bi.booking_id = $1`, b.ID).Scan(&r.CheckedOutAt, &r.ReturnedAt, &r.OutCondition, &r.ReturnCondition, &lateFee, &qty)
+			where bi.booking_id = $1`, b.ID, businessID).Scan(&r.CheckedOutAt, &r.ReturnedAt, &r.OutCondition, &r.ReturnCondition, &dailyPrice, &qty, &rawSettings)
 		if err != nil {
 			return b, err
 		}
 		if r.ReturnedAt != nil && b.EndsAt != nil {
+			// A late day costs the daily price × the business's multiplier (e.g. ×2).
 			r.LateDays = LateDays(*b.EndsAt, *r.ReturnedAt)
-			r.LateFeeSuggested = r.LateDays * lateFee * int64(qty)
+			r.LateFeeSuggested = r.LateDays * settings.RentalsFrom(rawSettings).LateFeePerDay(dailyPrice) * int64(qty)
 		}
 		b.Rental = &r
 	}

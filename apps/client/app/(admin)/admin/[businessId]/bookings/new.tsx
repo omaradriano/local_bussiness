@@ -7,6 +7,7 @@ import { Calendar, type DayInfo } from '../../../../../components/Calendar';
 import { api } from '../../../../../lib/api';
 import { errorText, fieldErrors } from '../../../../../lib/errors';
 import { useBusiness } from '../../../../../lib/useMe';
+import { useSettings } from '../../../../../lib/useSettings';
 
 type Item = components['schemas']['CatalogItem'];
 type Availability = components['schemas']['Availability'];
@@ -40,6 +41,7 @@ function Field({ label, value, onChange, error, keyboard }: {
 export default function NewBooking() {
   const { businessId } = useLocalSearchParams<{ businessId: string }>();
   const { business } = useBusiness(businessId);
+  const { settings } = useSettings(businessId);
   const today = todayISO();
   const [items, setItems] = useState<Item[] | null>(null);
   const [staffNames, setStaffNames] = useState<Record<string, string>>({});
@@ -138,8 +140,10 @@ export default function NewBooking() {
     if (!from || to || date < from) { setFrom(date); setTo(null); return; }
     // A rental range can't cross a day without free units; a closed day in between is fine (the tool
     // stays with the customer). Only the visible month is loaded; the exact check of the whole range runs right after.
+    const spanClosed = settings?.rentals.rentals_span_closed_days ?? true;
     for (let d = from; d <= date; d = addDays(d, 1)) {
       if (days[d] && days[d].remaining < qty) { setMessage(t.rangeBlocked); return; }
+      if (!spanClosed && days[d]?.closed) { setMessage(t.closedNotAllowed); return; }
     }
     setTo(date);
   }
@@ -196,7 +200,7 @@ export default function NewBooking() {
       {item && (
         <>
           <Text>{item.kind === 'rental' ? (from && !to ? t.pickReturn : t.pickRange) : t.pickDay}</Text>
-          {item.kind === 'rental' && <Text style={{ opacity: 0.7 }}>{t.closedDayHint}</Text>}
+          {item.kind === 'rental' && (settings?.rentals.rentals_span_closed_days ?? true) && <Text style={{ opacity: 0.7 }}>{t.closedDayHint}</Text>}
           <Calendar month={month} onMonthChange={setMonth} minMonth={firstOfMonth(today)} from={from} to={item.kind === 'rental' ? to : null}
             onSelect={pick} dayInfo={dayInfo} />
           {daysState !== 'loading' && daysState !== 'ready' && <Text accessibilityRole="alert">{daysState}</Text>}

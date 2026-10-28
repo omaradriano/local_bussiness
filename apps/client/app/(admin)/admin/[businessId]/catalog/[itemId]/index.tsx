@@ -9,6 +9,7 @@ import { goBack } from '../../../../../../lib/nav';
 import { uploadPhotos, type PickedPhoto } from '../../../../../../lib/photos';
 import { errorText, fieldErrors } from '../../../../../../lib/errors';
 import { useBusiness } from '../../../../../../lib/useMe';
+import { useSettings } from '../../../../../../lib/useSettings';
 
 type Item = components['schemas']['CatalogItem'];
 type Fields = components['schemas']['CatalogItemFields'];
@@ -36,7 +37,7 @@ function fromItem(it: Item): Form {
 }
 
 /** Form -> API fields for the kind, or field errors for what can't be parsed. */
-function toFields(f: Form, kind: ItemKind): { fields?: Fields; errors?: Record<string, string> } {
+function toFields(f: Form, kind: ItemKind, depositEnabled: boolean): { fields?: Fields; errors?: Record<string, string> } {
   const errors: Record<string, string> = {};
   const money = (key: string, v: string) => { const c = parsePesos(v); if (c === null) errors[key] = t.invalidMoney; return c ?? 0; };
   const int = (key: string, v: string) => { if (!/^\d+$/.test(v.trim())) errors[key] = t.invalidNumber; return Number(v); };
@@ -49,9 +50,10 @@ function toFields(f: Form, kind: ItemKind): { fields?: Fields; errors?: Record<s
     fields.prep_hours = int('prep_hours', f.prepHours);
     fields.daily_capacity = f.dailyCapacity.trim() ? int('daily_capacity', f.dailyCapacity) : null;
   } else {
-    fields.price_unit = f.priceUnit;
-    fields.security_deposit = money('security_deposit', f.deposit);
-    fields.late_fee_per_day = money('late_fee_per_day', f.lateFee);
+    // Rentals are priced per day; the late fee comes from the business multiplier (Ajustes), not per tool.
+    fields.price_unit = 'day';
+    fields.security_deposit = depositEnabled ? money('security_deposit', f.deposit) : 0;
+    fields.late_fee_per_day = 0;
   }
   return Object.keys(errors).length ? { errors } : { fields };
 }
@@ -60,6 +62,8 @@ export default function CatalogItemForm() {
   const pathname = usePathname();
   const { businessId, itemId, error: carriedError } = useLocalSearchParams<{ businessId: string; itemId: string; error?: string }>();
   const { business } = useBusiness(businessId);
+  const { settings } = useSettings(businessId);
+  const depositEnabled = settings?.rentals.security_deposit_enabled ?? true;
   const isNew = itemId === 'new';
   const [item, setItem] = useState<Item | null>(null);
   const [form, setForm] = useState<Form | null>(isNew ? empty : null);
@@ -92,7 +96,7 @@ export default function CatalogItemForm() {
   const set = (k: keyof Form) => (v: string) => setForm({ ...form, [k]: v });
 
   async function save() {
-    const { fields, errors: local } = toFields(form!, kind);
+    const { fields, errors: local } = toFields(form!, kind, depositEnabled);
     if (!fields) return setErrors(local!);
     setBusy(true);
     setErrors({});
@@ -137,23 +141,13 @@ export default function CatalogItemForm() {
       <Stack.Screen options={{ title: isNew ? `${t.add} ${term(business.vertical, 'catalog_item')?.toLowerCase()}` : form.name }} />
       {field('name', 'name', t.name)}
       {field('description', 'description', t.description)}
-      {field('price', 'price', t.price, true)}
+      {field('price', 'price', kind === 'rental' ? t.pricePerDay : t.price, true)}
       {kind === 'service' && (<>{field('duration', 'duration_minutes', t.duration, true)}{field('buffer', 'buffer_minutes', t.buffer, true)}</>)}
       {kind === 'product' && (<>{field('prepHours', 'prep_hours', t.prepHours, true)}{field('dailyCapacity', 'daily_capacity', t.dailyCapacity, true)}</>)}
       {kind === 'rental' && (
         <>
-          <Text>{t.priceUnit}</Text>
-          <View accessibilityRole="radiogroup" style={{ flexDirection: 'row', gap: 8 }}>
-            {(['day', 'weekend', 'week'] as const).map((u) => (
-              <Pressable key={u} accessibilityRole="radio" accessibilityState={{ checked: form.priceUnit === u }}
-                onPress={() => setForm({ ...form, priceUnit: u })}
-                style={{ borderWidth: form.priceUnit === u ? 2 : 1, borderRadius: 6, padding: 8 }}>
-                <Text>{t.priceUnits[u]}</Text>
-              </Pressable>
-            ))}
-          </View>
-          {field('deposit', 'security_deposit', t.deposit, true)}
-          {field('lateFee', 'late_fee_per_day', t.lateFee, true)}
+          <Text style={{ opacity: 0.7 }}>{t.perDayNote(settings?.rentals.late_fee_multiplier ?? 1)}</Text>
+          {depositEnabled && field('deposit', 'security_deposit', t.deposit, true)}
           {isNew && (
             <View style={{ gap: 4 }}>
               <Text>{t.unitsToCreate}</Text>
