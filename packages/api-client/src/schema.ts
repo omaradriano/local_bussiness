@@ -314,6 +314,25 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/v1/b/{businessId}/quote": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                businessId: components["parameters"]["BusinessId"];
+            };
+            cookie?: never;
+        };
+        /** Precio antes de crear (mismas reglas que al crear, sin opciones ni envío) */
+        get: operations["quoteBooking"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/v1/b/{businessId}/inventory": {
         parameters: {
             query?: never;
@@ -1698,6 +1717,41 @@ export interface operations {
                 content?: never;
             };
             404: components["responses"]["Error"];
+        };
+    };
+    quoteBooking: {
+        parameters: {
+            query: {
+                item_id: string;
+                quantity?: number;
+                starts_at: string;
+                ends_at?: string;
+            };
+            header?: never;
+            path: {
+                businessId: components["parameters"]["BusinessId"];
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        subtotal: number;
+                        total: number;
+                        deposit_required: number;
+                        security_deposit: number;
+                        /** @description Días que se cobran (renta) */
+                        periods: number;
+                    };
+                };
+            };
+            422: components["responses"]["Error"];
         };
     };
     getInventory: {

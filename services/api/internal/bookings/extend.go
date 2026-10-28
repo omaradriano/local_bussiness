@@ -56,18 +56,9 @@ func Extend(ctx context.Context, db store.DB, businessID, id string, newEnd time
 	if err != nil {
 		return Booking{}, err
 	}
-	if !availability.OpenOn(loc, newEnd, hours) {
-		return Booking{}, Invalid{"ends_at", "El negocio está cerrado ese día; elige otro día de regreso."}
-	}
-	rentals := settings.RentalsFrom(rawSettings)
-	periods := RentalPeriods(priceUnit, newEnd.Sub(start))
-	if closed := availability.ClosedDaysBetween(loc, start, newEnd, hours); closed > 0 {
-		if !rentals.SpanClosedDays {
-			return Booking{}, Invalid{"ends_at", "El negocio no renta sobre días cerrados; elige fechas sin días cerrados en medio."}
-		}
-		if !rentals.ChargeClosedDays && priceUnit == "day" {
-			periods = max(1, periods-int64(closed))
-		}
+	periods, err := rentalPeriods(loc, hours, settings.RentalsFrom(rawSettings), priceUnit, start, newEnd)
+	if err != nil {
+		return Booking{}, err
 	}
 
 	// Same units, longer range; the exclusion constraint refuses it if another rental has one by then.

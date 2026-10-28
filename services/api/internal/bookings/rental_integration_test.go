@@ -297,3 +297,22 @@ func TestIntegrationInventory(t *testing.T) {
 		t.Fatalf("rented row: %+v", rows[0])
 	}
 }
+
+func TestIntegrationQuoteMatchesCreate(t *testing.T) {
+	p := pool(t)
+	ctx := context.Background()
+	f := setup(t, p, "tool_rental", `{"charge_closed_days": false}`)
+	// Sat → Mon over a closed Sunday that isn't charged: 1 day, plus the 1000-peso deposit.
+	q, err := QuoteBooking(ctx, p, f.business, QuoteRequest{ItemID: f.item, Quantity: 1, StartsAt: *at("2026-11-07T15:00:00Z"), EndsAt: at("2026-11-09T15:00:00Z")})
+	if err != nil || q.Total != 30000 || q.Periods != 1 || q.SecurityDeposit != 100000 {
+		t.Fatalf("quote: %+v %v", q, err)
+	}
+	b, _, err := Create(ctx, p, f.business, CreateInput{Customer: cust("6143030005"), ItemID: f.item, StartsAt: at("2026-11-07T15:00:00Z"), EndsAt: at("2026-11-09T15:00:00Z"), Source: "admin"}, now)
+	if err != nil || b.Total != q.Total {
+		t.Fatalf("create total %d vs quote %d: %v", b.Total, q.Total, err)
+	}
+	var bad Invalid
+	if _, err := QuoteBooking(ctx, p, f.business, QuoteRequest{ItemID: f.item, StartsAt: *at("2026-11-07T15:00:00Z"), EndsAt: at("2026-11-08T15:00:00Z")}); !errors.As(err, &bad) {
+		t.Fatalf("return on Sunday: %v", err)
+	}
+}

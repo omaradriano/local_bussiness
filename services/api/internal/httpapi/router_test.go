@@ -603,6 +603,33 @@ func (fakeBookings) Inventory(context.Context, string) ([]bookings.InventoryRow,
 	return []bookings.InventoryRow{{State: "available", UnitCode: "RM-01"}}, nil
 }
 
+func (fakeBookings) Quote(_ context.Context, _ string, in bookings.QuoteRequest) (bookings.QuoteResult, error) {
+	if in.EndsAt != nil && in.EndsAt.Weekday() == time.Sunday {
+		return bookings.QuoteResult{}, bookings.Invalid{Field: "ends_at", Message: "cerrado"}
+	}
+	return bookings.QuoteResult{Quote: bookings.Quote{Total: 60000}, Periods: 2}, nil
+}
+
+func TestQuoteRoute(t *testing.T) {
+	base := "/v1/b/" + bizA + "/quote?item_id=" + itemID + "&quantity=1&starts_at=2026-11-02T15:00:00Z"
+	cases := []struct {
+		name, query string
+		code        int
+		want        string
+	}{
+		{"cotiza", "&ends_at=2026-11-04T15:00:00Z", http.StatusOK, `"total":60000`},
+		{"regreso en domingo", "&ends_at=2026-11-08T15:00:00Z", http.StatusUnprocessableEntity, `"ends_at"`},
+		{"fecha inválida", "&ends_at=mañana", http.StatusUnprocessableEntity, `"ends_at"`},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			if rec := do(http.MethodGet, base+tc.query, "staff"); rec.Code != tc.code || !strings.Contains(rec.Body.String(), tc.want) {
+				t.Fatalf("got %d %s", rec.Code, rec.Body)
+			}
+		})
+	}
+}
+
 func TestInventoryRoute(t *testing.T) {
 	if rec := do(http.MethodGet, "/v1/b/"+bizA+"/inventory", "staff"); rec.Code != http.StatusOK || !strings.Contains(rec.Body.String(), `"unit_code":"RM-01"`) {
 		t.Fatalf("got %d %s", rec.Code, rec.Body)
