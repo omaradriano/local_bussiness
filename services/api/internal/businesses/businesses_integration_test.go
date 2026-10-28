@@ -79,7 +79,7 @@ func TestIntegrationCreateAppliesTemplate(t *testing.T) {
 		}
 	}
 
-	_, err = Create(ctx, outer, user, Input{Name: "Otra", Slug: "prueba-unas", Vertical: "nails"}.Normalize())
+	_, err = Create(ctx, outer, user, Input{Name: "Otra", Slug: "prueba-nails", Vertical: "nails"}.Normalize())
 	if !errors.Is(err, ErrSlugTaken) {
 		t.Fatalf("duplicate slug: got %v, want ErrSlugTaken", err)
 	}
