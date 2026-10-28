@@ -45,6 +45,8 @@ type CreateInput struct {
 	DeliveryZone    string            `json:"delivery_zone"`
 	Options         map[string]string `json:"options"` // option name -> answer
 	Notes           string            `json:"notes"`
+	// Counter only: what the customer pays right now (type is set here: all of it = balance, part = advance).
+	InitialPayment *Payment `json:"initial_payment"`
 
 	Source         string `json:"-"` // admin | public
 	CreatedBy      string `json:"-"` // user id for admin bookings
@@ -264,6 +266,22 @@ func Create(ctx context.Context, db store.DB, businessID string, in CreateInput,
 	q := Compute(QuoteInput{UnitPrice: it.Price, OptionsExtra: optsExtra, Quantity: int64(in.Quantity), Periods: periods,
 		DeliveryFee: deliveryFee, DepositPercent: set.DepositPercent, SecurityDeposit: securityDeposit})
 	status, hold := InitialStatus(q.Advance, set.HoldHours, now)
+	pay := in.InitialPayment
+	if pay != nil {
+		if pay.Amount == 0 {
+			pay.Amount = q.Total // no amount = pays it all (the form doesn't know the exact total)
+		}
+		pay.Type = "advance"
+		if pay.Amount == q.Total {
+			pay.Type = "balance"
+		}
+		if err := ValidatePayment(*pay, Balance{Due: q.Total}); err != nil {
+			return Booking{}, false, err
+		}
+		if status == "pending_deposit" && pay.Amount >= q.Advance {
+			status, hold = "confirmed", nil
+		}
+	}
 
 	var bookingID string
 	err = tx.QueryRow(ctx, `
@@ -312,6 +330,13 @@ func Create(ctx context.Context, db store.DB, businessID string, in CreateInput,
 	if _, err := tx.Exec(ctx, `insert into public.booking_events (business_id, booking_id, from_status, to_status, actor, note)
 		values ($1, $2, null, $3, nullif($4, '')::uuid, $5)`, businessID, bookingID, status, in.CreatedBy, "Alta ("+in.Source+")"); err != nil {
 		return Booking{}, false, err
+	}
+	if pay != nil {
+		if _, err := tx.Exec(ctx, `insert into public.payments (business_id, booking_id, type, method, amount, paid_at, recorded_by, notes)
+			values ($1, $2, $3, $4, $5, $6, nullif($7, '')::uuid, nullif($8, ''))`,
+			businessID, bookingID, pay.Type, pay.Method, pay.Amount, now, in.CreatedBy, strings.TrimSpace(deref(pay.Notes))); err != nil {
+			return Booking{}, false, err
+		}
 	}
 	// Copy the configured steps that apply, so later config changes don't affect this booking.
 	if _, err := tx.Exec(ctx, `

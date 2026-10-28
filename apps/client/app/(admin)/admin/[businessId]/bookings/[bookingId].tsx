@@ -5,6 +5,7 @@ import { useCallback, useEffect, useState } from 'react';
 import { ActivityIndicator, Button, Linking, Pressable, ScrollView, Text, TextInput, View } from 'react-native';
 import { api } from '../../../../../lib/api';
 import { errorText, fieldErrors } from '../../../../../lib/errors';
+import { ExtendRental } from '../../../../../components/ExtendRental';
 import { StepCard } from '../../../../../components/StepCard';
 import { useBusiness } from '../../../../../lib/useMe';
 
@@ -177,6 +178,9 @@ export default function BookingDetail() {
           <Button title={b.next.includes('checked_out') ? t.doCheckout : t.doReturn} disabled={busy}
             onPress={() => rentalMove(b.next.includes('checked_out') ? 'checkout' : 'return')} />
         </>
+      )}
+      {b.kind === 'rental' && b.ends_at && ['pending_deposit', 'confirmed', 'checked_out', 'overdue'].includes(b.status) && (
+        <ExtendRental businessId={businessId} booking={b} onDone={(nb) => { setB(nb); setMessage(t.extended(when(nb.ends_at!), formatMXN(nb.total))); }} />
       )}
       {b.rental && (b.rental.checked_out_at || b.rental.returned_at) && (
         <>

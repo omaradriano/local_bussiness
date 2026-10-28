@@ -1,5 +1,5 @@
 import type { components } from '@lb/api-client';
-import { addDays, firstOfMonth, formatMXN, hhmm, lastOfMonth, localToISO, strings, term, todayISO } from '@lb/shared';
+import { addDays, firstOfMonth, parsePesos, formatMXN, hhmm, lastOfMonth, localToISO, strings, term, todayISO } from '@lb/shared';
 import { Link, router, Stack, useLocalSearchParams } from 'expo-router';
 import { useEffect, useMemo, useState } from 'react';
 import { ActivityIndicator, Button, Pressable, ScrollView, Text, TextInput, View } from 'react-native';
@@ -64,6 +64,9 @@ export default function NewBooking() {
   const [zone, setZone] = useState('');
   const [customer, setCustomer] = useState<Customer | null>(null);
   const [notes, setNotes] = useState('');
+  const [payMode, setPayMode] = useState<'none' | 'total' | 'partial'>('total'); // usually paid in full up front
+  const [payMethod, setPayMethod] = useState<'cash' | 'transfer' | 'card'>('cash');
+  const [payAmount, setPayAmount] = useState('');
 
   const [days, setDays] = useState<Record<string, Day>>({}); // calendar availability of the visible month
   const [daysState, setDaysState] = useState<'loading' | 'ready' | string>('loading'); // string = error
@@ -155,6 +158,8 @@ export default function NewBooking() {
     if (!startsAt) return setMessage(item.kind === 'service' ? t.pickDay : item.kind === 'rental' ? t.pickRange : t.pickDay);
     if (item.kind === 'rental' && !backISO) return setMessage(t.pickReturn);
     if (!customer) return setMessage(strings.customers.pick);
+    const partial = payMode === 'partial' ? parsePesos(payAmount) : null;
+    if (payMode === 'partial' && !partial) return setErrors({ amount: t.invalidAmount });
     setBusy(true);
     setErrors({});
     setMessage(null);
@@ -169,6 +174,7 @@ export default function NewBooking() {
         ...(staffId ? { staff_id: staffId } : {}),
         ...(item.kind === 'product' ? { fulfillment, delivery_address: address, delivery_zone: zone } : {}),
         notes,
+        ...(payMode !== 'none' ? { initial_payment: { method: payMethod, ...(partial ? { amount: partial } : {}) } } : {}),
       },
     });
     setBusy(false);
@@ -270,6 +276,16 @@ export default function NewBooking() {
           <CustomerPicker businessId={businessId} isOwner={business.role === 'owner'} value={customer} onChange={setCustomer}
             error={errors['customer.id'] ?? errors['customer.name']} />
           <Field label={t.notes} value={notes} onChange={setNotes} />
+          <Text style={{ fontWeight: '600' }}>{t.initialPayment}</Text>
+          <View accessibilityRole="radiogroup" style={{ flexDirection: 'row', gap: 8, flexWrap: 'wrap' }}>
+            {(['total', 'partial', 'none'] as const).map((m) => <Choice key={m} selected={payMode === m} label={t.payModes[m]} onPress={() => setPayMode(m)} />)}
+          </View>
+          {payMode !== 'none' && (
+            <View accessibilityRole="radiogroup" style={{ flexDirection: 'row', gap: 8, flexWrap: 'wrap' }}>
+              {(['cash', 'transfer', 'card'] as const).map((m) => <Choice key={m} selected={payMethod === m} label={t.methods[m]} onPress={() => setPayMethod(m)} />)}
+            </View>
+          )}
+          {payMode === 'partial' && <Field label={t.amount} value={payAmount} onChange={setPayAmount} keyboard="numeric" error={errors.amount} />}
           {Object.entries(errors).filter(([k]) => k.startsWith('options.')).map(([k, v]) => <Text key={k} accessibilityRole="alert">{v}</Text>)}
           {message && <Text accessibilityRole="alert">{message}</Text>}
           <Button title={busy ? '…' : t.save} onPress={save} disabled={busy || !canSave} />

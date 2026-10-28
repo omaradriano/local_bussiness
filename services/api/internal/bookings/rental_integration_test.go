@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/json"
 	"errors"
+	"fmt"
 	"testing"
 	"time"
 
@@ -158,5 +159,78 @@ func TestIntegrationCustomerDocsAreReused(t *testing.T) {
 	}
 	if b.Steps[0].Status != "done" || len(b.Steps[0].Files) != 1 {
 		t.Fatalf("ID step filled from the profile: %+v", b.Steps[0])
+	}
+}
+
+func TestIntegrationInitialPayment(t *testing.T) {
+	p := pool(t)
+	ctx := context.Background()
+	f := setup(t, p, "tool_rental", `{"deposit_percent": 50}`)
+	create := func(day int, pay *Payment) (Booking, error) { // Tue 3 … Fri 6; 1 day = 30000
+		start := fmt.Sprintf("2026-11-%02dT15:00:00Z", day)
+		end := fmt.Sprintf("2026-11-%02dT14:00:00Z", day+1)
+		b, _, err := Create(ctx, p, f.business, CreateInput{Customer: cust("6143030002"), ItemID: f.item, StartsAt: at(start), EndsAt: at(end), Source: "admin", InitialPayment: pay}, now)
+		return b, err
+	}
+	if b, err := create(3, nil); err != nil || b.Status != "pending_deposit" || len(b.Payments) != 0 {
+		t.Fatalf("no payment: %v %v", b.Status, err)
+	}
+	b, err := create(4, &Payment{Method: "cash", Amount: 15000})
+	if err != nil || b.Status != "confirmed" || b.Balance.Due != 15000 || len(b.Payments) != 1 || b.Payments[0].Type != "advance" {
+		t.Fatalf("half up front: %+v %+v %v", b.Status, b.Balance, err)
+	}
+	b, err = create(5, &Payment{Method: "transfer", Amount: 30000})
+	if err != nil || b.Balance.Due != 0 || b.Payments[0].Type != "balance" {
+		t.Fatalf("all up front: %+v %v", b.Balance, err)
+	}
+	var bad Invalid
+	if _, err := create(6, &Payment{Method: "cash", Amount: 40000}); !errors.As(err, &bad) || bad.Field != "amount" {
+		t.Fatalf("more than the total: %v", err)
+	}
+	if _, err := create(6, &Payment{Method: "cheque", Amount: 100}); !errors.As(err, &bad) || bad.Field != "method" {
+		t.Fatalf("bad method: %v", err)
+	}
+	if b, err := create(6, &Payment{Method: "card"}); err != nil || b.Balance.Due != 0 || b.Payments[0].Amount != 30000 {
+		t.Fatalf("no amount = the whole total: %+v %v", b.Balance, err)
+	}
+}
+
+func TestIntegrationExtendRental(t *testing.T) {
+	p := pool(t)
+	ctx := context.Background()
+	f := setup(t, p, "tool_rental", `{}`)
+	rent := func(start, end string) Booking {
+		b, _, err := Create(ctx, p, f.business, CreateInput{Customer: cust("6143030003"), ItemID: f.item, StartsAt: at(start), EndsAt: at(end), Source: "admin"}, now)
+		if err != nil {
+			t.Fatal(err)
+		}
+		return b
+	}
+	first := rent("2026-11-02T15:00:00Z", "2026-11-03T15:00:00Z") // Mon → Tue, 1 day
+	rent("2026-11-06T15:00:00Z", "2026-11-07T15:00:00Z")          // Fri → Sat, the only unit
+
+	b, err := Extend(ctx, p, f.business, first.ID, *at("2026-11-05T15:00:00Z"), "", now)
+	if err != nil || b.Total != 90000 || !b.EndsAt.Equal(*at("2026-11-05T15:00:00Z")) {
+		t.Fatalf("extend to Thu: total %d %v", b.Total, err)
+	}
+	if _, err := Extend(ctx, p, f.business, first.ID, *at("2026-11-07T15:00:00Z"), "", now); !errors.Is(err, ErrSlotTaken) {
+		t.Fatalf("over the next rental: %v", err)
+	}
+	var bad Invalid
+	if _, err := Extend(ctx, p, f.business, first.ID, *at("2026-11-04T15:00:00Z"), "", now); !errors.As(err, &bad) || bad.Field != "ends_at" {
+		t.Fatalf("earlier date: %v", err)
+	}
+	// An overdue rental extended goes back to "rented".
+	if _, err := p.Exec(ctx, `update public.bookings set status = 'overdue' where id = $1`, first.ID); err != nil {
+		t.Fatal(err)
+	}
+	b, err = Extend(ctx, p, f.business, first.ID, *at("2026-11-06T14:00:00Z"), "", now)
+	if err != nil || b.Status != "checked_out" {
+		t.Fatalf("overdue extended: %v %v", b.Status, err)
+	}
+	// Sunday the business is closed: no return that day.
+	other := rent("2026-11-09T15:00:00Z", "2026-11-10T15:00:00Z")
+	if _, err := Extend(ctx, p, f.business, other.ID, *at("2026-11-15T18:00:00Z"), "", now); !errors.As(err, &bad) || bad.Field != "ends_at" {
+		t.Fatalf("return on Sunday: %v", err)
 	}
 }

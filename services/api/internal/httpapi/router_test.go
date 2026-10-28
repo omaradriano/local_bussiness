@@ -592,6 +592,13 @@ func (fakeBookings) Return(_ context.Context, _, id, _, _ string, _ time.Time) (
 	return bookings.Booking{ID: id, Status: "returned", Rental: &bookings.RentalInfo{LateDays: 2, LateFeeSuggested: 60000}}, nil
 }
 
+func (fakeBookings) Extend(_ context.Context, _, id string, newEnd time.Time, _ string, _ time.Time) (bookings.Booking, error) {
+	if newEnd.Year() == 2030 {
+		return bookings.Booking{}, bookings.ErrSlotTaken
+	}
+	return bookings.Booking{ID: id, Status: "checked_out", EndsAt: &newEnd}, nil
+}
+
 func (fakeBookings) Get(_ context.Context, _, id string) (bookings.Booking, error) {
 	if id != bookingID {
 		return bookings.Booking{}, bookings.ErrNotFound
@@ -726,6 +733,9 @@ func TestRentalFlowRoutes(t *testing.T) {
 		{"salida con pasos pendientes", http.MethodPost, one + "/checkout", `{"condition":"sin ine"}`, true, http.StatusUnprocessableEntity, `"steps_pending"`},
 		{"salida", http.MethodPost, one + "/checkout", `{"condition":"ok"}`, true, http.StatusOK, `"status":"checked_out"`},
 		{"devolución con recargo sugerido", http.MethodPost, one + "/return", `{}`, true, http.StatusOK, `"late_fee_suggested":60000`},
+		{"extender", http.MethodPost, one + "/extend", `{"ends_at":"2026-11-10T16:00:00Z"}`, true, http.StatusOK, `"ends_at":"2026-11-10T16:00:00Z"`},
+		{"extender sin fecha", http.MethodPost, one + "/extend", `{}`, true, http.StatusUnprocessableEntity, `"ends_at"`},
+		{"extender sobre otra renta", http.MethodPost, one + "/extend", `{"ends_at":"2030-01-10T16:00:00Z"}`, true, http.StatusConflict, `"slot_taken"`},
 	}
 	for _, tc := range cases {
 		t.Run(tc.name, func(t *testing.T) {

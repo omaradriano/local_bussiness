@@ -63,6 +63,7 @@ type BookingsRepo interface {
 	CompleteStep(ctx context.Context, businessID, bookingID, stepID string, sub steps.Submission, actor string, now time.Time, exists bookings.FileExists) (bookings.Booking, error)
 	Checkout(ctx context.Context, businessID, id, condition, actor string, now time.Time) (bookings.Booking, error)
 	Return(ctx context.Context, businessID, id, condition, actor string, now time.Time) (bookings.Booking, error)
+	Extend(ctx context.Context, businessID, id string, newEnd time.Time, actor string, now time.Time) (bookings.Booking, error)
 }
 
 // writeBooking maps the bookings errors to HTTP and writes the booking on success.
@@ -76,6 +77,8 @@ func writeBooking(w http.ResponseWriter, r *http.Request, b bookings.Booking, er
 		apierr.JSON(w, http.StatusUnprocessableEntity, apierr.Error{Code: "steps_pending", Message: steps.Error(), Details: map[string]any{"steps": steps.Labels}})
 	case errors.Is(err, bookings.ErrNotFound):
 		notFound(w, "La reserva no existe.")
+	case errors.Is(err, bookings.ErrSlotTaken):
+		apierr.Write(w, http.StatusConflict, "slot_taken", "Una de las unidades ya está apartada para esas fechas.")
 	case err != nil:
 		internalError(w, r, "booking", err)
 	default:
@@ -502,6 +505,22 @@ func NewRouter(d Deps) http.Handler {
 						return
 					}
 					b, err := d.Bookings.Checkout(r.Context(), m.BusinessID, chi.URLParam(r, "bookingId"), body.Condition, m.UserID, d.now())
+					writeBooking(w, r, b, err)
+				})
+
+				r.Post("/extend", func(w http.ResponseWriter, r *http.Request) {
+					m, _ := auth.MemberFrom(r.Context())
+					var body struct {
+						EndsAt *time.Time `json:"ends_at"`
+					}
+					if !decode(w, r, &body) {
+						return
+					}
+					if body.EndsAt == nil {
+						invalid(w, "Elige la nueva fecha de regreso.", map[string]string{"ends_at": "Elige la nueva fecha de regreso."})
+						return
+					}
+					b, err := d.Bookings.Extend(r.Context(), m.BusinessID, chi.URLParam(r, "bookingId"), *body.EndsAt, m.UserID, d.now())
 					writeBooking(w, r, b, err)
 				})
 

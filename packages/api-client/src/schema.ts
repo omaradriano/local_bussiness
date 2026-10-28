@@ -622,6 +622,26 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/v1/b/{businessId}/bookings/{bookingId}/extend": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                businessId: components["parameters"]["BusinessId"];
+                bookingId: string;
+            };
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Extiende una renta (mismas unidades, total recalculado); 409 si una unidad ya está apartada */
+        post: operations["extendRental"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/v1/b/{businessId}/bookings/{bookingId}/return": {
         parameters: {
             query?: never;
@@ -826,6 +846,13 @@ export interface components {
                 name?: string;
                 phone?: string;
                 email?: string;
+            };
+            /** @description Lo que el cliente paga al crearla (solo mostrador). Sin `amount` = el total. */
+            initial_payment?: {
+                /** @enum {string} */
+                method: "cash" | "transfer" | "card";
+                /** @description centavos */
+                amount?: number;
             };
             /** Format: uuid */
             item_id: string;
@@ -2214,6 +2241,38 @@ export interface operations {
                 };
             };
             404: components["responses"]["Error"];
+            422: components["responses"]["Error"];
+        };
+    };
+    extendRental: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                businessId: components["parameters"]["BusinessId"];
+                bookingId: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": {
+                    /** Format: date-time */
+                    ends_at: string;
+                };
+            };
+        };
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Booking"];
+                };
+            };
+            409: components["responses"]["Error"];
             422: components["responses"]["Error"];
         };
     };

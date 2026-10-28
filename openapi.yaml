@@ -840,6 +840,31 @@ paths:
         "404": { $ref: "#/components/responses/Error" }
         "422": { $ref: "#/components/responses/Error" }
 
+  /v1/b/{businessId}/bookings/{bookingId}/extend:
+    parameters:
+      - $ref: "#/components/parameters/BusinessId"
+      - { name: bookingId, in: path, required: true, schema: { type: string, format: uuid } }
+    post:
+      operationId: extendRental
+      summary: Extiende una renta (mismas unidades, total recalculado); 409 si una unidad ya está apartada
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [ends_at]
+              properties:
+                ends_at: { type: string, format: date-time }
+      responses:
+        "200":
+          description: OK
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Booking" }
+        "409": { $ref: "#/components/responses/Error" }
+        "422": { $ref: "#/components/responses/Error" }
+
   /v1/b/{businessId}/bookings/{bookingId}/return:
     parameters:
       - $ref: "#/components/parameters/BusinessId"
@@ -1125,6 +1150,13 @@ components:
             name: { type: string }
             phone: { type: string }
             email: { type: string }
+        initial_payment:
+          type: object
+          description: "Lo que el cliente paga al crearla (solo mostrador). Sin `amount` = el total."
+          required: [method]
+          properties:
+            method: { type: string, enum: [cash, transfer, card] }
+            amount: { type: integer, minimum: 1, description: centavos }
         item_id: { type: string, format: uuid }
         quantity: { type: integer, minimum: 1, maximum: 100, default: 1 }
         starts_at: { type: string, format: date-time, description: "Servicio: hora de la cita; producto: entrega; renta: salida" }

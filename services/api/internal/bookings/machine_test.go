@@ -26,6 +26,7 @@ func TestF3_6_MachineAllowsOnlyItsTransitions(t *testing.T) {
 		{"rental", "confirmed", "checked_out", true},
 		{"rental", "checked_out", "returned", true},
 		{"rental", "overdue", "returned", true},
+		{"rental", "overdue", "checked_out", true}, // only by extending it
 		{"rental", "returned", "completed", true},
 		{"rental", "checked_out", "completed", false}, // must be returned first
 		{"rental", "checked_out", "cancelled", false}, // it's out: can't cancel
@@ -68,6 +69,9 @@ func TestNextStepsForThePanel(t *testing.T) {
 	want := []string{"checked_out", "cancelled", "no_show"}
 	if !equalStrings(got, want) {
 		t.Fatalf("Next = %v, want %v", got, want)
+	}
+	if got := Next("rental", "overdue"); !equalStrings(got, []string{"returned"}) {
+		t.Fatalf("overdue: no check-out button (extending is its own flow), got %v", got)
 	}
 	if len(Next("service", "completed")) != 0 {
 		t.Fatal("completed has no next steps")
