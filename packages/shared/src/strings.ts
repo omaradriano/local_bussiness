@@ -38,7 +38,7 @@ export const strings = {
     templateNote: 'Te dejamos un catálogo y horario de ejemplo; los puedes cambiar después.',
   },
   business: {
-    sections: { catalog: 'Catálogo', staff: 'Equipo', hours: 'Horario', calendar: 'Calendario' },
+    sections: { catalog: 'Catálogo', staff: 'Equipo', hours: 'Horario', calendar: 'Calendario', today: 'Hoy' },
     back: 'Mis negocios',
   },
   catalog: {
@@ -183,6 +183,13 @@ export const strings = {
       out_for_delivery: 'En camino', checked_out: 'Rentada', overdue: 'Vencida', returned: 'Devuelta',
       completed: 'Completada', cancelled: 'Cancelada', expired: 'Expirada', no_show: 'No asistió',
     },
+  },
+  today: {
+    groups: {
+      overdue: 'Rentas vencidas', awaitingDeposit: 'Por cobrar anticipo', appointments: 'Citas de hoy',
+      deliveries: 'Entregas de hoy', goingOut: 'Salen hoy', comingBack: 'Regresan hoy',
+    },
+    nothing: 'Nada pendiente para hoy.',
   },
   staff: {
     title: 'Equipo',
