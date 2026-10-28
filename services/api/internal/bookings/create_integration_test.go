@@ -297,9 +297,9 @@ func TestIntegrationRentalNotOnClosedDays(t *testing.T) {
 	ctx := context.Background()
 	f := setup(t, p, "tool_rental", `{}`) // open Mon–Sat
 	var inv Invalid
-	// Pick-up on Sunday Nov 1: refused.
+	// Pick-up on Sunday Nov 8: refused.
 	if _, _, err := Create(ctx, p, f.business, CreateInput{Customer: cust("6141010001"), ItemID: f.item,
-		StartsAt: at("2026-11-01T16:00:00Z"), EndsAt: at("2026-11-03T16:00:00Z"), Source: "admin"}, now); !errors.As(err, &inv) || inv.Field != "starts_at" {
+		StartsAt: at("2026-11-08T16:00:00Z"), EndsAt: at("2026-11-10T16:00:00Z"), Source: "admin"}, now); !errors.As(err, &inv) || inv.Field != "starts_at" {
 		t.Fatalf("pick-up on Sunday: %v", err)
 	}
 	// Saturday to Monday spans the closed Sunday: allowed (and charged).
