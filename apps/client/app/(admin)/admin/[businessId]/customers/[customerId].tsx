@@ -16,7 +16,7 @@ const t = strings.customers;
 export default function CustomerScreen() {
   const { businessId, customerId } = useLocalSearchParams<{ businessId: string; customerId: string }>();
   const { business } = useBusiness(businessId);
-  const { texts, isRental } = useTexts();
+  const { texts, has } = useTexts();
   const isNew = customerId === 'new';
   const [customer, setCustomer] = useState<Customer | null>(null);
   const [notFound, setNotFound] = useState(false);
@@ -38,7 +38,7 @@ export default function CustomerScreen() {
       <Text variant="largeTitle" accessibilityRole="header" style={{ marginBottom: 20 }}>{customer?.name ?? t.new}</Text>
       <CustomerForm key={customer?.id ?? 'new'} businessId={businessId} customer={customer ?? undefined} isOwner={isOwner}
         onSaved={(c) => (isNew ? open(c.id) : setCustomer(c))} onExisting={open} />
-      {customer && isRental && <View style={{ marginTop: 28 }}><CustomerDocuments businessId={businessId} customer={customer} isOwner={isOwner} onChange={setCustomer} /></View>}
+      {customer && has('customerDocuments') && <View style={{ marginTop: 28 }}><CustomerDocuments businessId={businessId} customer={customer} isOwner={isOwner} onChange={setCustomer} /></View>}
       {customer && (
         <View style={{ marginTop: 28 }}>
           <Text variant="title" style={{ marginBottom: 12 }}>{texts.bookings.ofCustomer}</Text>

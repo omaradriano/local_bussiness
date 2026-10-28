@@ -636,7 +636,7 @@ Catálogo público `/<slug>` con un diseño llamativo por giro, reservas y pedid
 La plataforma debe adaptarse a muchos giros (renta de herramienta, uñas, florería, lavado de autos, lavado de salas, tiendas…) sin reescribir pantallas. Cada giro se describe con un **mapa** montado sobre un **motor** (cómo se aparta: agenda, entrega con fecha, renta por unidades, venta sin fecha) y cada negocio ajusta sus propios parámetros. El diseño completo, el mapa de renta de herramienta (el primero terminado) y el camino para llegar están en [`docs/mapa-giros.md`](mapa-giros.md).
 
 - [x] Textos y secciones de Ajustes por giro (`verticalTexts.ts`, 2026-10-28).
-- [ ] Fuente única por giro en código: un archivo con todo su mapa; las pantallas preguntan por funciones, no por giro.
+- [x] Fuente única por giro en código: un archivo con todo su mapa; las pantallas preguntan por funciones, no por giro (2026-10-28).
 - [ ] Funciones encendibles por negocio (`settings.features`) por encima de lo que trae su giro.
 - [ ] Panel de superadministrador: negocios, su giro, plan, funciones y ajustes; entrar como el negocio con bitácora de auditoría.
 - [ ] Giros en la base (`business_types`), editables desde el panel de superadministrador y validados contra los motores.

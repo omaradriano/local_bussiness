@@ -14,7 +14,8 @@ const t = strings.customers;
 export default function Customers() {
   const { businessId } = useLocalSearchParams<{ businessId: string }>();
   const ui = useUI();
-  const { isRental } = useTexts();
+  const { has } = useTexts();
+  const trusted = (c: { trusted: boolean }) => has('trustedCustomers') && c.trusted;
   const [q, setQ] = useState('');
   const [list, setList] = useState<Customer[] | null>(null);
 
@@ -36,11 +37,11 @@ export default function Customers() {
       {!!list?.length && (
         <Group separatorInset={58}>
           {list.map((c) => {
-            const missing = isRental ? missingDocs(c) : [];
+            const missing = has('customerDocuments') ? missingDocs(c) : [];
             return (
-              <Cell key={c.id} icon={isRental && c.trusted ? 'shield-checkmark' : 'person'} tint={isRental && c.trusted ? ui.success : ui.indigo}
+              <Cell key={c.id} icon={trusted(c) ? 'shield-checkmark' : 'person'} tint={trusted(c) ? ui.success : ui.indigo}
                 label={c.name}
-                sublabel={`${formatPhone(c.phone)}${isRental && c.trusted ? ` · ${t.trustedBadge}` : missing.length ? ` · ${t.missingDocs(missing.join(', '))}` : ''}`}
+                sublabel={`${formatPhone(c.phone)}${trusted(c) ? ` · ${t.trustedBadge}` : missing.length ? ` · ${t.missingDocs(missing.join(', '))}` : ''}`}
                 onPress={() => router.push({ pathname: '/admin/[businessId]/customers/[customerId]', params: { businessId, customerId: c.id } })} />
             );
           })}

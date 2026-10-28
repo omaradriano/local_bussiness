@@ -20,7 +20,7 @@ export function CustomerPicker({ businessId, isOwner, value, onChange, error }: 
   businessId: string; isOwner: boolean; value: Customer | null; onChange: (c: Customer | null) => void; error?: string;
 }) {
   const ui = useUI();
-  const { isRental } = useTexts();
+  const { has } = useTexts();
   const [q, setQ] = useState('');
   const [results, setResults] = useState<Customer[]>([]);
   const [creating, setCreating] = useState(false);
@@ -57,15 +57,16 @@ export function CustomerPicker({ businessId, isOwner, value, onChange, error }: 
   );
 
   if (value) {
-    const missing = isRental ? missingDocs(value) : [];
+    const missing = has('customerDocuments') ? missingDocs(value) : [];
+    const trusted = has('trustedCustomers') && value.trusted;
     return (
       <View style={{ backgroundColor: ui.fill, borderRadius: radius.sm, padding: 14, gap: 4 }}>
         <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8 }}>
-          <Ionicons name={isRental && value.trusted ? 'shield-checkmark' : 'person-circle'} size={22} color={isRental && value.trusted ? ui.success : ui.accent} />
+          <Ionicons name={trusted ? 'shield-checkmark' : 'person-circle'} size={22} color={trusted ? ui.success : ui.accent} />
           <Text variant="headline" style={{ flex: 1 }}>{value.name}</Text>
           <Button size="sm" variant="plain" onPress={() => { onChange(null); setQ(''); }}>{t.change}</Button>
         </View>
-        <Text variant="subhead" color="labelSecondary">{formatPhone(value.phone)}{isRental && value.trusted ? ` · ${t.trustedBadge}` : ''}</Text>
+        <Text variant="subhead" color="labelSecondary">{formatPhone(value.phone)}{trusted ? ` · ${t.trustedBadge}` : ''}</Text>
         {value.address && <Text variant="subhead" color="labelSecondary">{value.address}</Text>}
         {missing.length > 0 && <View style={{ marginTop: 6 }}><Notice tone="warning">{t.missingDocs(missing.join(', '))}</Notice></View>}
       </View>

@@ -1,4 +1,12 @@
 {
+  "kind": "rental",
+  "features": [
+    "inventory",
+    "guarantor",
+    "customerAddress",
+    "customerDocuments",
+    "trustedCustomers"
+  ],
   "settings": {
     "deposit_percent": 0,
     "cancel_hours": 24,

@@ -52,17 +52,13 @@ La máquina de estados ya es por motor (`internal/bookings/machine.go`): un giro
 
 Los mapas de uñas (`nails`, motor `service`) y florería (`flowers`, motor `product`) ya tienen terminología, textos y secciones de Ajustes; les falta su flujo del detalle y sus funciones propias (equipo y servicios por persona en uñas; armador y zonas de entrega en flores).
 
-## Dónde está fijo hoy cada giro
+## Dónde vive hoy cada giro
 
-Agregar un giro hoy obliga a tocar código y base en estos lugares:
-
-- Base: `check (vertical in (...))` en `businesses` y `notification_templates`.
-- Go: `businesses.Verticals` y `KindFor`; `customers.Validate` (aval obligatorio solo en `tool_rental`); plantilla JSON por giro.
-- TypeScript: `VERTICALS`, `kindFor`, `TERMS`, `verticalTexts` y `settingsSectionsFor`; en el cliente, alguna condición por giro (inventario en el calendario).
+Desde 2026-10-28 cada giro es **un archivo de mapa** (`packages/shared/src/verticals/<giro>.ts`) y **una plantilla de la API** (`services/api/internal/businesses/templates/<giro>.json`) que repite su motor y sus funciones; un test verifica que coincidan. De ahí salen la lista de giros, el motor, la terminología, los textos, las secciones de Ajustes y las funciones; las pantallas y la API preguntan por funciones (`guarantor`, `inventory`, `staff`…), no por el giro. Lo único fijo que queda es el `check` de `businesses.vertical` en la base. Receta en `CLAUDE.md`.
 
 ## Camino propuesto
 
-1. **Fuente única en código (siguiente paso).** Un archivo por giro con todo su mapa (identidad, motor, terminología, textos, secciones, valores por defecto, funciones, plantilla), del que salen la lista de giros, `kindFor`, los textos y la plantilla de alta. El cliente y la API dejan de preguntar «¿es `tool_rental`?» y preguntan «¿tiene la función `guarantor`?». Agregar un giro sobre un motor existente = agregar un archivo y sus tests.
+1. **Fuente única en código (hecho, 2026-10-28).** Un archivo por giro con todo su mapa (identidad, motor, terminología, textos, secciones, valores por defecto, funciones, plantilla), del que salen la lista de giros, `kindFor`, los textos y la plantilla de alta. El cliente y la API dejan de preguntar «¿es `tool_rental`?» y preguntan «¿tiene la función `guarantor`?». Agregar un giro sobre un motor existente = agregar un archivo y sus tests.
 2. **Funciones por negocio.** `settings.features` permite que el superadministrador encienda o apague una función para un negocio concreto, por encima de lo que trae su giro (por ejemplo, documentos del cliente en un lavado de salas).
 3. **Panel de superadministrador** (ver plan): lista de negocios, su giro, plan, funciones y ajustes; entrar como el negocio con bitácora de auditoría.
 4. **Giros en la base (`business_types`).** Cuando haya varios giros y el panel de superadministrador, los mapas pasan a una tabla editable desde ese panel, validada contra los motores; `businesses.vertical` apunta a esa tabla en lugar del `check`. Los motores, los tipos de paso y los tipos de sección de Ajustes siguen en código.

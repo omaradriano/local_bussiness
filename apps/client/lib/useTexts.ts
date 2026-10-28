@@ -1,4 +1,4 @@
-import { kindFor, textsFor, type ItemKind, type Vertical, type VerticalTexts } from '@lb/shared';
+import { hasFeature, kindFor, textsFor, type Feature, type ItemKind, type Vertical, type VerticalTexts } from '@lb/shared';
 import { usePathname } from 'expo-router';
 import { useBusiness } from './useMe';
 
@@ -11,13 +11,13 @@ export function useCurrentBusinessId(): { businessId: string | null; rest: strin
 }
 
 /**
- * Texts of the current business's type (rentals say "Rentas", nails "Citas", flowers "Pedidos"),
- * with its vertical and item kind. Until the business loads it uses rental texts (the first vertical).
+ * The current business's giro map: its texts ("Rentas" / "Citas" / "Pedidos"), engine and features.
+ * Screens ask `has('guarantor')` instead of "is it a rental?". Until the business loads it uses the
+ * rental map (the first giro).
  */
-export function useTexts(): { vertical: Vertical; kind: ItemKind; texts: VerticalTexts; isRental: boolean } {
+export function useTexts(): { vertical: Vertical; kind: ItemKind; texts: VerticalTexts; has: (f: Feature) => boolean } {
   const { businessId } = useCurrentBusinessId();
   const { business } = useBusiness(businessId ?? '');
   const vertical: Vertical = business?.vertical ?? 'tool_rental';
-  const kind = kindFor(vertical);
-  return { vertical, kind, texts: textsFor(vertical), isRental: kind === 'rental' };
+  return { vertical, kind: kindFor(vertical), texts: textsFor(vertical), has: (f) => hasFeature(vertical, f) };
 }
