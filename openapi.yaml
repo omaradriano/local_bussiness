@@ -513,6 +513,61 @@ paths:
               schema: { $ref: "#/components/schemas/Booking" }
         "404": { $ref: "#/components/responses/Error" }
 
+  /v1/b/{businessId}/bookings/{bookingId}/transition:
+    parameters:
+      - $ref: "#/components/parameters/BusinessId"
+      - { name: bookingId, in: path, required: true, schema: { type: string, format: uuid } }
+    post:
+      operationId: transitionBooking
+      summary: Cambia el estado (dueño o empleado). La máquina y los requisitos se validan en el servidor.
+      description: "Errores 422: `validation_failed` (transición inválida, falta anticipo o saldo) o `steps_pending` (details.steps)."
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [to]
+              properties:
+                to: { $ref: "#/components/schemas/BookingStatus" }
+                note: { type: string, maxLength: 500 }
+      responses:
+        "200":
+          description: OK
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Booking" }
+        "404": { $ref: "#/components/responses/Error" }
+        "422": { $ref: "#/components/responses/Error" }
+
+  /v1/b/{businessId}/bookings/{bookingId}/payments:
+    parameters:
+      - $ref: "#/components/parameters/BusinessId"
+      - { name: bookingId, in: path, required: true, schema: { type: string, format: uuid } }
+    post:
+      operationId: addPayment
+      summary: Registra un pago; cubrir el anticipo de un apartado lo confirma
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [type, method, amount]
+              properties:
+                type: { $ref: "#/components/schemas/PaymentType" }
+                method: { type: string, enum: [cash, transfer, card] }
+                amount: { type: integer, format: int64, minimum: 1 }
+                notes: { type: string, maxLength: 500 }
+      responses:
+        "200":
+          description: OK
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Booking" }
+        "404": { $ref: "#/components/responses/Error" }
+        "422": { $ref: "#/components/responses/Error" }
+
 components:
   securitySchemes:
     bearer:
@@ -665,6 +720,10 @@ components:
               remaining: { type: integer, description: "-1 = sin límite" }
         free_units: { type: array, items: { type: string, format: uuid } }
 
+    PaymentType:
+      type: string
+      enum: [advance, balance, security_deposit, refund, late_fee, damage_fee]
+
     BookingStatus:
       type: string
       enum: [pending_deposit, confirmed, in_progress, ready, out_for_delivery, checked_out, overdue, returned, completed, cancelled, expired, no_show]
@@ -694,7 +753,7 @@ components:
 
     Booking:
       type: object
-      required: [id, kind, status, starts_at, ends_at, customer, items, staff, units, subtotal, deposit_required, total, source, hold_expires_at, public_token, created_at]
+      required: [id, kind, status, starts_at, ends_at, customer, items, staff, units, subtotal, deposit_required, total, source, hold_expires_at, public_token, created_at, payments, balance, events, steps, next]
       properties:
         id: { type: string, format: uuid }
         kind: { $ref: "#/components/schemas/ItemKind" }
@@ -735,6 +794,54 @@ components:
         hold_expires_at: { type: [string, "null"], format: date-time }
         public_token: { type: string }
         created_at: { type: string, format: date-time }
+        payments:
+          type: array
+          items:
+            type: object
+            required: [id, type, method, amount, paid_at, recorded_by, notes]
+            properties:
+              id: { type: string, format: uuid }
+              type: { $ref: "#/components/schemas/PaymentType" }
+              method: { type: string, enum: [cash, transfer, card] }
+              amount: { type: integer, format: int64 }
+              paid_at: { type: string, format: date-time }
+              recorded_by: { type: [string, "null"] }
+              notes: { type: [string, "null"] }
+        balance:
+          type: object
+          required: [paid, due, deposit_held, extra_charges]
+          properties:
+            paid: { type: integer, format: int64 }
+            due: { type: integer, format: int64 }
+            deposit_held: { type: integer, format: int64 }
+            extra_charges: { type: integer, format: int64 }
+        events:
+          type: array
+          items:
+            type: object
+            required: [from_status, to_status, at, note]
+            properties:
+              from_status: { type: [string, "null"] }
+              to_status: { type: string }
+              at: { type: string, format: date-time }
+              note: { type: [string, "null"] }
+        steps:
+          type: array
+          items:
+            type: object
+            required: [id, label, step_type, to_status, required, status, completed_at, files]
+            properties:
+              id: { type: string, format: uuid }
+              label: { type: string }
+              step_type: { type: string }
+              to_status: { type: [string, "null"] }
+              required: { type: boolean }
+              status: { type: string, enum: [pending, done, skipped] }
+              completed_at: { type: [string, "null"], format: date-time }
+              files: { type: array, items: { type: string } }
+        next:
+          type: array
+          items: { $ref: "#/components/schemas/BookingStatus" }
 
     BookingSummary:
       type: object
