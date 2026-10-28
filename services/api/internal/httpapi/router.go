@@ -65,6 +65,7 @@ type BookingsRepo interface {
 	Return(ctx context.Context, businessID, id, condition, actor string, now time.Time) (bookings.Booking, error)
 	Extend(ctx context.Context, businessID, id string, newEnd time.Time, actor string, now time.Time) (bookings.Booking, error)
 	Inventory(ctx context.Context, businessID string) ([]bookings.InventoryRow, error)
+	Quote(ctx context.Context, businessID string, in bookings.QuoteRequest) (bookings.QuoteResult, error)
 }
 
 // writeBooking maps the bookings errors to HTTP and writes the booking on success.
@@ -361,6 +362,38 @@ func NewRouter(d Deps) http.Handler {
 					apierr.JSON(w, http.StatusOK, b)
 				default:
 					apierr.JSON(w, http.StatusCreated, b)
+				}
+			})
+
+			// Price of a booking before creating it (the form shows it while dates are picked).
+			r.Get("/quote", func(w http.ResponseWriter, r *http.Request) {
+				m, _ := auth.MemberFrom(r.Context())
+				q := r.URL.Query()
+				in := bookings.QuoteRequest{ItemID: q.Get("item_id")}
+				in.Quantity, _ = strconv.Atoi(q.Get("quantity"))
+				start, err := time.Parse(time.RFC3339, q.Get("starts_at"))
+				if err != nil || !auth.IsUUID(in.ItemID) || in.Quantity > 100 {
+					invalid(w, "Revisa los datos.", map[string]string{"starts_at": "Fecha u artículo inválido."})
+					return
+				}
+				in.StartsAt = start
+				if v := q.Get("ends_at"); v != "" {
+					end, err := time.Parse(time.RFC3339, v)
+					if err != nil {
+						invalid(w, "Fecha de regreso inválida.", map[string]string{"ends_at": "Fecha inválida."})
+						return
+					}
+					in.EndsAt = &end
+				}
+				res, err := d.Bookings.Quote(r.Context(), m.BusinessID, in)
+				var bad bookings.Invalid
+				switch {
+				case errors.As(err, &bad):
+					invalid(w, bad.Message, map[string]string{bad.Field: bad.Message})
+				case err != nil:
+					internalError(w, r, "quote", err)
+				default:
+					apierr.JSON(w, http.StatusOK, res)
 				}
 			})
 

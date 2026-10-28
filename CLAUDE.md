@@ -30,7 +30,7 @@ Plataforma multi-negocio de reservas, pedidos y rentas (uñas, florería, renta 
 5. Toda regla de negocio (disponibilidad, estados, pagos) vive en Go y se escribe empezando por sus tests unitarios; el cliente solo valida formato, y también lleva tests donde haya lógica.
 6. Montos en centavos (`bigint`, MXN), fechas en UTC (`timestamptz`) con la zona del negocio; nada de `float` para dinero ni fechas locales sin zona.
 7. Textos visibles en español de México, centralizados en `packages/shared` para poder adaptarlos por giro.
-8. Nada de diseño visual antes de la fase 6: componentes base funcionales y accesibles. En la fase 6 se instalan y usan las skills de `emilkowalski/skills`.
+8. Diseño: usa el sistema de `apps/client/ui` (tokens estilo iOS con modo oscuro, `Screen`, `Group`/`Cell`, `Field`, `Button`, `Step` para flujos numerados), alineado con la app fastmarketcuu y la skill de Emil Kowalski: curvas ease-out fuertes, animaciones de UI menores a 300 ms y `scale(0.97)` al presionar. Componentes accesibles; cada paso de un flujo lleva una descripción breve.
 9. Nunca subas secretos; usa `.env.example`, variables de Railway y Vercel, y secretos de GitHub. Nunca imprimas, copies ni edites `.env.local`.
 10. Si algo del plan es ambiguo o contradictorio, pregunta antes de construir.
 11. Commits y PRs sin ninguna atribución a Claude (nada de `Co-Authored-By: Claude` ni "Generated with Claude Code"). Mensajes en Conventional Commits (`feat:`, `fix:`, `test:`, `chore:`).

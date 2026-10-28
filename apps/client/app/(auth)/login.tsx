@@ -1,14 +1,16 @@
 import { authErrorMessage, strings, validateCredentials } from '@lb/shared';
 import { Redirect, Stack } from 'expo-router';
 import { useState } from 'react';
-import { Button, Pressable, Text, TextInput, View } from 'react-native';
+import { View } from 'react-native';
 import { useSession } from '../../lib/session';
 import { supabase } from '../../lib/supabase';
+import { Button, Field, Notice, Screen, Text, useUI } from '../../ui';
 
 const t = strings.auth;
 
 export default function Login() {
   const { session } = useSession();
+  const ui = useUI();
   const [mode, setMode] = useState<'login' | 'signup'>('login');
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
@@ -36,34 +38,19 @@ export default function Login() {
 
   const title = mode === 'login' ? t.loginTitle : t.signUpTitle;
   return (
-    <View style={{ flex: 1, padding: 16, gap: 12, maxWidth: 420, width: '100%', alignSelf: 'center' }}>
-      <Stack.Screen options={{ title }} />
-      <Text accessibilityRole="header" style={{ fontSize: 22, fontWeight: '600' }}>{title}</Text>
-      <TextInput
-        accessibilityLabel={t.email}
-        placeholder={t.email}
-        autoCapitalize="none"
-        autoComplete="email"
-        keyboardType="email-address"
-        value={email}
-        onChangeText={setEmail}
-        style={{ borderWidth: 1, borderRadius: 6, padding: 10 }}
-      />
-      <TextInput
-        accessibilityLabel={t.password}
-        placeholder={t.password}
-        secureTextEntry
-        autoComplete={mode === 'login' ? 'current-password' : 'new-password'}
-        value={password}
-        onChangeText={setPassword}
-        onSubmitEditing={submit}
-        style={{ borderWidth: 1, borderRadius: 6, padding: 10 }}
-      />
-      {message && <Text accessibilityRole="alert">{message}</Text>}
-      <Button title={mode === 'login' ? t.submitLogin : t.submitSignUp} onPress={submit} disabled={busy} />
-      <Pressable accessibilityRole="button" onPress={() => { setMode(mode === 'login' ? 'signup' : 'login'); setMessage(null); }}>
-        <Text style={{ textDecorationLine: 'underline' }}>{mode === 'login' ? t.toSignUp : t.toLogin}</Text>
-      </Pressable>
-    </View>
+    <Screen>
+      <Stack.Screen options={{ title, headerShadowVisible: false, headerStyle: { backgroundColor: ui.bg }, headerTitleStyle: { color: ui.label } }} />
+      <View style={{ maxWidth: 420, width: '100%', alignSelf: 'center', paddingTop: 24 }}>
+        <Text variant="largeTitle" accessibilityRole="header" style={{ marginBottom: 24 }}>{title}</Text>
+        <Field label={t.email} autoCapitalize="none" autoComplete="email" keyboardType="email-address" value={email} onChangeText={setEmail} />
+        <Field label={t.password} secureTextEntry autoComplete={mode === 'login' ? 'current-password' : 'new-password'}
+          value={password} onChangeText={setPassword} onSubmitEditing={submit} />
+        {message && <View style={{ marginBottom: 16 }}><Notice tone="warning">{message}</Notice></View>}
+        <Button variant="primary" busy={busy} onPress={submit}>{mode === 'login' ? t.submitLogin : t.submitSignUp}</Button>
+        <Button variant="plain" onPress={() => { setMode(mode === 'login' ? 'signup' : 'login'); setMessage(null); }} style={{ marginTop: 8 }}>
+          {mode === 'login' ? t.toSignUp : t.toLogin}
+        </Button>
+      </View>
+    </Screen>
   );
 }

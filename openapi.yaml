@@ -414,6 +414,33 @@ paths:
         "204": { description: Borrada }
         "404": { $ref: "#/components/responses/Error" }
 
+  /v1/b/{businessId}/quote:
+    parameters:
+      - $ref: "#/components/parameters/BusinessId"
+    get:
+      operationId: quoteBooking
+      summary: Precio antes de crear (mismas reglas que al crear, sin opciones ni envío)
+      parameters:
+        - { name: item_id, in: query, required: true, schema: { type: string, format: uuid } }
+        - { name: quantity, in: query, schema: { type: integer, minimum: 1, maximum: 100 } }
+        - { name: starts_at, in: query, required: true, schema: { type: string, format: date-time } }
+        - { name: ends_at, in: query, schema: { type: string, format: date-time } }
+      responses:
+        "200":
+          description: OK
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [subtotal, total, deposit_required, security_deposit, periods]
+                properties:
+                  subtotal: { type: integer }
+                  total: { type: integer }
+                  deposit_required: { type: integer }
+                  security_deposit: { type: integer }
+                  periods: { type: integer, description: "Días que se cobran (renta)" }
+        "422": { $ref: "#/components/responses/Error" }
+
   /v1/b/{businessId}/inventory:
     parameters:
       - $ref: "#/components/parameters/BusinessId"

@@ -54,3 +54,7 @@ func (r Repo) Extend(ctx context.Context, businessID, id string, newEnd time.Tim
 func (r Repo) Inventory(ctx context.Context, businessID string) ([]InventoryRow, error) {
 	return Inventory(ctx, r.DB, businessID)
 }
+
+func (r Repo) Quote(ctx context.Context, businessID string, in QuoteRequest) (QuoteResult, error) {
+	return QuoteBooking(ctx, r.DB, businessID, in)
+}

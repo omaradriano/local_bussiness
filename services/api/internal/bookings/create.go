@@ -187,7 +187,6 @@ func Create(ctx context.Context, db store.DB, businessID string, in CreateInput,
 			return Booking{}, false, Invalid{"ends_at", "El regreso debe ser después de la salida."}
 		}
 		end = in.EndsAt
-		periods = RentalPeriods(it.PriceUnit, end.Sub(start))
 		in.Fulfillment, in.DeliveryAddress = "", ""
 	}
 
@@ -240,16 +239,8 @@ func Create(ctx context.Context, db store.DB, businessID string, in CreateInput,
 		if !availability.OpenOn(loc, start, hours) {
 			return Booking{}, false, Invalid{"starts_at", "El negocio está cerrado ese día; elige otro día de salida."}
 		}
-		if !availability.OpenOn(loc, *end, hours) {
-			return Booking{}, false, Invalid{"ends_at", "El negocio está cerrado ese día; elige otro día de regreso."}
-		}
-		if closed := availability.ClosedDaysBetween(loc, start, *end, hours); closed > 0 {
-			if !rentals.SpanClosedDays {
-				return Booking{}, false, Invalid{"ends_at", "El negocio no renta sobre días cerrados; elige fechas sin días cerrados en medio."}
-			}
-			if !rentals.ChargeClosedDays && it.PriceUnit == "day" {
-				periods = max(1, periods-int64(closed))
-			}
+		if periods, err = rentalPeriods(loc, hours, rentals, it.PriceUnit, start, *end); err != nil {
+			return Booking{}, false, err
 		}
 		candidates = res.FreeUnits
 	}

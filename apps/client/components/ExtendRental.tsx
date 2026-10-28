@@ -1,7 +1,8 @@
 import type { components } from '@lb/api-client';
 import { firstOfMonth, formatMXN, hhmm, localToISO, strings, todayISO } from '@lb/shared';
 import { useState } from 'react';
-import { Button, Text, TextInput, View } from 'react-native';
+import { Text, TextInput, View } from 'react-native';
+import { Button } from '../ui';
 import { api } from '../lib/api';
 import { errorText, fieldErrors } from '../lib/errors';
 import { Calendar } from './Calendar';
@@ -19,7 +20,7 @@ export function ExtendRental({ businessId, booking, onDone }: { businessId: stri
   const [message, setMessage] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
 
-  if (!open) return <Button title={t.extend} onPress={() => setOpen(true)} />;
+  if (!open) return <Button onPress={() => setOpen(true)}>{t.extend}</Button>;
 
   async function save() {
     const endsAt = date ? localToISO(date, time) : null;
@@ -43,8 +44,8 @@ export function ExtendRental({ businessId, booking, onDone }: { businessId: stri
       <TextInput accessibilityLabel={t.backTime} value={time} onChangeText={setTime} style={{ borderWidth: 1, borderRadius: 6, padding: 8, width: 120 }} />
       {message && <Text accessibilityRole="alert">{message}</Text>}
       <View style={{ flexDirection: 'row', gap: 8 }}>
-        <Button title={busy ? '…' : t.doExtend} onPress={save} disabled={busy || !date} />
-        <Button title={strings.common.cancel} onPress={() => setOpen(false)} />
+        <Button onPress={save} disabled={busy || !date}>{busy ? '…' : t.doExtend}</Button>
+        <Button onPress={() => setOpen(false)}>{strings.common.cancel}</Button>
       </View>
     </View>
   );

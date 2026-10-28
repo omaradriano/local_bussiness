@@ -1,50 +1,45 @@
 import { kindFor, strings, term } from '@lb/shared';
-import { Link, Stack, useLocalSearchParams } from 'expo-router';
-import { ActivityIndicator, Text, View } from 'react-native';
+import { router, Stack, useLocalSearchParams, type Href } from 'expo-router';
+import { ActivityIndicator } from 'react-native';
 import { useBusiness } from '../../../../lib/useMe';
+import { Button, Cell, Group, Screen, Text, useUI } from '../../../../ui';
+
+const s = strings.business;
 
 export default function BusinessHome() {
   const { businessId } = useLocalSearchParams<{ businessId: string }>();
   const { business, businesses, error } = useBusiness(businessId);
+  const ui = useUI();
 
-  if (error) return <Text accessibilityRole="alert" style={{ padding: 16 }}>{error}</Text>;
+  if (error) return <Text style={{ padding: 16 }}>{error}</Text>;
   if (!businesses) return <ActivityIndicator style={{ marginTop: 24 }} accessibilityLabel={strings.common.loading} />;
   if (!business) return <Text style={{ padding: 16 }}>{strings.common.notFound}</Text>;
+  const go = (pathname: string) => () => router.push({ pathname, params: { businessId } } as Href);
 
   return (
-    <View style={{ flex: 1, padding: 16, gap: 12 }}>
+    <Screen>
       <Stack.Screen options={{ title: business.name }} />
-      <Text accessibilityRole="header" style={{ fontSize: 22, fontWeight: '600' }}>{business.name}</Text>
-      <Link href={{ pathname: '/admin/[businessId]/bookings/new', params: { businessId } }}>
-        <Text style={{ textDecorationLine: 'underline', fontSize: 16, fontWeight: '600' }}>
-          {strings.bookings.new(term(business.vertical, 'booking') ?? '')}
-        </Text>
-      </Link>
-      <Link href={{ pathname: '/admin/[businessId]/today', params: { businessId } }}>
-        <Text style={{ textDecorationLine: 'underline', fontSize: 16, fontWeight: '600' }}>{strings.business.sections.today}</Text>
-      </Link>
-      <Link href={{ pathname: '/admin/[businessId]/calendar', params: { businessId } }}>
-        <Text style={{ textDecorationLine: 'underline', fontSize: 16 }}>{strings.business.sections.calendar}</Text>
-      </Link>
-      <Link href={{ pathname: '/admin/[businessId]/catalog', params: { businessId } }}>
-        <Text style={{ textDecorationLine: 'underline', fontSize: 16 }}>{term(business.vertical, 'catalog')}</Text>
-      </Link>
-      {kindFor(business.vertical) === 'service' && (
-        <Link href={{ pathname: '/admin/[businessId]/staff', params: { businessId } }}>
-          <Text style={{ textDecorationLine: 'underline', fontSize: 16 }}>{strings.business.sections.staff}</Text>
-        </Link>
-      )}
-      <Link href={{ pathname: '/admin/[businessId]/hours', params: { businessId } }}>
-        <Text style={{ textDecorationLine: 'underline', fontSize: 16 }}>{strings.business.sections.hours}</Text>
-      </Link>
-      <Link href={{ pathname: '/admin/[businessId]/customers', params: { businessId } }}>
-        <Text style={{ textDecorationLine: 'underline', fontSize: 16 }}>{strings.business.sections.customers}</Text>
-      </Link>
-      {business.role === 'owner' && (
-        <Link href={{ pathname: '/admin/[businessId]/settings', params: { businessId } }}>
-          <Text style={{ textDecorationLine: 'underline', fontSize: 16 }}>{strings.business.sections.settings}</Text>
-        </Link>
-      )}
-    </View>
+      <Text variant="largeTitle" accessibilityRole="header" style={{ marginBottom: 16 }}>{business.name}</Text>
+      <Button variant="primary" icon="add-circle" onPress={go('/admin/[businessId]/bookings/new')} style={{ marginBottom: 28 }}>
+        {strings.bookings.new(term(business.vertical, 'booking') ?? '')}
+      </Button>
+
+      <Group label={s.groups.daily} separatorInset={58}>
+        <Cell icon="today" tint={ui.warning} label={s.sections.today} sublabel={s.hints.today} onPress={go('/admin/[businessId]/today')} />
+        <Cell icon="calendar" tint={ui.accent} label={s.sections.calendar} sublabel={s.hints.calendar} onPress={go('/admin/[businessId]/calendar')} />
+        <Cell icon="people" tint={ui.indigo} label={s.sections.customers} sublabel={s.hints.customers} onPress={go('/admin/[businessId]/customers')} />
+      </Group>
+
+      <Group label={s.groups.business} separatorInset={58}>
+        <Cell icon="construct" tint={ui.purple} label={term(business.vertical, 'catalog') ?? ''} sublabel={s.hints.catalog} onPress={go('/admin/[businessId]/catalog')} />
+        {kindFor(business.vertical) === 'service' && (
+          <Cell icon="person" tint={ui.success} label={s.sections.staff} onPress={go('/admin/[businessId]/staff')} />
+        )}
+        <Cell icon="time" tint={ui.gray} label={s.sections.hours} sublabel={s.hints.hours} onPress={go('/admin/[businessId]/hours')} />
+        {business.role === 'owner' ? (
+          <Cell icon="settings" tint={ui.gray} label={s.sections.settings} sublabel={s.hints.settings} onPress={go('/admin/[businessId]/settings')} />
+        ) : null}
+      </Group>
+    </Screen>
   );
 }
