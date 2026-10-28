@@ -392,7 +392,10 @@ func TestIntegrationBarbershopRequirements(t *testing.T) {
 	if err != nil || b.Customer.ID != a.Customer.ID {
 		t.Fatalf("second walk-in reuses the casual customer: %v %v", b.Customer, err)
 	}
-	// Finished without "starting" it.
+	// Paid at the end, then finished without "starting" it.
+	if _, err := AddPayment(ctx, p, f.business, a.ID, Payment{Type: "balance", Method: "cash", Amount: a.Total}, "", now, noFiles); err != nil {
+		t.Fatal(err)
+	}
 	if done, err := Transition(ctx, p, f.business, a.ID, "completed", "", ""); err != nil || done.Status != "completed" {
 		t.Fatalf("complete from confirmed: %v %v", done.Status, err)
 	}
