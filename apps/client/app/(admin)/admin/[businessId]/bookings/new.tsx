@@ -126,6 +126,7 @@ export default function NewBooking() {
     if (!item || item.kind === 'service') return {};
     const d = days[date];
     if (!d) return { disabled: true }; // not loaded yet or outside the range
+    if (d.closed) return { disabled: true, badge: t.closedBadge }; // no pick-up/return, but a rental can span it
     if (!d.available) return { disabled: true };
     if (item.kind === 'rental') return { badge: t.freeBadge(d.remaining) };
     return d.remaining >= 0 ? { badge: t.countBadge(d.remaining) } : {};
@@ -135,10 +136,10 @@ export default function NewBooking() {
     setMessage(null);
     if (item?.kind !== 'rental') return setFrom(date);
     if (!from || to || date < from) { setFrom(date); setTo(null); return; }
-    // A rental range can't cross a day without free units. Only the visible month is loaded; the
-    // exact check of the whole range (with times) runs right after.
+    // A rental range can't cross a day without free units; a closed day in between is fine (the tool
+    // stays with the customer). Only the visible month is loaded; the exact check of the whole range runs right after.
     for (let d = from; d <= date; d = addDays(d, 1)) {
-      if (days[d] && !days[d].available) { setMessage(t.rangeBlocked); return; }
+      if (days[d] && days[d].remaining < qty) { setMessage(t.rangeBlocked); return; }
     }
     setTo(date);
   }
@@ -195,6 +196,7 @@ export default function NewBooking() {
       {item && (
         <>
           <Text>{item.kind === 'rental' ? (from && !to ? t.pickReturn : t.pickRange) : t.pickDay}</Text>
+          {item.kind === 'rental' && <Text style={{ opacity: 0.7 }}>{t.closedDayHint}</Text>}
           <Calendar month={month} onMonthChange={setMonth} minMonth={firstOfMonth(today)} from={from} to={item.kind === 'rental' ? to : null}
             onSelect={pick} dayInfo={dayInfo} />
           {daysState !== 'loading' && daysState !== 'ready' && <Text accessibilityRole="alert">{daysState}</Text>}

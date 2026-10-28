@@ -228,6 +228,17 @@ func Create(ctx context.Context, db store.DB, businessID string, in CreateInput,
 		if !res.Available {
 			return Booking{}, false, ErrSlotTaken
 		}
+		// No pick-up or return on a closed day (spanning one is fine).
+		hours, err := loader.BusinessHours(ctx, businessID)
+		if err != nil {
+			return Booking{}, false, err
+		}
+		if !availability.OpenOn(loc, start, hours) {
+			return Booking{}, false, Invalid{"starts_at", "El negocio está cerrado ese día; elige otro día de salida."}
+		}
+		if !availability.OpenOn(loc, *end, hours) {
+			return Booking{}, false, Invalid{"ends_at", "El negocio está cerrado ese día; elige otro día de regreso."}
+		}
 		candidates = res.FreeUnits
 	}
 

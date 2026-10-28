@@ -621,6 +621,8 @@ export interface components {
                 available: boolean;
                 /** @description -1 = sin límite */
                 remaining: number;
+                /** @description Renta: el negocio cierra (no se sale ni regresa), pero una renta puede abarcarlo */
+                closed?: boolean;
             }[];
             free_units?: string[];
         };

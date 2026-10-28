@@ -848,6 +848,7 @@ components:
               date: { type: string, format: date }
               available: { type: boolean }
               remaining: { type: integer, description: "-1 = sin límite" }
+              closed: { type: boolean, description: "Renta: el negocio cierra (no se sale ni regresa), pero una renta puede abarcarlo" }
         free_units: { type: array, items: { type: string, format: uuid } }
 
     PaymentType:

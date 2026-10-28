@@ -169,7 +169,8 @@ type ProductQuery struct {
 type Day struct {
 	Date      string `json:"date"`
 	Available bool   `json:"available"`
-	Remaining int    `json:"remaining"` // -1 = no limit
+	Remaining int    `json:"remaining"`        // -1 = no limit
+	Closed    bool   `json:"closed,omitempty"` // rentals: no pick-up/return that day, but a rental can span it
 }
 
 const maxDays = 62
@@ -299,28 +300,35 @@ func RentalDays(q RentalDaysQuery) []Day {
 	var out []Day
 	for d, n := from, 0; !d.After(to) && n < maxDays; d, n = d.AddDate(0, 0, 1), n+1 {
 		day := Day{Date: d.Format("2006-01-02")}
+		// The window that must be free: open hours, or the whole day when closed (the tool can
+		// stay with the customer over a Sunday; it just can't go out or come back that day).
+		window := Interval{d, d.AddDate(0, 0, 1)}
 		shifts := shiftsOn(q.Loc, d, q.BusinessHours)
-		if len(shifts) > 0 {
-			open := Interval{shifts[0].Start, shifts[len(shifts)-1].End}
-			for _, s := range shifts {
-				if s.Start.Before(open.Start) {
-					open.Start = s.Start
-				}
-				if s.End.After(open.End) {
-					open.End = s.End
+		day.Closed = len(shifts) == 0
+		for i, s := range shifts {
+			if i == 0 || s.Start.Before(window.Start) {
+				window.Start = s.Start
+			}
+			if i == 0 || s.End.After(window.End) {
+				window.End = s.End
+			}
+		}
+		if window.End.After(q.Now) {
+			want := Interval{window.Start.Add(-q.Inspection), window.End.Add(q.Inspection)}
+			for _, u := range q.Units {
+				if free(want, u.Busy, q.Blackouts, "", u.ID) {
+					day.Remaining++
 				}
 			}
-			if open.End.After(q.Now) {
-				want := Interval{open.Start.Add(-q.Inspection), open.End.Add(q.Inspection)}
-				for _, u := range q.Units {
-					if free(want, u.Busy, q.Blackouts, "", u.ID) {
-						day.Remaining++
-					}
-				}
-				day.Available = day.Remaining >= max(q.Quantity, 1)
-			}
+			day.Available = !day.Closed && day.Remaining >= max(q.Quantity, 1)
 		}
 		out = append(out, day)
 	}
 	return out
+}
+
+// OpenOn says whether the business opens on the local date of t (any shift that weekday).
+func OpenOn(loc *time.Location, t time.Time, hours []Shift) bool {
+	l := t.In(loc)
+	return len(shiftsOn(loc, time.Date(l.Year(), l.Month(), l.Day(), 0, 0, 0, 0, loc), hours)) > 0
 }

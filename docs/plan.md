@@ -642,6 +642,12 @@ Lista de puntos a considerar, agrupados por cuándo conviene resolverlos; ningun
 - [ ] **Requisitos de las tiendas:** borrar la cuenta desde la app (obligatorio en Apple), etiquetas de privacidad en App Store y sección de seguridad de datos en Google Play.
 - [ ] **Términos y condiciones:** de la plataforma y plantillas para los negocios, como el contrato de renta de herramienta.
 
+**Ajustes de renta (pedido por el dueño, 2026-10-28)**
+
+- [ ] **Rentas sobre días cerrados:** opción en Ajustes del negocio "Permitir rentas que pasen por días cerrados" (`settings.rentals_span_closed_days`, por defecto sí). Si es no, un rango que incluya un día cerrado no está disponible.
+- [ ] **Cobro de días cerrados:** con la opción anterior activa, "Cobrar los días cerrados" (`settings.charge_closed_days`, por defecto sí). Si es no, los días cerrados no cuentan en el precio por día. Decisión de negocio: algunos cobran fines de semana y otros no.
+- Hoy: no se puede salir ni regresar en un día cerrado; un día cerrado en medio de la renta se permite y se cobra.
+
 **Antes de vender**
 
 - [ ] **Planes y cobro de la suscripción:** periodo de prueba, límites por plan (empleadas, unidades en renta, reservas al mes), avisos de pago vencido y suspensión.

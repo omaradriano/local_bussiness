@@ -102,6 +102,12 @@ export default function BookingDetail() {
   }
 
   if (!b || !business) return message ? <Text style={{ padding: 16 }}>{message}</Text> : <ActivityIndicator style={{ marginTop: 24 }} />;
+  // Tolerate an older API without the operation fields instead of crashing the screen.
+  b.next ??= [];
+  b.payments ??= [];
+  b.events ??= [];
+  b.steps ??= [];
+  b.balance ??= { paid: 0, due: b.total, deposit_held: 0, extra_charges: 0 };
   const security = Number(b.items[0]?.options?.security_deposit ?? 0);
   const bookingTerm = term(business.vertical, 'booking') ?? t.detail;
   const payTypes: PaymentType[] = b.kind === 'rental'
