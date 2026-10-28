@@ -4,6 +4,7 @@ import (
 	"context"
 	"time"
 
+	"github.com/omaradriano/local_bussiness/services/api/internal/steps"
 	"github.com/omaradriano/local_bussiness/services/api/internal/store"
 )
 
@@ -28,4 +29,20 @@ func (r Repo) Transition(ctx context.Context, businessID, id, to, actor, note st
 
 func (r Repo) AddPayment(ctx context.Context, businessID, id string, p Payment, actor string, now time.Time) (Booking, error) {
 	return AddPayment(ctx, r.DB, businessID, id, p, actor, now)
+}
+
+func (r Repo) StepUpload(ctx context.Context, businessID, bookingID, stepID string) (string, error) {
+	return StepUpload(ctx, r.DB, businessID, bookingID, stepID)
+}
+
+func (r Repo) CompleteStep(ctx context.Context, businessID, bookingID, stepID string, sub steps.Submission, actor string, now time.Time, exists FileExists) (Booking, error) {
+	return CompleteStep(ctx, r.DB, businessID, bookingID, stepID, sub, actor, now, exists)
+}
+
+func (r Repo) Checkout(ctx context.Context, businessID, id, condition, actor string, now time.Time) (Booking, error) {
+	return Checkout(ctx, r.DB, businessID, id, condition, actor, now)
+}
+
+func (r Repo) Return(ctx context.Context, businessID, id, condition, actor string, now time.Time) (Booking, error) {
+	return Return(ctx, r.DB, businessID, id, condition, actor, now)
 }

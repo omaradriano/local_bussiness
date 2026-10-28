@@ -403,6 +403,107 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/v1/b/{businessId}/bookings/{bookingId}/uploads": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                businessId: components["parameters"]["BusinessId"];
+                bookingId: string;
+            };
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** URL prefirmada para subir un archivo de un paso (INE, evidencias) a su bucket privado */
+        post: operations["createBookingUpload"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/b/{businessId}/bookings/{bookingId}/steps/{stepId}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                businessId: components["parameters"]["BusinessId"];
+                bookingId: string;
+                stepId: string;
+            };
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Completa un paso; lo valida el tipo de paso registrado */
+        post: operations["completeStep"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/b/{businessId}/bookings/{bookingId}/files": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                businessId: components["parameters"]["BusinessId"];
+                bookingId: string;
+            };
+            cookie?: never;
+        };
+        /** URL de lectura de 5 minutos para un archivo privado de la reserva */
+        get: operations["getBookingFile"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/b/{businessId}/bookings/{bookingId}/checkout": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                businessId: components["parameters"]["BusinessId"];
+                bookingId: string;
+            };
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Salida de la renta (pasos previos hechos y depósito de garantía cobrado) */
+        post: operations["checkoutRental"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/b/{businessId}/bookings/{bookingId}/return": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                businessId: components["parameters"]["BusinessId"];
+                bookingId: string;
+            };
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Devolución; si es anticipada libera las unidades; el recargo por retraso queda sugerido en `rental` */
+        post: operations["returnRental"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/v1/b/{businessId}/bookings/{bookingId}/payments": {
         parameters: {
             query?: never;
@@ -650,8 +751,24 @@ export interface components {
                 /** Format: date-time */
                 completed_at: string | null;
                 files: string[];
+                config: {
+                    [key: string]: unknown;
+                };
+                /** @description Bucket privado de sus archivos (vacío si no lleva archivos) */
+                bucket: string;
             }[];
             next: components["schemas"]["BookingStatus"][];
+            rental: null | {
+                /** Format: date-time */
+                checked_out_at: string | null;
+                /** Format: date-time */
+                returned_at: string | null;
+                out_condition: string | null;
+                return_condition: string | null;
+                late_days: number;
+                /** Format: int64 */
+                late_fee_suggested: number;
+            };
         };
         BookingSummary: {
             /** Format: uuid */
@@ -1461,6 +1578,175 @@ export interface operations {
                 "application/json": {
                     to: components["schemas"]["BookingStatus"];
                     note?: string;
+                };
+            };
+        };
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Booking"];
+                };
+            };
+            404: components["responses"]["Error"];
+            422: components["responses"]["Error"];
+        };
+    };
+    createBookingUpload: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                businessId: components["parameters"]["BusinessId"];
+                bookingId: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": {
+                    /** Format: uuid */
+                    step_id: string;
+                    /** @enum {string} */
+                    content_type: "image/jpeg" | "image/png" | "image/webp";
+                    size: number;
+                };
+            };
+        };
+        responses: {
+            /** @description Subir con PUT y luego mandar `key` al completar el paso */
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        key: string;
+                        upload_url: string;
+                        upload_headers: {
+                            [key: string]: string;
+                        };
+                    };
+                };
+            };
+            404: components["responses"]["Error"];
+            422: components["responses"]["Error"];
+            503: components["responses"]["Error"];
+        };
+    };
+    completeStep: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                businessId: components["parameters"]["BusinessId"];
+                bookingId: string;
+                stepId: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": {
+                    /** @description text: {text}; number: {value}; checklist: {checked: {item: true}} */
+                    data?: {
+                        [key: string]: unknown;
+                    };
+                    files?: string[];
+                };
+            };
+        };
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Booking"];
+                };
+            };
+            404: components["responses"]["Error"];
+            422: components["responses"]["Error"];
+        };
+    };
+    getBookingFile: {
+        parameters: {
+            query: {
+                bucket: "private-docs" | "rental-evidence";
+                key: string;
+            };
+            header?: never;
+            path: {
+                businessId: components["parameters"]["BusinessId"];
+                bookingId: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        url: string;
+                    };
+                };
+            };
+            404: components["responses"]["Error"];
+        };
+    };
+    checkoutRental: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                businessId: components["parameters"]["BusinessId"];
+                bookingId: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": {
+                    condition?: string;
+                };
+            };
+        };
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Booking"];
+                };
+            };
+            404: components["responses"]["Error"];
+            422: components["responses"]["Error"];
+        };
+    };
+    returnRental: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                businessId: components["parameters"]["BusinessId"];
+                bookingId: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": {
+                    condition?: string;
                 };
             };
         };

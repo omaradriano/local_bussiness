@@ -23,6 +23,7 @@ type MediaRepo interface {
 
 type FileStore interface {
 	PresignPut(ctx context.Context, bucket, key, contentType string, size int64) (string, error)
+	PresignGet(ctx context.Context, bucket, key string) (string, error)
 	Head(ctx context.Context, bucket, key string) (int64, string, error)
 	Delete(ctx context.Context, bucket, key string) error
 }

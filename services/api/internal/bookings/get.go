@@ -8,6 +8,7 @@ import (
 
 	"github.com/jackc/pgx/v5"
 
+	"github.com/omaradriano/local_bussiness/services/api/internal/steps"
 	"github.com/omaradriano/local_bussiness/services/api/internal/store"
 )
 
@@ -53,11 +54,22 @@ type Booking struct {
 	PublicToken     string     `json:"public_token"`
 	CreatedAt       time.Time  `json:"created_at"`
 
-	Payments []Payment `json:"payments"`
-	Balance  Balance   `json:"balance"`
-	Events   []Event   `json:"events"`
-	Steps    []Step    `json:"steps"`
-	Next     []string  `json:"next"` // status moves available from the panel
+	Payments []Payment   `json:"payments"`
+	Balance  Balance     `json:"balance"`
+	Events   []Event     `json:"events"`
+	Steps    []Step      `json:"steps"`
+	Next     []string    `json:"next"` // status moves available from the panel
+	Rental   *RentalInfo `json:"rental"`
+}
+
+// RentalInfo: when the units went out and came back, and the late fee it suggests.
+type RentalInfo struct {
+	CheckedOutAt     *time.Time `json:"checked_out_at"`
+	ReturnedAt       *time.Time `json:"returned_at"`
+	OutCondition     *string    `json:"out_condition"`
+	ReturnCondition  *string    `json:"return_condition"`
+	LateDays         int64      `json:"late_days"`
+	LateFeeSuggested int64      `json:"late_fee_suggested"`
 }
 
 type Event struct {
@@ -69,14 +81,16 @@ type Event struct {
 
 // Step is a copied workflow step (e.g. "Foto del INE" before checked_out) and its result.
 type Step struct {
-	ID          string     `json:"id"`
-	Label       string     `json:"label"`
-	StepType    string     `json:"step_type"`
-	ToStatus    *string    `json:"to_status"`
-	Required    bool       `json:"required"`
-	Status      string     `json:"status"` // pending | done | skipped
-	CompletedAt *time.Time `json:"completed_at"`
-	Files       []string   `json:"files"` // S3 keys (private buckets)
+	ID          string          `json:"id"`
+	Label       string          `json:"label"`
+	StepType    string          `json:"step_type"`
+	ToStatus    *string         `json:"to_status"`
+	Required    bool            `json:"required"`
+	Status      string          `json:"status"` // pending | done | skipped
+	CompletedAt *time.Time      `json:"completed_at"`
+	Files       []string        `json:"files"` // S3 keys (private buckets)
+	Config      json.RawMessage `json:"config"`
+	Bucket      string          `json:"bucket"` // where its files live ("" = no files)
 }
 
 // Get returns one booking of the business with its customer, lines and assigned staff/units.
@@ -133,7 +147,8 @@ func Get(ctx context.Context, db store.DB, businessID, id string) (Booking, erro
 	}
 
 	rows, err = db.Query(ctx, `select id::text, coalesce(step_snapshot->>'label', ''), coalesce(step_snapshot->>'step_type', ''),
-		step_snapshot->>'to_status', coalesce((step_snapshot->>'required')::boolean, true), status, completed_at, s3_keys
+		step_snapshot->>'to_status', coalesce((step_snapshot->>'required')::boolean, true), status, completed_at, s3_keys,
+		coalesce(step_snapshot->'config', '{}'), ''
 		from public.booking_steps where booking_id = $1 order by (step_snapshot->>'sort')::int nulls last, id`, b.ID)
 	if err != nil {
 		return b, err
@@ -143,6 +158,30 @@ func Get(ctx context.Context, db store.DB, businessID, id string) (Booking, erro
 	}
 	if b.Steps == nil {
 		b.Steps = []Step{}
+	}
+	for i := range b.Steps {
+		if st, ok := steps.Lookup(b.Steps[i].StepType); ok {
+			b.Steps[i].Bucket = st.Bucket(b.Steps[i].Config)
+		}
+	}
+	if b.Kind == "rental" {
+		var r RentalInfo
+		var lateFee int64
+		var qty int
+		err := db.QueryRow(ctx, `
+			select min(rc.out_at), max(rc.returned_at), min(rc.out_condition), min(rc.return_condition),
+			       coalesce(max(i.late_fee_per_day), 0), coalesce(max(bi.quantity), 1)
+			from public.booking_items bi join public.catalog_items i on i.id = bi.item_id
+			left join public.rental_checkouts rc on rc.booking_id = bi.booking_id
+			where bi.booking_id = $1`, b.ID).Scan(&r.CheckedOutAt, &r.ReturnedAt, &r.OutCondition, &r.ReturnCondition, &lateFee, &qty)
+		if err != nil {
+			return b, err
+		}
+		if r.ReturnedAt != nil && b.EndsAt != nil {
+			r.LateDays = LateDays(*b.EndsAt, *r.ReturnedAt)
+			r.LateFeeSuggested = r.LateDays * lateFee * int64(qty)
+		}
+		b.Rental = &r
 	}
 	return b, nil
 }

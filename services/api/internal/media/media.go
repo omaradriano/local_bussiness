@@ -145,3 +145,6 @@ func (i Image) Keys() []string {
 }
 
 func (i Image) String() string { return fmt.Sprintf("image %s (%s)", i.ID, i.Status) }
+
+// Ext is the file extension for an accepted content type.
+func Ext(contentType string) string { return extByType[contentType] }

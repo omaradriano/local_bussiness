@@ -7,6 +7,7 @@ import (
 	"log/slog"
 	"net/http"
 	"strconv"
+	"strings"
 	"time"
 
 	"github.com/go-chi/chi/v5"
@@ -19,8 +20,10 @@ import (
 	"github.com/omaradriano/local_bussiness/services/api/internal/bookings"
 	"github.com/omaradriano/local_bussiness/services/api/internal/businesses"
 	"github.com/omaradriano/local_bussiness/services/api/internal/catalog"
+	"github.com/omaradriano/local_bussiness/services/api/internal/files"
 	"github.com/omaradriano/local_bussiness/services/api/internal/media"
 	"github.com/omaradriano/local_bussiness/services/api/internal/staff"
+	"github.com/omaradriano/local_bussiness/services/api/internal/steps"
 	"github.com/omaradriano/local_bussiness/services/api/internal/store"
 )
 
@@ -48,6 +51,10 @@ type BookingsRepo interface {
 	List(ctx context.Context, businessID string, f bookings.ListFilter) ([]bookings.Summary, error)
 	Transition(ctx context.Context, businessID, id, to, actor, note string) (bookings.Booking, error)
 	AddPayment(ctx context.Context, businessID, id string, p bookings.Payment, actor string, now time.Time) (bookings.Booking, error)
+	StepUpload(ctx context.Context, businessID, bookingID, stepID string) (string, error)
+	CompleteStep(ctx context.Context, businessID, bookingID, stepID string, sub steps.Submission, actor string, now time.Time, exists bookings.FileExists) (bookings.Booking, error)
+	Checkout(ctx context.Context, businessID, id, condition, actor string, now time.Time) (bookings.Booking, error)
+	Return(ctx context.Context, businessID, id, condition, actor string, now time.Time) (bookings.Booking, error)
 }
 
 // writeBooking maps the bookings errors to HTTP and writes the booking on success.
@@ -356,6 +363,113 @@ func NewRouter(d Deps) http.Handler {
 						return
 					}
 					b, err := d.Bookings.Transition(r.Context(), m.BusinessID, chi.URLParam(r, "bookingId"), body.To, m.UserID, body.Note)
+					writeBooking(w, r, b, err)
+				})
+
+				// Private files of the booking (ID, evidence): presigned upload for a step, then complete it.
+				r.Post("/uploads", func(w http.ResponseWriter, r *http.Request) {
+					if !d.Photos.enabled(w) {
+						return
+					}
+					m, _ := auth.MemberFrom(r.Context())
+					var body struct {
+						StepID      string `json:"step_id"`
+						ContentType string `json:"content_type"`
+						Size        int64  `json:"size"`
+					}
+					if !decode(w, r, &body) {
+						return
+					}
+					if msg := media.ValidateUpload(body.ContentType, body.Size); msg != "" {
+						invalid(w, msg, map[string]string{"file": msg})
+						return
+					}
+					if !auth.IsUUID(body.StepID) {
+						notFound(w, "El paso no existe.")
+						return
+					}
+					bookingID := chi.URLParam(r, "bookingId")
+					bucket, err := d.Bookings.StepUpload(r.Context(), m.BusinessID, bookingID, body.StepID)
+					if errors.Is(err, bookings.ErrNotFound) {
+						notFound(w, "El paso no existe o no lleva archivos.")
+						return
+					}
+					if err != nil {
+						internalError(w, r, "step upload", err)
+						return
+					}
+					key := bookings.NewFileKey(m.BusinessID, bookingID, media.Ext(body.ContentType))
+					url, err := d.Photos.Files.PresignPut(r.Context(), bucket, key, body.ContentType, body.Size)
+					if err != nil {
+						internalError(w, r, "presign", err)
+						return
+					}
+					apierr.JSON(w, http.StatusCreated, map[string]any{"key": key, "upload_url": url,
+						"upload_headers": map[string]string{"Content-Type": body.ContentType}})
+				})
+
+				r.With(requireUUIDParam("stepId", "El paso no existe.")).Post("/steps/{stepId}", func(w http.ResponseWriter, r *http.Request) {
+					m, _ := auth.MemberFrom(r.Context())
+					var sub steps.Submission
+					if !decode(w, r, &sub) {
+						return
+					}
+					if len(sub.Files) > 20 {
+						invalid(w, "Demasiados archivos.", map[string]string{"files": "Máximo 20."})
+						return
+					}
+					exists := func(ctx context.Context, bucket, key string) error {
+						if d.Photos == nil || d.Photos.Files == nil {
+							return errors.New("files not configured")
+						}
+						_, _, err := d.Photos.Files.Head(ctx, bucket, key)
+						return err
+					}
+					b, err := d.Bookings.CompleteStep(r.Context(), m.BusinessID, chi.URLParam(r, "bookingId"), chi.URLParam(r, "stepId"), sub, m.UserID, d.now(), exists)
+					writeBooking(w, r, b, err)
+				})
+
+				// Short-lived read URL for a private file of this booking.
+				r.Get("/files", func(w http.ResponseWriter, r *http.Request) {
+					if !d.Photos.enabled(w) {
+						return
+					}
+					m, _ := auth.MemberFrom(r.Context())
+					bucket, key := r.URL.Query().Get("bucket"), r.URL.Query().Get("key")
+					if (bucket != files.PrivateDocs && bucket != files.RentalEvidence) ||
+						!strings.HasPrefix(key, bookings.FilePrefix(m.BusinessID, chi.URLParam(r, "bookingId"))) || strings.Contains(key, "..") {
+						notFound(w, "El archivo no existe.")
+						return
+					}
+					url, err := d.Photos.Files.PresignGet(r.Context(), bucket, key)
+					if err != nil {
+						internalError(w, r, "presign get", err)
+						return
+					}
+					apierr.JSON(w, http.StatusOK, map[string]string{"url": url})
+				})
+
+				r.Post("/checkout", func(w http.ResponseWriter, r *http.Request) {
+					m, _ := auth.MemberFrom(r.Context())
+					var body struct {
+						Condition string `json:"condition"`
+					}
+					if !decode(w, r, &body) {
+						return
+					}
+					b, err := d.Bookings.Checkout(r.Context(), m.BusinessID, chi.URLParam(r, "bookingId"), body.Condition, m.UserID, d.now())
+					writeBooking(w, r, b, err)
+				})
+
+				r.Post("/return", func(w http.ResponseWriter, r *http.Request) {
+					m, _ := auth.MemberFrom(r.Context())
+					var body struct {
+						Condition string `json:"condition"`
+					}
+					if !decode(w, r, &body) {
+						return
+					}
+					b, err := d.Bookings.Return(r.Context(), m.BusinessID, chi.URLParam(r, "bookingId"), body.Condition, m.UserID, d.now())
 					writeBooking(w, r, b, err)
 				})
 
