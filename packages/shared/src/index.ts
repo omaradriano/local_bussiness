@@ -8,3 +8,4 @@ export * from './image';
 export * from './nav';
 export * from './datetime';
 export * from './calendar';
+export * from './agenda';
