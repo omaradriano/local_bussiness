@@ -2,9 +2,10 @@ import type { components } from '@lb/api-client';
 import { centavosToInput, kindFor, parsePesos, strings, term, type ItemKind } from '@lb/shared';
 import { router, Stack, useLocalSearchParams, usePathname } from 'expo-router';
 import { useCallback, useEffect, useState } from 'react';
-import { ActivityIndicator, Button, Pressable, ScrollView, Text, TextInput, View } from 'react-native';
+import { ActivityIndicator, Switch, View } from 'react-native';
 import { ItemPhotos } from '../../../../../../components/ItemPhotos';
 import { UnitsSection } from '../../../../../../components/UnitsSection';
+import { Button, Cell, Field, Group, Notice, Screen, Text } from '../../../../../../ui';
 import { api } from '../../../../../../lib/api';
 import { goBack } from '../../../../../../lib/nav';
 import { uploadPhotos, type PickedPhoto } from '../../../../../../lib/photos';
@@ -123,50 +124,49 @@ export default function CatalogItemForm() {
     goBack(pathname);
   }
 
-  const field = (key: keyof Form, apiKey: string, label: string, numeric = false) => (
-    <View style={{ gap: 4 }}>
-      <Text>{label}</Text>
-      <TextInput
-        accessibilityLabel={label}
-        value={form[key] as string}
-        onChangeText={set(key)}
-        keyboardType={numeric ? 'decimal-pad' : 'default'}
-        style={{ borderWidth: 1, borderRadius: 6, padding: 10 }}
-      />
-      {errors[apiKey] && <Text accessibilityRole="alert">{errors[apiKey]}</Text>}
-    </View>
+  const field = (key: keyof Form, apiKey: string, label: string, numeric = false, hint?: string) => (
+    <Field label={label} value={form[key] as string} onChangeText={set(key)} keyboardType={numeric ? 'decimal-pad' : 'default'}
+      error={errors[apiKey]} hint={hint} multiline={key === 'description'} />
   );
+  const isOwner = business.role === 'owner';
 
+  async function toggleActive(active: boolean) {
+    const { data, error, response } = await api.PATCH('/v1/b/{businessId}/catalog/{itemId}', { params: { path: { businessId, itemId } }, body: { active } });
+    if (data) setItem(data);
+    else setMessage(errorText(error, response.status));
+  }
+
+  const title = isNew ? `${t.add} ${term(business.vertical, 'catalog_item')?.toLowerCase()}` : form.name;
   return (
-    <ScrollView contentContainerStyle={{ padding: 16, gap: 12, maxWidth: 480, width: '100%', alignSelf: 'center' }}>
-      <Stack.Screen options={{ title: isNew ? `${t.add} ${term(business.vertical, 'catalog_item')?.toLowerCase()}` : form.name }} />
-      {field('name', 'name', t.name)}
-      {field('description', 'description', t.description)}
-      {field('price', 'price', kind === 'rental' ? t.pricePerDay : t.price, true)}
-      {kind === 'service' && (<>{field('duration', 'duration_minutes', t.duration, true)}{field('buffer', 'buffer_minutes', t.buffer, true)}</>)}
-      {kind === 'product' && (<>{field('prepHours', 'prep_hours', t.prepHours, true)}{field('dailyCapacity', 'daily_capacity', t.dailyCapacity, true)}</>)}
-      {kind === 'rental' && (
-        <>
-          <Text style={{ opacity: 0.7 }}>{t.perDayNote(settings?.rentals.late_fee_multiplier ?? 1)}</Text>
-          {depositEnabled && field('deposit', 'security_deposit', t.deposit, true)}
-          {isNew && (
-            <View style={{ gap: 4 }}>
-              <Text>{t.unitsToCreate}</Text>
-              <TextInput accessibilityLabel={t.unitsToCreate} value={units} onChangeText={setUnits} keyboardType="numeric"
-                style={{ borderWidth: 1, borderRadius: 6, padding: 10 }} />
-              {errors.units && <Text accessibilityRole="alert">{errors.units}</Text>}
-            </View>
-          )}
-        </>
+    <Screen>
+      <Stack.Screen options={{ title }} />
+      <Text variant="largeTitle" accessibilityRole="header" style={{ marginBottom: 20 }}>{title}</Text>
+      <Group label={t.general} padded>
+        {field('name', 'name', t.name)}
+        {field('description', 'description', t.description)}
+        {field('price', 'price', kind === 'rental' ? t.pricePerDay : t.price, true, kind === 'rental' ? t.perDayNote(settings?.rentals.late_fee_multiplier ?? 1) : undefined)}
+        {kind === 'service' && (<>{field('duration', 'duration_minutes', t.duration, true)}{field('buffer', 'buffer_minutes', t.buffer, true)}</>)}
+        {kind === 'product' && (<>{field('prepHours', 'prep_hours', t.prepHours, true)}{field('dailyCapacity', 'daily_capacity', t.dailyCapacity, true)}</>)}
+        {kind === 'rental' && depositEnabled && field('deposit', 'security_deposit', t.deposit, true, t.depositHint)}
+        {kind === 'rental' && isNew && (
+          <Field label={t.unitsToCreate} value={units} onChangeText={setUnits} keyboardType="numeric" error={errors.units} hint={t.unitsToCreateHint} />
+        )}
+      </Group>
+      <Group label={strings.photos.title} padded footer={t.photosHint}>
+        {item ? (
+          <ItemPhotos businessId={businessId} itemId={item.id} images={item.images ?? []} reload={reloadItem} editable={isOwner} />
+        ) : (
+          <ItemPhotos businessId={businessId} pending={pending} onPendingChange={setPending} editable={isOwner} />
+        )}
+      </Group>
+      {item && isOwner && (
+        <Group footer={t.activeHint}>
+          <Cell label={t.activeLabel} accessory={<Switch accessibilityLabel={t.activeLabel} value={item.active} onValueChange={toggleActive} />} />
+        </Group>
       )}
-      {item ? (
-        <ItemPhotos businessId={businessId} itemId={item.id} images={item.images ?? []} reload={reloadItem} editable={business.role === 'owner'} />
-      ) : (
-        <ItemPhotos businessId={businessId} pending={pending} onPendingChange={setPending} editable={business.role === 'owner'} />
-      )}
-      {message && <Text accessibilityRole="alert">{message}</Text>}
-      <Button title={t.save} onPress={save} disabled={busy} />
-      {item && kind === 'rental' && <UnitsSection businessId={businessId} itemId={item.id} isOwner={business.role === 'owner'} />}
-    </ScrollView>
+      {message && <View style={{ marginBottom: 12 }}><Notice tone="warning">{message}</Notice></View>}
+      {isOwner && <Button variant="primary" busy={busy} onPress={save} style={{ marginBottom: 28 }}>{t.save}</Button>}
+      {item && kind === 'rental' && <UnitsSection businessId={businessId} itemId={item.id} isOwner={isOwner} />}
+    </Screen>
   );
 }

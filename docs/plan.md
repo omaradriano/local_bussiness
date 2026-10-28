@@ -635,7 +635,7 @@ Catálogo público `/<slug>` con un diseño llamativo por giro, reservas y pedid
 ### Notas de UI/UX (2026-10-27)
 
 - En el detalle de una renta, los pasos para **registrar la salida** (documentos, fotos, cobro y botón de salida) deben quedar más arriba: es lo que más se usa en mostrador. El rediseño por pasos numerados ya los acerca; revisar con uso real.
-- Diseño: sistema estilo iOS en `apps/client/ui` (mismos tokens que fastmarketcuu, curvas de Emil Kowalski). Faltan por migrar: catálogo, clientes, horario, equipo, ajustes, hoy e inventario.
+- Diseño: sistema estilo iOS en `apps/client/ui` (mismos tokens que fastmarketcuu, curvas de Emil Kowalski). Todo el panel ya lo usa; falta el catálogo público cuando se construya.
 
 Lista de puntos a considerar, agrupados por cuándo conviene resolverlos; ninguno bloquea arrancar la fase 0, y cada uno se integra a una fase cuando se decida hacerlo.
 

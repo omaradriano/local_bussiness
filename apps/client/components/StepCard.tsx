@@ -1,9 +1,10 @@
+import { Ionicons } from '@expo/vector-icons';
 import type { components } from '@lb/api-client';
 import { strings } from '@lb/shared';
 import { ZoomableImage } from './ZoomableImage';
-import { useState } from 'react';
-import { Pressable, Text, TextInput, View } from 'react-native';
-import { Button } from '../ui';
+import { useEffect, useState } from 'react';
+import { Pressable, TextInput, View } from 'react-native';
+import { Button, Text, radius, useUI } from '../ui';
 import { api } from '../lib/api';
 import { errorText, fieldErrors } from '../lib/errors';
 import { pickPhotos, uploadStepPhoto } from '../lib/photos';
@@ -19,6 +20,7 @@ const t = strings.bookings;
 export function StepCard({ businessId, bookingId, step, editable, onDone }: {
   businessId: string; bookingId: string; step: Step; editable: boolean; onDone: (b: Booking) => void;
 }) {
+  const ui = useUI();
   const [text, setText] = useState('');
   const [checked, setChecked] = useState<Record<string, boolean>>({});
   const [urls, setUrls] = useState<string[] | null>(null);
@@ -65,32 +67,44 @@ export function StepCard({ businessId, bookingId, step, editable, onDone }: {
   }
 
   const done = step.status === 'done';
-  const target = step.to_status ? ` · antes de «${t.status[step.to_status as Booking['status']] ?? step.to_status}»` : '';
-  return (
-    <View style={{ borderRadius: 12, padding: 12, backgroundColor: 'rgba(118,118,128,0.12)', gap: 6 }}>
-      <Text style={{ fontWeight: '600' }}>{done ? '✓' : '○'} {step.label}{step.required ? '' : ' (opcional)'}</Text>
-      <Text style={{ opacity: 0.7 }}>{done ? t.stepDone : t.stepPending}{target}</Text>
-      {step.customer_doc !== '' && <Text style={{ opacity: 0.7 }}>{step.on_file ? `✓ ${strings.customers.fromProfile}` : strings.customers.missingDocs(strings.customers.docTypes[step.customer_doc] ?? step.label)}</Text>}
+  // Show the step's photos right away once it's done (short-lived signed URLs).
+  useEffect(() => {
+    if (done && step.files.length > 0 && step.bucket !== '') showFiles();
+  }, [done, step.files.join()]); // eslint-disable-line react-hooks/exhaustive-deps
 
-      {done && step.files.length > 0 && step.bucket !== '' && (
-        urls ? (
-          <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: 6 }}>
-            {urls.map((u) => <ZoomableImage key={u} source={u} style={{ width: 96, height: 96, borderRadius: 6 }} contentFit="cover" accessibilityLabel={step.label} />)}
-          </View>
-        ) : (
-          <Pressable accessibilityRole="button" onPress={showFiles}><Text style={{ textDecorationLine: 'underline' }}>{t.seeFiles} ({step.files.length})</Text></Pressable>
-        )
+  const target = step.to_status ? ` · antes de «${t.status[step.to_status as Booking['status']] ?? step.to_status}»` : '';
+  const fromProfile = step.customer_doc !== '' && step.on_file;
+  return (
+    <View style={{ borderRadius: radius.sm, padding: 14, backgroundColor: ui.fill, gap: 10 }}>
+      <View style={{ flexDirection: 'row', gap: 10, alignItems: 'flex-start' }}>
+        <Ionicons name={done || fromProfile ? 'checkmark-circle' : 'ellipse-outline'} size={22} color={done || fromProfile ? ui.success : ui.labelSecondary} />
+        <View style={{ flex: 1, gap: 2 }}>
+          <Text variant="headline">{step.label}{step.required ? '' : ' (opcional)'}</Text>
+          <Text variant="footnote" color="labelSecondary">
+            {fromProfile && !done ? strings.customers.fromProfile : done ? t.stepDone : t.stepPending}{target}
+          </Text>
+          {step.customer_doc !== '' && !step.on_file && !done && (
+            <Text variant="footnote" color="labelSecondary">{strings.customers.missingDocs(strings.customers.docTypes[step.customer_doc] ?? step.label)}</Text>
+          )}
+        </View>
+      </View>
+
+      {done && urls && urls.length > 0 && (
+        <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: 8 }}>
+          {urls.map((u) => <ZoomableImage key={u} source={u} style={{ width: 80, height: 80, borderRadius: 10 }} contentFit="cover" accessibilityLabel={step.label} />)}
+        </View>
       )}
 
       {!done && editable && !step.on_file && (
         <>
           {(step.step_type === 'photo' || step.step_type === 'file_upload') && (
-            <Button onPress={addPhotos} disabled={busy}>{busy ? '…' : t.addStepPhotos}</Button>
+            <Button icon="camera" busy={busy} onPress={addPhotos}>{t.addStepPhotos}</Button>
           )}
           {(step.step_type === 'text' || step.step_type === 'number') && (
             <>
               <TextInput accessibilityLabel={step.label} placeholder={step.step_type === 'text' ? t.stepText : t.stepNumber} value={text} onChangeText={setText}
-                keyboardType={step.step_type === 'number' ? 'decimal-pad' : 'default'} style={{ borderWidth: 1, borderRadius: 6, padding: 8 }} />
+                placeholderTextColor={ui.labelSecondary} keyboardType={step.step_type === 'number' ? 'decimal-pad' : 'default'}
+                style={{ minHeight: 44, borderRadius: radius.sm, paddingHorizontal: 12, fontSize: 17, backgroundColor: ui.surface, color: ui.label }} />
               <Button disabled={busy} onPress={() => {
                 setBusy(true);
                 submit({ data: step.step_type === 'text' ? { text } : { value: Number(text) } });
@@ -101,8 +115,9 @@ export function StepCard({ businessId, bookingId, step, editable, onDone }: {
             <>
               {items.map((it) => (
                 <Pressable key={it} accessibilityRole="checkbox" accessibilityState={{ checked: !!checked[it] }}
-                  onPress={() => setChecked({ ...checked, [it]: !checked[it] })} style={{ flexDirection: 'row', gap: 8 }}>
-                  <Text>{checked[it] ? '☑' : '☐'}</Text><Text>{it}</Text>
+                  onPress={() => setChecked({ ...checked, [it]: !checked[it] })} style={{ flexDirection: 'row', gap: 10, alignItems: 'center', minHeight: 36 }}>
+                  <Ionicons name={checked[it] ? 'checkbox' : 'square-outline'} size={22} color={checked[it] ? ui.accent : ui.labelSecondary} />
+                  <Text style={{ flex: 1 }}>{it}</Text>
                 </Pressable>
               ))}
               <Button onPress={() => { setBusy(true); submit({ data: { checked } }); }} disabled={busy}>{t.completeStep}</Button>
@@ -110,7 +125,7 @@ export function StepCard({ businessId, bookingId, step, editable, onDone }: {
           )}
         </>
       )}
-      {message && <Text accessibilityRole="alert">{message}</Text>}
+      {message && <Text variant="footnote" accessibilityRole="alert" style={{ color: ui.danger }}>{message}</Text>}
     </View>
   );
 }

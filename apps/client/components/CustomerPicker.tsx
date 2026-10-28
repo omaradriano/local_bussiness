@@ -1,7 +1,8 @@
+import { Ionicons } from '@expo/vector-icons';
 import { formatPhone, strings } from '@lb/shared';
 import { useEffect, useState } from 'react';
-import { Pressable, ScrollView, Text, TextInput, View } from 'react-native';
-import { Button } from '../ui';
+import { ScrollView, StyleSheet, View } from 'react-native';
+import { Button, Cell, Field, Notice, Text, radius, useUI } from '../ui';
 import { api } from '../lib/api';
 import { CustomerForm, type Customer } from './CustomerForm';
 
@@ -17,6 +18,7 @@ export function missingDocs(c: Customer): string[] {
 export function CustomerPicker({ businessId, isOwner, value, onChange, error }: {
   businessId: string; isOwner: boolean; value: Customer | null; onChange: (c: Customer | null) => void; error?: string;
 }) {
+  const ui = useUI();
   const [q, setQ] = useState('');
   const [results, setResults] = useState<Customer[]>([]);
   const [creating, setCreating] = useState(false);
@@ -40,17 +42,30 @@ export function CustomerPicker({ businessId, isOwner, value, onChange, error }: 
     return () => clearTimeout(id);
   }, [businessId, q, value, creating]);
 
+  // Lists inside a step sit on a grey fill (the step itself is the white surface).
+  const list = (cs: Customer[]) => (
+    <View style={{ backgroundColor: ui.fill, borderRadius: radius.sm, overflow: 'hidden' }}>
+      {cs.map((c, i) => (
+        <View key={c.id}>
+          {i > 0 && <View style={{ height: StyleSheet.hairlineWidth, backgroundColor: ui.separator, marginLeft: 16 }} />}
+          <Cell label={c.name} sublabel={formatPhone(c.phone)} onPress={() => { setListOpen(false); onChange(c); }} />
+        </View>
+      ))}
+    </View>
+  );
+
   if (value) {
     const missing = missingDocs(value);
     return (
-      <View style={{ borderRadius: 12, padding: 12, backgroundColor: 'rgba(118,118,128,0.12)', gap: 4 }}>
-        <Text style={{ fontWeight: '600' }}>{value.name}{value.trusted ? ` · ${t.trustedBadge}` : ''}</Text>
-        <Text>{formatPhone(value.phone)}</Text>
-        {value.address && <Text style={{ opacity: 0.7 }}>{value.address}</Text>}
-        {missing.length > 0 && <Text>{t.missingDocs(missing.join(', '))}</Text>}
-        <Pressable accessibilityRole="button" onPress={() => { onChange(null); setQ(''); }}>
-          <Text style={{ textDecorationLine: 'underline' }}>{t.change}</Text>
-        </Pressable>
+      <View style={{ backgroundColor: ui.fill, borderRadius: radius.sm, padding: 14, gap: 4 }}>
+        <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8 }}>
+          <Ionicons name={value.trusted ? 'shield-checkmark' : 'person-circle'} size={22} color={value.trusted ? ui.success : ui.accent} />
+          <Text variant="headline" style={{ flex: 1 }}>{value.name}</Text>
+          <Button size="sm" variant="plain" onPress={() => { onChange(null); setQ(''); }}>{t.change}</Button>
+        </View>
+        <Text variant="subhead" color="labelSecondary">{formatPhone(value.phone)}{value.trusted ? ` · ${t.trustedBadge}` : ''}</Text>
+        {value.address && <Text variant="subhead" color="labelSecondary">{value.address}</Text>}
+        {missing.length > 0 && <View style={{ marginTop: 6 }}><Notice tone="warning">{t.missingDocs(missing.join(', '))}</Notice></View>}
       </View>
     );
   }
@@ -63,38 +78,20 @@ export function CustomerPicker({ businessId, isOwner, value, onChange, error }: 
             const { data } = await api.GET('/v1/b/{businessId}/customers/{customerId}/', { params: { path: { businessId, customerId: id } } });
             if (data) { setCreating(false); onChange(data); }
           }} />
-        <Button onPress={() => setCreating(false)}>{strings.common.cancel}</Button>
+        <Button variant="plain" onPress={() => setCreating(false)}>{strings.common.cancel}</Button>
       </View>
     );
   }
 
   return (
-    <View style={{ gap: 6 }}>
-      <TextInput accessibilityLabel={t.search} placeholder={t.search} value={q} onChangeText={setQ}
-        style={{ borderRadius: 10, padding: 12, backgroundColor: 'rgba(118,118,128,0.12)' }} />
-      <Pressable accessibilityRole="button" accessibilityState={{ expanded: listOpen }} onPress={toggleList}
-        style={{ borderWidth: 1, borderRadius: 6, padding: 10, flexDirection: 'row', justifyContent: 'space-between' }}>
-        <Text>{t.registered}</Text><Text>{listOpen ? '▴' : '▾'}</Text>
-      </Pressable>
-      {listOpen && (
-        <ScrollView style={{ maxHeight: 260, borderWidth: 1, borderRadius: 6 }} nestedScrollEnabled>
-          {all?.length === 0 && <Text style={{ padding: 8 }}>{t.empty}</Text>}
-          {all?.map((c) => (
-            <Pressable key={c.id} accessibilityRole="button" onPress={() => { setListOpen(false); onChange(c); }} style={{ padding: 10, borderBottomWidth: 1, borderColor: '#ddd' }}>
-              <Text>{c.name} · {formatPhone(c.phone)}</Text>
-            </Pressable>
-          ))}
-        </ScrollView>
-      )}
-      {results.map((c) => (
-        <Pressable key={c.id} accessibilityRole="button" onPress={() => onChange(c)} style={{ borderWidth: 1, borderRadius: 6, padding: 8 }}>
-          <Text>{c.name} · {formatPhone(c.phone)}</Text>
-        </Pressable>
+    <View style={{ gap: 10 }}>
+      <Field label={t.search} placeholder={t.searchPlaceholder} value={q} onChangeText={setQ} autoCorrect={false} error={error} />
+      {results.length > 0 && list(results)}
+      <Button icon={listOpen ? 'chevron-up' : 'chevron-down'} onPress={toggleList}>{t.registered}</Button>
+      {listOpen && (all?.length === 0 ? <Text color="labelSecondary">{t.empty}</Text> : all && (
+        <ScrollView style={{ maxHeight: 300 }} nestedScrollEnabled>{list(all)}</ScrollView>
       ))}
-      <Pressable accessibilityRole="button" onPress={() => setCreating(true)}>
-        <Text style={{ textDecorationLine: 'underline' }}>+ {t.new}</Text>
-      </Pressable>
-      {error && <Text accessibilityRole="alert">{error}</Text>}
+      <Button variant="plain" icon="person-add" onPress={() => setCreating(true)}>{t.new}</Button>
     </View>
   );
 }
