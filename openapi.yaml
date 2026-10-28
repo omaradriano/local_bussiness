@@ -910,6 +910,25 @@ paths:
         "404": { $ref: "#/components/responses/Error" }
         "422": { $ref: "#/components/responses/Error" }
 
+  /v1/b/{businessId}/bookings/{bookingId}/steps/{stepId}/files:
+    parameters:
+      - $ref: "#/components/parameters/BusinessId"
+      - { name: bookingId, in: path, required: true, schema: { type: string, format: uuid } }
+      - { name: stepId, in: path, required: true, schema: { type: string, format: uuid } }
+    delete:
+      operationId: removeStepFile
+      summary: Quita una foto de un paso mientras su momento no haya pasado; sin fotos vuelve a pendiente
+      parameters:
+        - { name: key, in: query, required: true, schema: { type: string } }
+      responses:
+        "200":
+          description: OK
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Booking" }
+        "404": { $ref: "#/components/responses/Error" }
+        "422": { $ref: "#/components/responses/Error" }
+
   /v1/b/{businessId}/bookings/{bookingId}/extend:
     parameters:
       - $ref: "#/components/parameters/BusinessId"
