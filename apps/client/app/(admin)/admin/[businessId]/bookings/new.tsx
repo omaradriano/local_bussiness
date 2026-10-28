@@ -4,6 +4,8 @@ import { Link, router, Stack, useLocalSearchParams } from 'expo-router';
 import { useEffect, useMemo, useState } from 'react';
 import { ActivityIndicator, Button, Pressable, ScrollView, Text, TextInput, View } from 'react-native';
 import { Calendar, type DayInfo } from '../../../../../components/Calendar';
+import type { Customer } from '../../../../../components/CustomerForm';
+import { CustomerPicker } from '../../../../../components/CustomerPicker';
 import { api } from '../../../../../lib/api';
 import { errorText, fieldErrors } from '../../../../../lib/errors';
 import { useBusiness } from '../../../../../lib/useMe';
@@ -60,8 +62,7 @@ export default function NewBooking() {
   const [fulfillment, setFulfillment] = useState<'pickup' | 'delivery'>('pickup');
   const [address, setAddress] = useState('');
   const [zone, setZone] = useState('');
-  const [phone, setPhone] = useState('');
-  const [name, setName] = useState('');
+  const [customer, setCustomer] = useState<Customer | null>(null);
   const [notes, setNotes] = useState('');
 
   const [days, setDays] = useState<Record<string, Day>>({}); // calendar availability of the visible month
@@ -153,13 +154,14 @@ export default function NewBooking() {
     const startsAt = item.kind === 'service' ? slot?.starts_at : outISO;
     if (!startsAt) return setMessage(item.kind === 'service' ? t.pickDay : item.kind === 'rental' ? t.pickRange : t.pickDay);
     if (item.kind === 'rental' && !backISO) return setMessage(t.pickReturn);
+    if (!customer) return setMessage(strings.customers.pick);
     setBusy(true);
     setErrors({});
     setMessage(null);
     const res = await api.POST('/v1/b/{businessId}/bookings', {
       params: { path: { businessId }, header: { 'Idempotency-Key': idempotencyKey } },
       body: {
-        customer: { name, phone },
+        customer: { id: customer?.id },
         item_id: item.id,
         quantity: qty,
         starts_at: startsAt,
@@ -265,8 +267,8 @@ export default function NewBooking() {
       {item && (
         <>
           <Text style={{ fontWeight: '600' }}>{t.customer}</Text>
-          <Field label={t.phone} value={phone} onChange={setPhone} keyboard="phone-pad" error={errors['customer.phone']} />
-          <Field label={t.name} value={name} onChange={setName} error={errors['customer.name']} />
+          <CustomerPicker businessId={businessId} isOwner={business.role === 'owner'} value={customer} onChange={setCustomer}
+            error={errors['customer.id'] ?? errors['customer.name']} />
           <Field label={t.notes} value={notes} onChange={setNotes} />
           {Object.entries(errors).filter(([k]) => k.startsWith('options.')).map(([k, v]) => <Text key={k} accessibilityRole="alert">{v}</Text>)}
           {message && <Text accessibilityRole="alert">{message}</Text>}

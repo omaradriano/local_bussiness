@@ -1,6 +1,6 @@
 import type { components } from '@lb/api-client';
-import { centavosToInput, formatMXN, parsePesos, strings, term } from '@lb/shared';
-import { Stack, useLocalSearchParams } from 'expo-router';
+import { centavosToInput, formatMXN, parsePesos, strings, term, formatPhone } from '@lb/shared';
+import { Link, Stack, useLocalSearchParams } from 'expo-router';
 import { useCallback, useEffect, useState } from 'react';
 import { ActivityIndicator, Button, Linking, Pressable, ScrollView, Text, TextInput, View } from 'react-native';
 import { api } from '../../../../../lib/api';
@@ -128,7 +128,10 @@ export default function BookingDetail() {
       {b.staff.length > 0 && <Text>{t.attendedBy}: {b.staff.map((s) => s.name).join(', ')}</Text>}
       {b.units.length > 0 && <Text>{t.units}: {b.units.map((u) => u.name).join(', ')}</Text>}
       {b.fulfillment === 'delivery' && <Text>{t.delivery}: {b.delivery_address}</Text>}
-      <Text>{t.customer}: {b.customer.name} · {b.customer.phone}</Text>
+      <Text>{t.customer}: {b.customer.name} · {formatPhone(b.customer.phone)}</Text>
+      <Link href={{ pathname: '/admin/[businessId]/customers/[customerId]', params: { businessId, customerId: b.customer.id } }}>
+        <Text style={{ textDecorationLine: 'underline' }}>{strings.customers.goToProfile}</Text>
+      </Link>
       {b.notes && <Text>{b.notes}</Text>}
       {b.hold_expires_at && <Text>{t.holdUntil}: {when(b.hold_expires_at)}</Text>}
       <Pressable accessibilityRole="link" onPress={() => Linking.openURL(`https://wa.me/${b.customer.phone.replace(/\D/g, '')}?text=${encodeURIComponent(waText)}`)}>

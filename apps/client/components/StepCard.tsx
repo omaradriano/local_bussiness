@@ -69,6 +69,7 @@ export function StepCard({ businessId, bookingId, step, editable, onDone }: {
     <View style={{ borderWidth: 1, borderRadius: 8, padding: 10, gap: 6 }}>
       <Text style={{ fontWeight: '600' }}>{done ? '✓' : '○'} {step.label}{step.required ? '' : ' (opcional)'}</Text>
       <Text style={{ opacity: 0.7 }}>{done ? t.stepDone : t.stepPending}{target}</Text>
+      {step.customer_doc !== '' && <Text style={{ opacity: 0.7 }}>{step.on_file ? `✓ ${strings.customers.fromProfile}` : strings.customers.missingDocs(strings.customers.docTypes[step.customer_doc] ?? step.label)}</Text>}
 
       {done && step.files.length > 0 && step.bucket !== '' && (
         urls ? (
@@ -80,7 +81,7 @@ export function StepCard({ businessId, bookingId, step, editable, onDone }: {
         )
       )}
 
-      {!done && editable && (
+      {!done && editable && !step.on_file && (
         <>
           {(step.step_type === 'photo' || step.step_type === 'file_upload') && (
             <Button title={busy ? '…' : t.addStepPhotos} onPress={addPhotos} disabled={busy} />

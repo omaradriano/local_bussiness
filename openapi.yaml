@@ -453,6 +453,161 @@ paths:
         "403": { $ref: "#/components/responses/Error" }
         "422": { $ref: "#/components/responses/Error" }
 
+  /v1/b/{businessId}/customers:
+    parameters:
+      - $ref: "#/components/parameters/BusinessId"
+    get:
+      operationId: searchCustomers
+      summary: Busca clientes por nombre o teléfono (vacío = los más recientes)
+      parameters:
+        - { name: q, in: query, schema: { type: string } }
+        - { name: limit, in: query, schema: { type: integer, minimum: 1, maximum: 100 } }
+      responses:
+        "200":
+          description: OK
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [customers]
+                properties:
+                  customers: { type: array, items: { $ref: "#/components/schemas/Customer" } }
+    post:
+      operationId: createCustomer
+      summary: Registra un cliente (renta exige dirección y aval). Teléfono repetido → 409 customer_exists.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/CustomerInput" }
+      responses:
+        "201":
+          description: Creado
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Customer" }
+        "409": { $ref: "#/components/responses/Error" }
+        "422": { $ref: "#/components/responses/Error" }
+
+  /v1/b/{businessId}/customers/{customerId}/:
+    parameters:
+      - $ref: "#/components/parameters/BusinessId"
+      - $ref: "#/components/parameters/CustomerId"
+    get:
+      operationId: getCustomer
+      responses:
+        "200":
+          description: OK
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Customer" }
+        "404": { $ref: "#/components/responses/Error" }
+    patch:
+      operationId: updateCustomer
+      summary: Edita la ficha (solo el dueño cambia "de confianza")
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/CustomerInput" }
+      responses:
+        "200":
+          description: OK
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Customer" }
+        "404": { $ref: "#/components/responses/Error" }
+        "409": { $ref: "#/components/responses/Error" }
+        "422": { $ref: "#/components/responses/Error" }
+
+  /v1/b/{businessId}/customers/{customerId}/uploads:
+    parameters:
+      - $ref: "#/components/parameters/BusinessId"
+      - $ref: "#/components/parameters/CustomerId"
+    post:
+      operationId: createCustomerUpload
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [doc_type, content_type, size]
+              properties:
+                doc_type: { $ref: "#/components/schemas/DocType" }
+                content_type: { type: string, enum: [image/jpeg, image/png, image/webp] }
+                size: { type: integer, minimum: 1, maximum: 5242880 }
+      responses:
+        "201":
+          description: Subir con PUT y luego registrar la llave en /documents
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [key, upload_url, upload_headers]
+                properties:
+                  key: { type: string }
+                  upload_url: { type: string }
+                  upload_headers: { type: object, additionalProperties: { type: string } }
+        "422": { $ref: "#/components/responses/Error" }
+
+  /v1/b/{businessId}/customers/{customerId}/documents:
+    parameters:
+      - $ref: "#/components/parameters/BusinessId"
+      - $ref: "#/components/parameters/CustomerId"
+    post:
+      operationId: addCustomerDocuments
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [doc_type, keys]
+              properties:
+                doc_type: { $ref: "#/components/schemas/DocType" }
+                keys: { type: array, items: { type: string }, minItems: 1, maxItems: 6 }
+      responses:
+        "200":
+          description: OK
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Customer" }
+        "422": { $ref: "#/components/responses/Error" }
+
+  /v1/b/{businessId}/customers/{customerId}/documents/{docId}:
+    parameters:
+      - $ref: "#/components/parameters/BusinessId"
+      - $ref: "#/components/parameters/CustomerId"
+      - { name: docId, in: path, required: true, schema: { type: string, format: uuid } }
+    delete:
+      operationId: deleteCustomerDocument
+      summary: Borra un documento (solo dueño)
+      responses:
+        "204": { description: Borrado }
+        "403": { $ref: "#/components/responses/Error" }
+        "404": { $ref: "#/components/responses/Error" }
+
+  /v1/b/{businessId}/customers/{customerId}/files:
+    parameters:
+      - $ref: "#/components/parameters/BusinessId"
+      - $ref: "#/components/parameters/CustomerId"
+    get:
+      operationId: getCustomerFile
+      parameters:
+        - { name: key, in: query, required: true, schema: { type: string } }
+      responses:
+        "200":
+          description: URL de lectura de 5 minutos
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [url]
+                properties:
+                  url: { type: string }
+        "404": { $ref: "#/components/responses/Error" }
+
   /v1/b/{businessId}/availability:
     parameters:
       - $ref: "#/components/parameters/BusinessId"
@@ -745,6 +900,11 @@ components:
       description: Access token de Supabase Auth
 
   parameters:
+    CustomerId:
+      name: customerId
+      in: path
+      required: true
+      schema: { type: string, format: uuid }
     ImageId:
       name: imageId
       in: path
@@ -862,6 +1022,47 @@ components:
           type: [object, "null"]
           description: "Variante (thumb 160 px, card 480 px, detail 1080 px) -> URL del CDN"
           additionalProperties: { type: string }
+
+    DocType:
+      type: string
+      enum: [ine, proof_of_address, guarantor_id]
+
+    CustomerInput:
+      type: object
+      properties:
+        name: { type: string, maxLength: 80 }
+        phone: { type: string, description: "E.164 (+526141234567)" }
+        email: { type: string }
+        address: { type: string, maxLength: 300 }
+        guarantor_name: { type: string, maxLength: 80 }
+        guarantor_phone: { type: string }
+        trusted: { type: boolean }
+        notes: { type: string }
+
+    Customer:
+      type: object
+      required: [id, name, phone, email, address, guarantor_name, guarantor_phone, trusted, notes, documents, created_at]
+      properties:
+        id: { type: string, format: uuid }
+        name: { type: string }
+        phone: { type: string }
+        email: { type: [string, "null"] }
+        address: { type: [string, "null"] }
+        guarantor_name: { type: [string, "null"] }
+        guarantor_phone: { type: [string, "null"] }
+        trusted: { type: boolean, description: "No se le exigen documentos" }
+        notes: { type: [string, "null"] }
+        created_at: { type: string, format: date-time }
+        documents:
+          type: array
+          items:
+            type: object
+            required: [id, doc_type, key, created_at]
+            properties:
+              id: { type: string, format: uuid }
+              doc_type: { $ref: "#/components/schemas/DocType" }
+              key: { type: string }
+              created_at: { type: string, format: date-time }
 
     Settings:
       type: object
@@ -1013,7 +1214,7 @@ components:
           type: array
           items:
             type: object
-            required: [id, label, step_type, to_status, required, status, completed_at, files, config, bucket]
+            required: [id, label, step_type, to_status, required, status, completed_at, files, config, bucket, customer_doc, on_file]
             properties:
               id: { type: string, format: uuid }
               label: { type: string }
@@ -1025,6 +1226,8 @@ components:
               files: { type: array, items: { type: string } }
               config: { type: object, additionalProperties: true }
               bucket: { type: string, description: "Bucket privado de sus archivos (vacío si no lleva archivos)" }
+              customer_doc: { type: string, description: "Documento de la ficha del cliente que cumple este paso (ine, proof_of_address) o vacío" }
+              on_file: { type: boolean, description: "Ese documento ya está en la ficha (o el cliente es de confianza)" }
         next:
           type: array
           items: { $ref: "#/components/schemas/BookingStatus" }

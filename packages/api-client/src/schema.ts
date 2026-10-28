@@ -334,6 +334,124 @@ export interface paths {
         patch: operations["updateSettings"];
         trace?: never;
     };
+    "/v1/b/{businessId}/customers": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                businessId: components["parameters"]["BusinessId"];
+            };
+            cookie?: never;
+        };
+        /** Busca clientes por nombre o teléfono (vacío = los más recientes) */
+        get: operations["searchCustomers"];
+        put?: never;
+        /** Registra un cliente (renta exige dirección y aval). Teléfono repetido → 409 customer_exists. */
+        post: operations["createCustomer"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/b/{businessId}/customers/{customerId}/": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                businessId: components["parameters"]["BusinessId"];
+                customerId: components["parameters"]["CustomerId"];
+            };
+            cookie?: never;
+        };
+        get: operations["getCustomer"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        /** Edita la ficha (solo el dueño cambia "de confianza") */
+        patch: operations["updateCustomer"];
+        trace?: never;
+    };
+    "/v1/b/{businessId}/customers/{customerId}/uploads": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                businessId: components["parameters"]["BusinessId"];
+                customerId: components["parameters"]["CustomerId"];
+            };
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post: operations["createCustomerUpload"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/b/{businessId}/customers/{customerId}/documents": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                businessId: components["parameters"]["BusinessId"];
+                customerId: components["parameters"]["CustomerId"];
+            };
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post: operations["addCustomerDocuments"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/b/{businessId}/customers/{customerId}/documents/{docId}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                businessId: components["parameters"]["BusinessId"];
+                customerId: components["parameters"]["CustomerId"];
+                docId: string;
+            };
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post?: never;
+        /** Borra un documento (solo dueño) */
+        delete: operations["deleteCustomerDocument"];
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/b/{businessId}/customers/{customerId}/files": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                businessId: components["parameters"]["BusinessId"];
+                customerId: components["parameters"]["CustomerId"];
+            };
+            cookie?: never;
+        };
+        get: operations["getCustomerFile"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/v1/b/{businessId}/availability": {
         parameters: {
             query?: never;
@@ -625,6 +743,42 @@ export interface components {
                 [key: string]: string;
             } | null;
         };
+        /** @enum {string} */
+        DocType: "ine" | "proof_of_address" | "guarantor_id";
+        CustomerInput: {
+            name?: string;
+            /** @description E.164 (+526141234567) */
+            phone?: string;
+            email?: string;
+            address?: string;
+            guarantor_name?: string;
+            guarantor_phone?: string;
+            trusted?: boolean;
+            notes?: string;
+        };
+        Customer: {
+            /** Format: uuid */
+            id: string;
+            name: string;
+            phone: string;
+            email: string | null;
+            address: string | null;
+            guarantor_name: string | null;
+            guarantor_phone: string | null;
+            /** @description No se le exigen documentos */
+            trusted: boolean;
+            notes: string | null;
+            /** Format: date-time */
+            created_at: string;
+            documents: {
+                /** Format: uuid */
+                id: string;
+                doc_type: components["schemas"]["DocType"];
+                key: string;
+                /** Format: date-time */
+                created_at: string;
+            }[];
+        };
         Settings: {
             rentals: {
                 /** @description Pedir depósito de garantía reembolsable */
@@ -792,6 +946,10 @@ export interface components {
                 };
                 /** @description Bucket privado de sus archivos (vacío si no lleva archivos) */
                 bucket: string;
+                /** @description Documento de la ficha del cliente que cumple este paso (ine, proof_of_address) o vacío */
+                customer_doc: string;
+                /** @description Ese documento ya está en la ficha (o el cliente es de confianza) */
+                on_file: boolean;
             }[];
             next: components["schemas"]["BookingStatus"][];
             rental: null | {
@@ -892,6 +1050,7 @@ export interface components {
         };
     };
     parameters: {
+        CustomerId: string;
         ImageId: string;
         StaffId: string;
         ItemId: string;
@@ -1527,6 +1686,237 @@ export interface operations {
             };
             403: components["responses"]["Error"];
             422: components["responses"]["Error"];
+        };
+    };
+    searchCustomers: {
+        parameters: {
+            query?: {
+                q?: string;
+                limit?: number;
+            };
+            header?: never;
+            path: {
+                businessId: components["parameters"]["BusinessId"];
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        customers: components["schemas"]["Customer"][];
+                    };
+                };
+            };
+        };
+    };
+    createCustomer: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                businessId: components["parameters"]["BusinessId"];
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["CustomerInput"];
+            };
+        };
+        responses: {
+            /** @description Creado */
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Customer"];
+                };
+            };
+            409: components["responses"]["Error"];
+            422: components["responses"]["Error"];
+        };
+    };
+    getCustomer: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                businessId: components["parameters"]["BusinessId"];
+                customerId: components["parameters"]["CustomerId"];
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Customer"];
+                };
+            };
+            404: components["responses"]["Error"];
+        };
+    };
+    updateCustomer: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                businessId: components["parameters"]["BusinessId"];
+                customerId: components["parameters"]["CustomerId"];
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["CustomerInput"];
+            };
+        };
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Customer"];
+                };
+            };
+            404: components["responses"]["Error"];
+            409: components["responses"]["Error"];
+            422: components["responses"]["Error"];
+        };
+    };
+    createCustomerUpload: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                businessId: components["parameters"]["BusinessId"];
+                customerId: components["parameters"]["CustomerId"];
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": {
+                    doc_type: components["schemas"]["DocType"];
+                    /** @enum {string} */
+                    content_type: "image/jpeg" | "image/png" | "image/webp";
+                    size: number;
+                };
+            };
+        };
+        responses: {
+            /** @description Subir con PUT y luego registrar la llave en /documents */
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        key: string;
+                        upload_url: string;
+                        upload_headers: {
+                            [key: string]: string;
+                        };
+                    };
+                };
+            };
+            422: components["responses"]["Error"];
+        };
+    };
+    addCustomerDocuments: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                businessId: components["parameters"]["BusinessId"];
+                customerId: components["parameters"]["CustomerId"];
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": {
+                    doc_type: components["schemas"]["DocType"];
+                    keys: string[];
+                };
+            };
+        };
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Customer"];
+                };
+            };
+            422: components["responses"]["Error"];
+        };
+    };
+    deleteCustomerDocument: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                businessId: components["parameters"]["BusinessId"];
+                customerId: components["parameters"]["CustomerId"];
+                docId: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Borrado */
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            403: components["responses"]["Error"];
+            404: components["responses"]["Error"];
+        };
+    };
+    getCustomerFile: {
+        parameters: {
+            query: {
+                key: string;
+            };
+            header?: never;
+            path: {
+                businessId: components["parameters"]["BusinessId"];
+                customerId: components["parameters"]["CustomerId"];
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description URL de lectura de 5 minutos */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        url: string;
+                    };
+                };
+            };
+            404: components["responses"]["Error"];
         };
     };
     getAvailability: {
