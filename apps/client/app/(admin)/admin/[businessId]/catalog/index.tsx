@@ -14,7 +14,8 @@ const t = strings.catalog;
 function detail(it: Item): string {
   if (it.kind === 'service') return `${it.duration_minutes} min`;
   if (it.kind === 'product') return `${it.prep_hours} h de anticipación`;
-  return `por ${t.priceUnits[it.price_unit ?? 'day'].toLowerCase()} · depósito ${formatMXN(it.security_deposit ?? 0)}`;
+  const unit = `por ${t.priceUnits[it.price_unit ?? 'day'].toLowerCase()}`;
+  return it.security_deposit ? `${unit} · depósito ${formatMXN(it.security_deposit)}` : unit;
 }
 
 export default function CatalogList() {

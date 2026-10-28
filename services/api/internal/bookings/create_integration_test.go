@@ -309,3 +309,55 @@ func TestIntegrationRentalNotOnClosedDays(t *testing.T) {
 		t.Fatalf("spanning Sunday: total=%d err=%v", b.Total, err)
 	}
 }
+
+func TestIntegrationRentalSettings(t *testing.T) {
+	p := pool(t)
+	ctx := context.Background()
+	later := at("2026-11-05T12:00:00Z").UTC()
+	satToMon := func(f fixture, phone string) CreateInput {
+		return CreateInput{Customer: cust(phone), ItemID: f.item, StartsAt: at("2026-11-07T16:00:00Z"), EndsAt: at("2026-11-09T16:00:00Z"), Source: "admin"}
+	}
+
+	t.Run("sin depósito de garantía", func(t *testing.T) {
+		f := setup(t, p, "tool_rental", `{"security_deposit_enabled": false}`)
+		p.Exec(ctx, `delete from public.workflow_steps where business_id = $1`, f.business)
+		b, _, err := Create(ctx, p, f.business, satToMon(f, "6142020001"), later)
+		if err != nil || b.Items[0].Options["security_deposit"].(float64) != 0 {
+			t.Fatalf("deposit: %+v %v", b.Items, err)
+		}
+		if _, err := Checkout(ctx, p, f.business, b.ID, "", "", later); err != nil {
+			t.Fatalf("checkout without deposit when it's disabled: %v", err)
+		}
+	})
+
+	t.Run("no se renta sobre días cerrados", func(t *testing.T) {
+		f := setup(t, p, "tool_rental", `{"rentals_span_closed_days": false}`)
+		var inv Invalid
+		if _, _, err := Create(ctx, p, f.business, satToMon(f, "6142020002"), later); !errors.As(err, &inv) || inv.Field != "ends_at" {
+			t.Fatalf("span closed Sunday: %v", err)
+		}
+	})
+
+	t.Run("días cerrados no se cobran", func(t *testing.T) {
+		f := setup(t, p, "tool_rental", `{"charge_closed_days": false}`)
+		b, _, err := Create(ctx, p, f.business, satToMon(f, "6142020003"), later)
+		if err != nil || b.Total != 30000 { // 2 days − the closed Sunday
+			t.Fatalf("total = %d, want 30000 (%v)", b.Total, err)
+		}
+	})
+
+	t.Run("recargo con multiplicador ×2", func(t *testing.T) {
+		f := setup(t, p, "tool_rental", `{"late_fee_multiplier": 2, "security_deposit_enabled": false}`)
+		p.Exec(ctx, `delete from public.workflow_steps where business_id = $1`, f.business)
+		b, _, err := Create(ctx, p, f.business, CreateInput{Customer: cust("6142020004"), ItemID: f.item,
+			StartsAt: at("2026-11-02T15:00:00Z"), EndsAt: at("2026-11-04T15:00:00Z"), Source: "admin"}, now)
+		if err != nil {
+			t.Fatal(err)
+		}
+		Checkout(ctx, p, f.business, b.ID, "", "", now)
+		b, err = Return(ctx, p, f.business, b.ID, "", "", at("2026-11-05T15:30:00Z").UTC()) // 1 day late
+		if err != nil || b.Rental.LateDays != 1 || b.Rental.LateFeeSuggested != 60000 {
+			t.Fatalf("late fee ×2: %+v %v", b.Rental, err)
+		}
+	})
+}

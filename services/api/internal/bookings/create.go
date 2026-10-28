@@ -14,6 +14,7 @@ import (
 	"github.com/jackc/pgx/v5/pgconn"
 
 	"github.com/omaradriano/local_bussiness/services/api/internal/availability"
+	"github.com/omaradriano/local_bussiness/services/api/internal/settings"
 	"github.com/omaradriano/local_bussiness/services/api/internal/store"
 )
 
@@ -55,7 +56,7 @@ type zone struct {
 	Fee  int64  `json:"fee"`
 }
 
-type settings struct {
+type bizSettings struct {
 	DepositPercent int64  `json:"deposit_percent"`
 	HoldHours      int    `json:"hold_hours"`
 	DeliveryZones  []zone `json:"delivery_zones"`
@@ -136,8 +137,9 @@ func Create(ctx context.Context, db store.DB, businessID string, in CreateInput,
 	if err != nil {
 		return Booking{}, false, err
 	}
-	var set settings
+	var set bizSettings
 	_ = json.Unmarshal(rawSettings, &set)
+	rentals := settings.RentalsFrom(rawSettings)
 
 	var it itemRow
 	err = tx.QueryRow(ctx, `select kind, name, price, coalesce(duration_minutes, 0), buffer_minutes, coalesce(price_unit, ''), coalesce(security_deposit, 0)
@@ -239,6 +241,14 @@ func Create(ctx context.Context, db store.DB, businessID string, in CreateInput,
 		if !availability.OpenOn(loc, *end, hours) {
 			return Booking{}, false, Invalid{"ends_at", "El negocio está cerrado ese día; elige otro día de regreso."}
 		}
+		if closed := availability.ClosedDaysBetween(loc, start, *end, hours); closed > 0 {
+			if !rentals.SpanClosedDays {
+				return Booking{}, false, Invalid{"ends_at", "El negocio no renta sobre días cerrados; elige fechas sin días cerrados en medio."}
+			}
+			if !rentals.ChargeClosedDays && it.PriceUnit == "day" {
+				periods = max(1, periods-int64(closed))
+			}
+		}
 		candidates = res.FreeUnits
 	}
 
@@ -247,8 +257,12 @@ func Create(ctx context.Context, db store.DB, businessID string, in CreateInput,
 		return Booking{}, false, err
 	}
 
+	securityDeposit := it.SecurityDeposit
+	if !rentals.SecurityDepositEnabled {
+		securityDeposit = 0 // the business doesn't ask for one
+	}
 	q := Compute(QuoteInput{UnitPrice: it.Price, OptionsExtra: optsExtra, Quantity: int64(in.Quantity), Periods: periods,
-		DeliveryFee: deliveryFee, DepositPercent: set.DepositPercent, SecurityDeposit: it.SecurityDeposit})
+		DeliveryFee: deliveryFee, DepositPercent: set.DepositPercent, SecurityDeposit: securityDeposit})
 	status, hold := InitialStatus(q.Advance, set.HoldHours, now)
 
 	var bookingID string

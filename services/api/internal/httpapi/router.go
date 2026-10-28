@@ -22,6 +22,7 @@ import (
 	"github.com/omaradriano/local_bussiness/services/api/internal/catalog"
 	"github.com/omaradriano/local_bussiness/services/api/internal/files"
 	"github.com/omaradriano/local_bussiness/services/api/internal/media"
+	"github.com/omaradriano/local_bussiness/services/api/internal/settings"
 	"github.com/omaradriano/local_bussiness/services/api/internal/staff"
 	"github.com/omaradriano/local_bussiness/services/api/internal/steps"
 	"github.com/omaradriano/local_bussiness/services/api/internal/store"
@@ -42,7 +43,13 @@ type Deps struct {
 	Photos         *Photos
 	Availability   AvailabilityAnswerer
 	Bookings       BookingsRepo
+	Settings       SettingsRepo
 	Now            func() time.Time // injectable clock; nil = time.Now
+}
+
+type SettingsRepo interface {
+	Rentals(ctx context.Context, businessID string) (settings.Rentals, error)
+	SaveRentals(ctx context.Context, businessID string, r settings.Rentals) error
 }
 
 type BookingsRepo interface {
@@ -282,6 +289,41 @@ func NewRouter(d Deps) http.Handler {
 			})
 
 			mountImages(r, d.Photos)
+
+			r.Get("/settings", func(w http.ResponseWriter, r *http.Request) {
+				m, _ := auth.MemberFrom(r.Context())
+				rs, err := d.Settings.Rentals(r.Context(), m.BusinessID)
+				if err != nil {
+					internalError(w, r, "get settings", err)
+					return
+				}
+				apierr.JSON(w, http.StatusOK, map[string]any{"rentals": rs})
+			})
+
+			r.With(auth.RequireRole("owner")).Patch("/settings", func(w http.ResponseWriter, r *http.Request) {
+				m, _ := auth.MemberFrom(r.Context())
+				var body struct {
+					Rentals settings.RentalsPatch `json:"rentals"`
+				}
+				if !decode(w, r, &body) {
+					return
+				}
+				current, err := d.Settings.Rentals(r.Context(), m.BusinessID)
+				if err != nil {
+					internalError(w, r, "get settings", err)
+					return
+				}
+				next := current.Apply(body.Rentals)
+				if errs := next.Validate(); len(errs) > 0 {
+					invalid(w, "Revisa los ajustes.", errs)
+					return
+				}
+				if err := d.Settings.SaveRentals(r.Context(), m.BusinessID, next); err != nil {
+					internalError(w, r, "save settings", err)
+					return
+				}
+				apierr.JSON(w, http.StatusOK, map[string]any{"rentals": next})
+			})
 
 			// Counter booking: owner and staff can take it.
 			r.Post("/bookings", func(w http.ResponseWriter, r *http.Request) {

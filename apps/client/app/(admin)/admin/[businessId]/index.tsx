@@ -37,6 +37,11 @@ export default function BusinessHome() {
       <Link href={{ pathname: '/admin/[businessId]/hours', params: { businessId } }}>
         <Text style={{ textDecorationLine: 'underline', fontSize: 16 }}>{strings.business.sections.hours}</Text>
       </Link>
+      {business.role === 'owner' && (
+        <Link href={{ pathname: '/admin/[businessId]/settings', params: { businessId } }}>
+          <Text style={{ textDecorationLine: 'underline', fontSize: 16 }}>{strings.business.sections.settings}</Text>
+        </Link>
+      )}
     </View>
   );
 }

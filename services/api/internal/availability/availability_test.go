@@ -328,3 +328,23 @@ func TestRentalDaysClosedDayCanBeSpanned(t *testing.T) {
 		t.Fatalf("open Monday = %+v", days[0])
 	}
 }
+
+func TestClosedDaysBetween(t *testing.T) {
+	monSat := weekdays("08:00", "18:00", 1, 2, 3, 4, 5, 6)
+	cases := []struct {
+		from, to string
+		want     int
+	}{
+		{"2026-11-07 10:00", "2026-11-09 10:00", 1}, // Sat → Mon spans Sunday
+		{"2026-11-02 10:00", "2026-11-04 10:00", 0}, // Mon → Wed
+		{"2026-11-07 10:00", "2026-11-16 10:00", 2}, // two Sundays
+		{"2026-11-07 10:00", "2026-11-07 18:00", 0}, // same day
+	}
+	for _, tc := range cases {
+		f, _ := time.ParseInLocation("2006-01-02 15:04", tc.from, chih)
+		to, _ := time.ParseInLocation("2006-01-02 15:04", tc.to, chih)
+		if got := ClosedDaysBetween(chih, f, to, monSat); got != tc.want {
+			t.Errorf("%s → %s: %d closed days, want %d", tc.from, tc.to, got, tc.want)
+		}
+	}
+}
