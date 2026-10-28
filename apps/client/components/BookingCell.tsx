@@ -19,7 +19,7 @@ export function BookingCell({ businessId, b, time }: { businessId: string; b: Su
       <View style={{ flex: 1, minWidth: 0, gap: 4 }}>
         <Text numberOfLines={1}>{what}</Text>
         <Text variant="footnote" color="labelSecondary" numberOfLines={1}>{time} · {b.customer_name}</Text>
-        <StatusBadge kind={b.kind} status={b.status} />
+        <StatusBadge status={b.status} />
       </View>
       <Text color="labelSecondary" style={{ fontVariant: ['tabular-nums'] }}>{formatMXN(b.total)}</Text>
       <Ionicons name="chevron-forward" size={18} color={ui.labelSecondary} style={{ opacity: 0.6 }} />

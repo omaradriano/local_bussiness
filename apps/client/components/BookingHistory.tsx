@@ -4,6 +4,7 @@ import { useCallback, useEffect, useRef, useState } from 'react';
 import { ActivityIndicator, View } from 'react-native';
 import { api } from '../lib/api';
 import { errorText } from '../lib/errors';
+import { useTexts } from '../lib/useTexts';
 import { Button, EmptyState, Field, Group, Notice, Segmented } from '../ui';
 import { BookingCell } from './BookingCell';
 
@@ -18,6 +19,7 @@ const monthKey = (iso: string) => new Date(iso).toLocaleDateString('es-MX', { mo
 /** Bookings newest first, grouped by month; filter by group and search (or one customer's). Pages of 30. */
 export function BookingHistory({ businessId, customerId, compact }: { businessId: string; customerId?: string; compact?: boolean }) {
   const [group, setGroup] = useState<HistoryGroup>('all');
+  const { texts } = useTexts();
   const [q, setQ] = useState('');
   const [rows, setRows] = useState<Summary[] | null>(null);
   const [more, setMore] = useState(false);
@@ -56,13 +58,13 @@ export function BookingHistory({ businessId, customerId, compact }: { businessId
 
   return (
     <View>
-      {!compact && <Field label={t.search} placeholder={t.searchPlaceholder} value={q} onChangeText={setQ} autoCorrect={false} />}
+      {!compact && <Field label={t.search} placeholder={texts.bookings.searchPlaceholder} value={q} onChangeText={setQ} autoCorrect={false} />}
       <View style={{ marginBottom: 16 }}>
         <Segmented options={(['all', 'active', 'finished', 'cancelled'] as HistoryGroup[]).map((g) => ({ value: g, label: t.groups[g] }))} value={group} onChange={setGroup} />
       </View>
       {error && <Notice tone="warning">{error}</Notice>}
       {rows === null && !error && <ActivityIndicator />}
-      {rows?.length === 0 && <EmptyState icon="file-tray-outline" title={t.empty} />}
+      {rows?.length === 0 && <EmptyState icon="file-tray-outline" title={texts.bookings.empty} />}
       {months.map(([month, list]) => (
         <Group key={month} label={month}>
           {list.map((b) => (

@@ -6,11 +6,12 @@ import { ActivityIndicator, Linking, View } from 'react-native';
 import { BookingDocuments } from '../../../../../components/BookingDocuments';
 import { ExtendRental } from '../../../../../components/ExtendRental';
 import { PaymentForm, PaymentList, paymentTypesFor, type PaymentType } from '../../../../../components/Payments';
-import { StatusBadge, statusLabel } from '../../../../../components/StatusBadge';
+import { StatusBadge } from '../../../../../components/StatusBadge';
 import { StepCard } from '../../../../../components/StepCard';
 import { api } from '../../../../../lib/api';
 import { errorText } from '../../../../../lib/errors';
 import { useBusiness } from '../../../../../lib/useMe';
+import { useTexts } from '../../../../../lib/useTexts';
 import { Button, Cell, Field, Group, Notice, Row, Screen, Step, SubStep, Text, useToast, useUI, type StepState } from '../../../../../ui';
 
 type Booking = components['schemas']['Booking'];
@@ -43,6 +44,7 @@ export default function BookingDetail() {
   const path = { businessId, bookingId };
   const ui = useUI();
   const toast = useToast();
+  const { texts } = useTexts();
 
   const show = useCallback((data: Booking) => { setB(data); setPayOpen(false); }, []);
 
@@ -56,7 +58,7 @@ export default function BookingDetail() {
     const { data, error, response } = await api.POST('/v1/b/{businessId}/bookings/{bookingId}/transition', { params: { path }, body: { to } });
     setBusy(false);
     setConfirmCancel(false);
-    if (data) { show(data); toast(t.statusChanged(statusLabel(data.kind, data.status))); return; }
+    if (data) { show(data); toast(t.statusChanged(texts.bookings.status[data.status])); return; }
     const pending = (error?.details as { steps?: string[] } | undefined)?.steps;
     toast(pending ? error!.message : errorText(error, response.status), 'error');
   }
@@ -82,7 +84,7 @@ export default function BookingDetail() {
   const bookingTerm = term(business.vertical, 'booking') ?? t.detail;
   // Rental check-out/return have their own flow; the rest are plain status moves.
   const actions = b.next.filter((s) => !(b.kind === 'rental' && (s === 'checked_out' || s === 'returned')));
-  const waText = t.whatsappText(b.customer.name, bookingTerm, when(b.starts_at), t.status[b.status]);
+  const waText = t.whatsappText(b.customer.name, bookingTerm, when(b.starts_at), texts.bookings.status[b.status]);
   const editable = !['cancelled', 'expired', 'no_show', 'completed'].includes(b.status);
   const f = t.detailFlow;
   const closedNote = ['cancelled', 'expired', 'no_show'].includes(b.status);
@@ -128,9 +130,9 @@ export default function BookingDetail() {
         <View style={{ gap: 4 }}>
           {b.units.length > 0 && <Text variant="footnote" color="labelSecondary">{b.units.map((u) => u.name).join(', ')}</Text>}
           <Text variant="largeTitle" accessibilityRole="header">{b.items.map((i) => `${i.quantity > 1 ? `${i.quantity} × ` : ''}${i.name}`).join(', ')}</Text>
-          <StatusBadge kind={b.kind} status={b.status} size="md" />
+          <StatusBadge status={b.status} size="md" />
           {b.status === 'overdue' && <Notice tone="warning">{f.overdue}</Notice>}
-          {closedNote && <Notice tone="warning">{f.closed}</Notice>}
+          {closedNote && <Notice tone="warning">{texts.bookings.inactive}</Notice>}
         </View>
 
         <Group separatorInset={58}>

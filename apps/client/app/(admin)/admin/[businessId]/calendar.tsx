@@ -9,6 +9,7 @@ import { InventoryList } from '../../../../components/InventoryList';
 import { api } from '../../../../lib/api';
 import { errorText } from '../../../../lib/errors';
 import { useBusiness } from '../../../../lib/useMe';
+import { useTexts } from '../../../../lib/useTexts';
 import { Cell, Group, Notice, Screen, Segmented, Text } from '../../../../ui';
 
 type Summary = components['schemas']['BookingSummary'];
@@ -20,6 +21,7 @@ const when = (iso: string) => new Date(iso).toLocaleString('es-MX', { day: 'nume
 export default function BookingCalendar() {
   const { businessId } = useLocalSearchParams<{ businessId: string }>();
   const { business } = useBusiness(businessId);
+  const { texts } = useTexts();
   const [month, setMonth] = useState(firstOfMonth(todayISO()));
   const [day, setDay] = useState(todayISO());
   const [list, setList] = useState<Summary[] | null>(null);
@@ -66,7 +68,7 @@ export default function BookingCalendar() {
           {error && <Notice tone="warning">{error}</Notice>}
           {list === null && !error && <ActivityIndicator />}
           <Group label={new Date(`${day}T12:00:00`).toLocaleDateString('es-MX', { weekday: 'long', day: 'numeric', month: 'long' })}>
-            {list && selected.length === 0 ? <Cell label={t.noneThatDay} /> : null}
+            {list && selected.length === 0 ? <Cell label={texts.bookings.noneThatDay} /> : null}
             {selected.map((b) => (
               <BookingCell key={b.id} businessId={businessId} b={b}
                 time={b.kind === 'rental' && b.ends_at ? `${when(b.starts_at)} → ${when(b.ends_at)}` : when(b.starts_at)} />

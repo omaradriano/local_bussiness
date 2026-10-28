@@ -10,6 +10,7 @@ import { api } from '../../../../../lib/api';
 import { errorText, fieldErrors } from '../../../../../lib/errors';
 import { useBusiness } from '../../../../../lib/useMe';
 import { useSettings } from '../../../../../lib/useSettings';
+import { useTexts } from '../../../../../lib/useTexts';
 import { Button, Chip, Chips, Field as UIField, Notice, Row, Screen, Segmented, Step, Text, useToast, type StepState } from '../../../../../ui';
 
 type Item = components['schemas']['CatalogItem'];
@@ -30,6 +31,7 @@ export default function NewBooking() {
   const { businessId } = useLocalSearchParams<{ businessId: string }>();
   const { business } = useBusiness(businessId);
   const { settings } = useSettings(businessId);
+  const { texts } = useTexts();
   const toast = useToast();
   const today = todayISO();
   const [items, setItems] = useState<Item[] | null>(null);
@@ -205,7 +207,7 @@ export default function NewBooking() {
     <Screen>
       <Stack.Screen options={{ title: t.new(bookingTerm) }} />
       <View style={{ gap: 16 }}>
-        <Step inline n={1} title={s.item.title(term(business.vertical, 'catalog_item') ?? '')} description={s.item.description} state={state(0)}>
+        <Step inline n={1} title={s.item.title(term(business.vertical, 'catalog_item') ?? '')} description={texts.newBooking.itemHint} state={state(0)}>
           <Chips>
             {items.map((i) => (
               <Chip key={i.id} selected={i.id === itemId} onPress={() => setItemId(i.id)}>{`${i.name} · ${formatMXN(i.price)}`}</Chip>
@@ -293,14 +295,14 @@ export default function NewBooking() {
           )}
         </Step>
 
-        <Step inline n={3} title={s.customer.title} description={s.customer.description} state={state(2)}>
+        <Step inline n={3} title={s.customer.title} description={texts.newBooking.customerHint} state={state(2)}>
           {item && (
             <CustomerPicker businessId={businessId} isOwner={business.role === 'owner'} value={customer} onChange={setCustomer}
               error={errors['customer.id'] ?? errors['customer.name']} />
           )}
         </Step>
 
-        <Step inline n={4} title={s.payment.title} description={s.payment.description} state={item ? state(3) : 'upcoming'}>
+        <Step inline n={4} title={s.payment.title} description={texts.newBooking.paymentHint} state={item ? state(3) : 'upcoming'}>
           {item && (
             <>
               <Segmented options={(['none', 'total', 'partial'] as const).map((m) => ({ value: m, label: t.payModes[m] }))} value={payMode} onChange={setPayMode} />

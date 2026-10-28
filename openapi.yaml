@@ -534,6 +534,15 @@ paths:
             schema:
               type: object
               properties:
+                general:
+                  type: object
+                  properties:
+                    deposit_percent: { type: integer, minimum: 0, maximum: 100 }
+                    hold_hours: { type: integer, minimum: 1, maximum: 168 }
+                delivery:
+                  type: object
+                  properties:
+                    delivery_zones: { type: array, maxItems: 30, items: { $ref: "#/components/schemas/DeliveryZone" } }
                 rentals:
                   type: object
                   properties:
@@ -1311,10 +1320,29 @@ components:
               key: { type: string }
               created_at: { type: string, format: date-time }
 
+    DeliveryZone:
+      type: object
+      required: [name, fee]
+      properties:
+        name: { type: string, maxLength: 40 }
+        fee: { type: integer, description: centavos }
+
     Settings:
       type: object
-      required: [rentals]
+      required: [general, rentals, delivery]
+      description: "Todas las secciones; la app muestra las que le tocan al giro del negocio"
       properties:
+        general:
+          type: object
+          required: [deposit_percent, hold_hours]
+          properties:
+            deposit_percent: { type: integer, description: "Anticipo al apartar, % del total (0 = sin anticipo)" }
+            hold_hours: { type: integer, description: "Horas que espera un apartado sin anticipo" }
+        delivery:
+          type: object
+          required: [delivery_zones]
+          properties:
+            delivery_zones: { type: array, items: { $ref: "#/components/schemas/DeliveryZone" } }
         rentals:
           type: object
           required: [security_deposit_enabled, late_fee_multiplier, rentals_span_closed_days, charge_closed_days, inspection_minutes]
