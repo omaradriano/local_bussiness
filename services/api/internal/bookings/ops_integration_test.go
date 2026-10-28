@@ -99,3 +99,71 @@ func TestIntegrationF3_6_PasosObligatoriosPendientes(t *testing.T) {
 		t.Fatalf("after completing the step: %v", err)
 	}
 }
+
+// F3-4: each vertical walks its whole flow (rentals: TestIntegrationRentalCheckoutAndReturn).
+func TestIntegrationF3_4_FlujoCompletoPorGiro(t *testing.T) {
+	p := pool(t)
+	ctx := context.Background()
+
+	t.Run("uñas: apartado → anticipo → en proceso → saldo → completada", func(t *testing.T) {
+		f := setup(t, p, "nails", `{"deposit_percent": 30}`)
+		b, _, err := Create(ctx, p, f.business, CreateInput{Customer: cust("6141230001"), ItemID: f.item, StartsAt: at("2026-11-02T17:00:00Z"), Source: "admin"}, now)
+		if err != nil {
+			t.Fatal(err)
+		}
+		steps := []func() (Booking, error){
+			func() (Booking, error) {
+				return AddPayment(ctx, p, f.business, b.ID, Payment{Type: "advance", Method: "cash", Amount: 7500}, "", now)
+			},
+			func() (Booking, error) { return Transition(ctx, p, f.business, b.ID, "in_progress", "", "") },
+			func() (Booking, error) {
+				return AddPayment(ctx, p, f.business, b.ID, Payment{Type: "balance", Method: "card", Amount: 17500}, "", now)
+			},
+			func() (Booking, error) { return Transition(ctx, p, f.business, b.ID, "completed", "", "") },
+		}
+		for i, s := range steps {
+			if b, err = s(); err != nil {
+				t.Fatalf("step %d: %v", i, err)
+			}
+		}
+		want := []string{"pending_deposit", "confirmed", "in_progress", "completed"}
+		if b.Status != "completed" || len(b.Events) != len(want) {
+			t.Fatalf("status=%s events=%d", b.Status, len(b.Events))
+		}
+		for i, e := range b.Events {
+			if e.ToStatus != want[i] {
+				t.Fatalf("event %d = %s, want %s", i, e.ToStatus, want[i])
+			}
+		}
+	})
+
+	t.Run("flores a domicilio: confirmada → preparación → lista → en camino → completada", func(t *testing.T) {
+		f := setup(t, p, "flowers", `{}`)
+		b, _, err := Create(ctx, p, f.business, CreateInput{Customer: cust("6141230002"), ItemID: f.item, StartsAt: at("2026-11-02T18:00:00Z"),
+			Options: map[string]string{"Color": "Blanco"}, Fulfillment: "delivery", DeliveryAddress: "Calle 1", Source: "admin"}, now)
+		if err != nil || b.Status != "confirmed" {
+			t.Fatalf("create: %v %v", b.Status, err)
+		}
+		for _, to := range []string{"in_progress", "ready", "out_for_delivery"} {
+			if b, err = Transition(ctx, p, f.business, b.ID, to, "", ""); err != nil {
+				t.Fatalf("%s: %v", to, err)
+			}
+		}
+		AddPayment(ctx, p, f.business, b.ID, Payment{Type: "balance", Method: "transfer", Amount: b.Balance.Due}, "", now)
+		if b, err = Transition(ctx, p, f.business, b.ID, "completed", "", "Entregado a la mamá"); err != nil || b.Status != "completed" {
+			t.Fatalf("complete: %v %v", b.Status, err)
+		}
+	})
+
+	t.Run("flores para recoger no sale a entrega", func(t *testing.T) {
+		f := setup(t, p, "flowers", `{}`)
+		b, _, _ := Create(ctx, p, f.business, CreateInput{Customer: cust("6141230003"), ItemID: f.item, StartsAt: at("2026-11-02T18:00:00Z"),
+			Options: map[string]string{"Color": "Rojo"}, Source: "admin"}, now)
+		Transition(ctx, p, f.business, b.ID, "in_progress", "", "")
+		Transition(ctx, p, f.business, b.ID, "ready", "", "")
+		var inv Invalid
+		if _, err := Transition(ctx, p, f.business, b.ID, "out_for_delivery", "", ""); !errors.As(err, &inv) {
+			t.Fatalf("pickup order sent out for delivery: %v", err)
+		}
+	})
+}
