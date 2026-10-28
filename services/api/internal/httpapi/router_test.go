@@ -521,6 +521,10 @@ func (fakeBookings) Create(_ context.Context, _ string, in bookings.CreateInput,
 	return bookings.Booking{ID: bookingID, Status: "pending_deposit"}, in.IdempotencyKey == "repetida-123", nil
 }
 
+func (fakeBookings) List(_ context.Context, _ string, f bookings.ListFilter) ([]bookings.Summary, error) {
+	return []bookings.Summary{{ID: bookingID, Kind: f.Kind, Status: map[bool]string{true: "active", false: "all"}[f.OnlyActive]}}, nil
+}
+
 func (fakeBookings) Get(_ context.Context, _, id string) (bookings.Booking, error) {
 	if id != bookingID {
 		return bookings.Booking{}, bookings.ErrNotFound
@@ -554,6 +558,30 @@ func TestBookingRoutes(t *testing.T) {
 				headers = []string{"Idempotency-Key", tc.key}
 			}
 			rec := doBody(tc.method, tc.path, tc.token, strings.NewReader(tc.body), headers...)
+			if rec.Code != tc.wantCode || !strings.Contains(rec.Body.String(), tc.wantIn) {
+				t.Fatalf("got %d %s", rec.Code, rec.Body)
+			}
+		})
+	}
+}
+
+func TestListBookingsRoute(t *testing.T) {
+	base := "/v1/b/" + bizA + "/bookings?from=2026-11-01T00:00:00Z&to=2026-12-01T00:00:00Z"
+	cases := []struct {
+		name, path string
+		wantCode   int
+		wantIn     string
+	}{
+		{"activas por defecto", base + "&kind=rental", http.StatusOK, `"status":"active"`},
+		{"todas", base + "&status=all", http.StatusOK, `"status":"all"`},
+		{"tipo inválido", base + "&kind=x", http.StatusUnprocessableEntity, `"kind"`},
+		{"rango invertido", "/v1/b/" + bizA + "/bookings?from=2026-12-01T00:00:00Z&to=2026-11-01T00:00:00Z", http.StatusUnprocessableEntity, `"from"`},
+		{"rango de un año", "/v1/b/" + bizA + "/bookings?from=2026-01-01T00:00:00Z&to=2027-01-01T00:00:00Z", http.StatusUnprocessableEntity, `"from"`},
+		{"sin rango", "/v1/b/" + bizA + "/bookings", http.StatusUnprocessableEntity, `"from"`},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			rec := do(http.MethodGet, tc.path, "staff")
 			if rec.Code != tc.wantCode || !strings.Contains(rec.Body.String(), tc.wantIn) {
 				t.Fatalf("got %d %s", rec.Code, rec.Body)
 			}

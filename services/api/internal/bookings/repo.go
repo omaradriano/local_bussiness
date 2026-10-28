@@ -17,3 +17,7 @@ func (r Repo) Create(ctx context.Context, businessID string, in CreateInput, now
 func (r Repo) Get(ctx context.Context, businessID, id string) (Booking, error) {
 	return Get(ctx, r.DB, businessID, id)
 }
+
+func (r Repo) List(ctx context.Context, businessID string, f ListFilter) ([]Summary, error) {
+	return List(ctx, r.DB, businessID, f)
+}

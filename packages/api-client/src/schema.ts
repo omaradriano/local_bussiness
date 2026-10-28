@@ -347,7 +347,8 @@ export interface paths {
             };
             cookie?: never;
         };
-        get?: never;
+        /** Reservas que se cruzan con [from, to) (máx. 3 meses); activas por defecto */
+        get: operations["listBookings"];
         put?: never;
         /**
          * Alta de cita, pedido o renta en mostrador (dueño o empleado)
@@ -560,6 +561,25 @@ export interface components {
             public_token: string;
             /** Format: date-time */
             created_at: string;
+        };
+        BookingSummary: {
+            /** Format: uuid */
+            id: string;
+            kind: components["schemas"]["ItemKind"];
+            status: components["schemas"]["BookingStatus"];
+            /** Format: date-time */
+            starts_at: string;
+            /** Format: date-time */
+            ends_at: string | null;
+            customer_name: string;
+            customer_phone: string;
+            items: string;
+            units: string[];
+            staff: string[];
+            /** Format: int64 */
+            total: number;
+            /** Format: int64 */
+            deposit_required: number;
         };
         Ref: {
             /** Format: uuid */
@@ -1236,6 +1256,37 @@ export interface operations {
             };
             403: components["responses"]["Error"];
             404: components["responses"]["Error"];
+            422: components["responses"]["Error"];
+        };
+    };
+    listBookings: {
+        parameters: {
+            query: {
+                from: string;
+                to: string;
+                kind?: components["schemas"]["ItemKind"];
+                status?: "active" | "all";
+            };
+            header?: never;
+            path: {
+                businessId: components["parameters"]["BusinessId"];
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        bookings: components["schemas"]["BookingSummary"][];
+                    };
+                };
+            };
+            403: components["responses"]["Error"];
             422: components["responses"]["Error"];
         };
     };

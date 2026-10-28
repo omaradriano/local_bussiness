@@ -256,3 +256,58 @@ func equal(a, b []string) bool {
 	}
 	return true
 }
+
+func TestRentalDays(t *testing.T) {
+	base := RentalDaysQuery{
+		Loc: chih, From: monday, To: "2026-11-05", Now: local("2026-11-01", "12:00"), Quantity: 1, Inspection: time.Hour,
+		BusinessHours: weekdays("08:00", "18:00", 1, 2, 3, 4),
+		Units:         []Unit{{ID: "rm-01"}, {ID: "rm-02"}},
+	}
+	cases := []struct {
+		name string
+		mut  func(*RentalDaysQuery)
+		want map[string]int // date -> free units (absent = not available)
+	}{
+		{"todo libre lunes a jueves", func(*RentalDaysQuery) {}, map[string]int{monday: 2, "2026-11-03": 2, "2026-11-04": 2, "2026-11-05": 2}},
+		{"una unidad rentada martes y miércoles", func(q *RentalDaysQuery) {
+			q.Units[0].Busy = []Interval{{local("2026-11-03", "09:00"), local("2026-11-04", "17:00")}}
+		}, map[string]int{monday: 2, "2026-11-03": 1, "2026-11-04": 1, "2026-11-05": 2}},
+		{"sin unidades libres un día", func(q *RentalDaysQuery) {
+			for i := range q.Units {
+				q.Units[i].Busy = []Interval{{local("2026-11-04", "08:00"), local("2026-11-04", "12:00")}}
+			}
+		}, map[string]int{monday: 2, "2026-11-03": 2, "2026-11-05": 2}},
+		{"piden 2 y solo hay 1 el martes", func(q *RentalDaysQuery) {
+			q.Quantity = 2
+			q.Units[0].Busy = []Interval{{local("2026-11-03", "09:00"), local("2026-11-03", "10:00")}}
+		}, map[string]int{monday: 2, "2026-11-04": 2, "2026-11-05": 2}},
+		{"día cerrado", func(q *RentalDaysQuery) { q.BusinessHours = weekdays("08:00", "18:00", 1, 3, 4) },
+			map[string]int{monday: 2, "2026-11-04": 2, "2026-11-05": 2}},
+		{"el día ya pasó", func(q *RentalDaysQuery) { q.Now = local("2026-11-03", "19:00") },
+			map[string]int{"2026-11-04": 2, "2026-11-05": 2}},
+		{"reparación de una unidad", func(q *RentalDaysQuery) {
+			q.Blackouts = []Blackout{{UnitID: "rm-02", Interval: Interval{local(monday, "00:00"), local("2026-11-06", "00:00")}}}
+		}, map[string]int{monday: 1, "2026-11-03": 1, "2026-11-04": 1, "2026-11-05": 1}},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			q := base
+			q.Units = []Unit{{ID: "rm-01"}, {ID: "rm-02"}}
+			tc.mut(&q)
+			got := map[string]int{}
+			for _, d := range RentalDays(q) {
+				if d.Available {
+					got[d.Date] = d.Remaining
+				}
+			}
+			if len(got) != len(tc.want) {
+				t.Fatalf("got %v, want %v", got, tc.want)
+			}
+			for k, v := range tc.want {
+				if got[k] != v {
+					t.Fatalf("got %v, want %v", got, tc.want)
+				}
+			}
+		})
+	}
+}

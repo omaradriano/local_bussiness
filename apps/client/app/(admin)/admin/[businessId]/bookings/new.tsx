@@ -1,8 +1,9 @@
 import type { components } from '@lb/api-client';
-import { formatMXN, hhmm, localToISO, strings, term, todayISO } from '@lb/shared';
+import { addDays, firstOfMonth, formatMXN, hhmm, lastOfMonth, localToISO, strings, term, todayISO } from '@lb/shared';
 import { router, Stack, useLocalSearchParams } from 'expo-router';
 import { useEffect, useMemo, useState } from 'react';
 import { ActivityIndicator, Button, Pressable, ScrollView, Text, TextInput, View } from 'react-native';
+import { Calendar, type DayInfo } from '../../../../../components/Calendar';
 import { api } from '../../../../../lib/api';
 import { errorText, fieldErrors } from '../../../../../lib/errors';
 import { useBusiness } from '../../../../../lib/useMe';
@@ -10,6 +11,7 @@ import { useBusiness } from '../../../../../lib/useMe';
 type Item = components['schemas']['CatalogItem'];
 type Availability = components['schemas']['Availability'];
 type Slot = NonNullable<Availability['slots']>[number];
+type Day = NonNullable<Availability['days']>[number];
 const t = strings.bookings;
 
 const input = { borderWidth: 1, borderRadius: 6, padding: 10 } as const;
@@ -38,16 +40,18 @@ function Field({ label, value, onChange, error, keyboard }: {
 export default function NewBooking() {
   const { businessId } = useLocalSearchParams<{ businessId: string }>();
   const { business } = useBusiness(businessId);
+  const today = todayISO();
   const [items, setItems] = useState<Item[] | null>(null);
   const [staffNames, setStaffNames] = useState<Record<string, string>>({});
   const [itemId, setItemId] = useState<string | null>(null);
   const item = items?.find((i) => i.id === itemId) ?? null;
 
-  // Form state (kept as typed; converted on save).
-  const [date, setDate] = useState(todayISO());
-  const [time, setTime] = useState('12:00');
-  const [backDate, setBackDate] = useState(todayISO());
-  const [backTime, setBackTime] = useState('12:00');
+  // What's being booked (kept as typed; converted on save).
+  const [month, setMonth] = useState(firstOfMonth(today));
+  const [from, setFrom] = useState<string | null>(null); // day (service/product) or pick-up day (rental)
+  const [to, setTo] = useState<string | null>(null); // return day (rental)
+  const [time, setTime] = useState('10:00');
+  const [backTime, setBackTime] = useState('10:00');
   const [quantity, setQuantity] = useState('1');
   const [slot, setSlot] = useState<Slot | null>(null);
   const [staffId, setStaffId] = useState<string | null>(null);
@@ -58,12 +62,16 @@ export default function NewBooking() {
   const [name, setName] = useState('');
   const [notes, setNotes] = useState('');
 
-  const [avail, setAvail] = useState<Availability | null>(null);
+  const [days, setDays] = useState<Record<string, Day>>({}); // calendar availability of the visible month
+  const [slots, setSlots] = useState<Slot[] | null>(null);
+  const [exact, setExact] = useState<Availability | null>(null); // rental: the exact range with times
   const [errors, setErrors] = useState<Record<string, string>>({});
   const [message, setMessage] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
+  const [refresh, setRefresh] = useState(0); // bump to re-ask availability (after a 409)
   // One key per form: a double tap or retry never creates two bookings.
   const idempotencyKey = useMemo(() => `adm-${Date.now()}-${Math.random().toString(36).slice(2, 10)}`, []);
+  const qty = Math.max(1, Number(quantity) || 1);
 
   useEffect(() => {
     const path = { businessId };
@@ -72,35 +80,68 @@ export default function NewBooking() {
       setStaffNames(Object.fromEntries((data?.staff ?? []).map((s) => [s.id, s.name]))));
   }, [businessId]);
 
-  // Any change to what's being asked invalidates the previous availability answer.
-  useEffect(() => { setAvail(null); setSlot(null); setStaffId(null); }, [itemId, date, time, backDate, backTime, quantity]);
+  // New item: start over.
+  useEffect(() => { setFrom(null); setTo(null); setSlot(null); setStaffId(null); setMessage(null); }, [itemId]);
 
-  async function check() {
-    if (!item) return;
+  // Products and rentals: paint the visible month (closed / full / no free units are disabled).
+  useEffect(() => {
+    setDays({});
+    if (!item || item.kind === 'service') return;
+    const start = month < today ? today : month;
+    const end = lastOfMonth(month);
+    if (start > end) return;
+    api.GET('/v1/b/{businessId}/availability', {
+      params: { path: { businessId }, query: { item_id: item.id, from: start, to: end, quantity: qty } },
+    }).then(({ data }) => setDays(Object.fromEntries((data?.days ?? []).map((d) => [d.date, d]))));
+  }, [businessId, item, month, qty, today, refresh]);
+
+  // Services: slots of the chosen day.
+  useEffect(() => {
+    setSlots(null); setSlot(null); setStaffId(null);
+    if (!item || item.kind !== 'service' || !from) return;
+    api.GET('/v1/b/{businessId}/availability', { params: { path: { businessId }, query: { item_id: item.id, date: from } } })
+      .then(({ data, error, response }) => (data ? setSlots(data.slots ?? []) : setMessage(errorText(error, response.status))));
+  }, [businessId, item, from, refresh]);
+
+  // Rentals: check the exact range (days + times) as soon as it is complete.
+  const outISO = from ? localToISO(from, time) : null;
+  const backISO = to ? localToISO(to, backTime) : null;
+  useEffect(() => {
+    setExact(null);
+    if (!item || item.kind !== 'rental' || !outISO || !backISO) return;
+    if (backISO <= outISO) return setMessage(t.sameInstant);
     setMessage(null);
-    const qty = Number(quantity) || 1;
-    let query: Record<string, string | number> = { item_id: item.id, quantity: qty };
-    if (item.kind === 'service') query = { ...query, date };
-    else if (item.kind === 'product') query = { ...query, from: date, to: date };
-    else {
-      const from = localToISO(date, time);
-      const to = localToISO(backDate, backTime);
-      if (!from || !to) return setMessage(t.invalidDate);
-      query = { ...query, from, to };
+    api.GET('/v1/b/{businessId}/availability', { params: { path: { businessId }, query: { item_id: item.id, from: outISO, to: backISO, quantity: qty } } })
+      .then(({ data, error, response }) => (data ? setExact(data) : setMessage(errorText(error, response.status))));
+  }, [businessId, item, outISO, backISO, qty]);
+
+  function dayInfo(date: string): DayInfo {
+    if (date < today) return { disabled: true };
+    if (!item || item.kind === 'service') return {};
+    const d = days[date];
+    if (!d) return { disabled: true }; // not loaded yet or outside the range
+    if (!d.available) return { disabled: true };
+    if (item.kind === 'rental') return { badge: t.freeBadge(d.remaining) };
+    return d.remaining >= 0 ? { badge: t.countBadge(d.remaining) } : {};
+  }
+
+  function pick(date: string) {
+    setMessage(null);
+    if (item?.kind !== 'rental') return setFrom(date);
+    if (!from || to || date < from) { setFrom(date); setTo(null); return; }
+    // A rental range can't cross a day without free units. Only the visible month is loaded; the
+    // exact check of the whole range (with times) runs right after.
+    for (let d = from; d <= date; d = addDays(d, 1)) {
+      if (days[d] && !days[d].available) { setMessage(t.rangeBlocked); return; }
     }
-    const { data, error, response } = await api.GET('/v1/b/{businessId}/availability', {
-      params: { path: { businessId }, query: query as never },
-    });
-    if (data) setAvail(data);
-    else setMessage(errorText(error, response.status));
+    setTo(date);
   }
 
   async function save() {
     if (!item) return;
-    const startsAt = item.kind === 'service' ? slot?.starts_at : localToISO(date, time);
-    if (!startsAt) return setMessage(item.kind === 'service' ? t.seeSlots : t.invalidDate);
-    const endsAt = item.kind === 'rental' ? localToISO(backDate, backTime) : null;
-    if (item.kind === 'rental' && !endsAt) return setMessage(t.invalidDate);
+    const startsAt = item.kind === 'service' ? slot?.starts_at : outISO;
+    if (!startsAt) return setMessage(item.kind === 'service' ? t.pickDay : item.kind === 'rental' ? t.pickRange : t.pickDay);
+    if (item.kind === 'rental' && !backISO) return setMessage(t.pickReturn);
     setBusy(true);
     setErrors({});
     setMessage(null);
@@ -109,9 +150,9 @@ export default function NewBooking() {
       body: {
         customer: { name, phone },
         item_id: item.id,
-        quantity: Number(quantity) || 1,
+        quantity: qty,
         starts_at: startsAt,
-        ...(endsAt ? { ends_at: endsAt } : {}),
+        ...(item.kind === 'rental' && backISO ? { ends_at: backISO } : {}),
         ...(staffId ? { staff_id: staffId } : {}),
         ...(item.kind === 'product' ? { fulfillment, delivery_address: address, delivery_zone: zone } : {}),
         notes,
@@ -121,13 +162,14 @@ export default function NewBooking() {
     if (res.data) {
       return router.replace({ pathname: '/admin/[businessId]/bookings/[bookingId]', params: { businessId, bookingId: res.data.id } });
     }
-    if (res.response.status === 409) { setAvail(null); setSlot(null); return setMessage(t.taken); }
+    if (res.response.status === 409) { setSlot(null); setTo(null); setRefresh((n) => n + 1); return setMessage(t.taken); }
     setErrors(fieldErrors(res.error));
     setMessage(errorText(res.error, res.response.status));
   }
 
   if (!business || !items) return <ActivityIndicator style={{ marginTop: 24 }} />;
   const bookingTerm = term(business.vertical, 'booking') ?? '';
+  const canSave = !!item && (item.kind === 'service' ? !!slot : item.kind === 'product' ? !!from && !!outISO : !!exact?.available);
 
   return (
     <ScrollView contentContainerStyle={{ padding: 16, gap: 14, maxWidth: 560, width: '100%', alignSelf: 'center' }}>
@@ -140,16 +182,25 @@ export default function NewBooking() {
         ))}
       </View>
 
-      {item?.kind === 'service' && (
+      {item && item.kind !== 'service' && (
+        <Field label={t.quantity} value={quantity} onChange={setQuantity} keyboard="numeric" error={errors.quantity} />
+      )}
+
+      {item && (
         <>
-          <Field label={t.date} value={date} onChange={setDate} />
-          <Button title={t.seeSlots} onPress={check} />
-          {avail && !avail.slots?.length && <Text>{t.noSlots}</Text>}
-          {!!avail?.slots?.length && (
+          <Text>{item.kind === 'rental' ? (from && !to ? t.pickReturn : t.pickRange) : t.pickDay}</Text>
+          <Calendar month={month} onMonthChange={setMonth} from={from} to={item.kind === 'rental' ? to : null} onSelect={pick} dayInfo={dayInfo} />
+        </>
+      )}
+
+      {item?.kind === 'service' && from && (
+        <>
+          {slots === null && <ActivityIndicator />}
+          {slots?.length === 0 && <Text>{t.noSlots}</Text>}
+          {!!slots?.length && (
             <View accessibilityRole="radiogroup" style={{ flexDirection: 'row', flexWrap: 'wrap', gap: 6 }}>
-              {avail.slots.map((s) => (
-                <Choice key={s.starts_at} selected={slot?.starts_at === s.starts_at} label={hhmm(s.starts_at)}
-                  onPress={() => { setSlot(s); setStaffId(null); }} />
+              {slots.map((s) => (
+                <Choice key={s.starts_at} selected={slot?.starts_at === s.starts_at} label={hhmm(s.starts_at)} onPress={() => { setSlot(s); setStaffId(null); }} />
               ))}
             </View>
           )}
@@ -167,13 +218,9 @@ export default function NewBooking() {
         </>
       )}
 
-      {item?.kind === 'product' && (
+      {item?.kind === 'product' && from && (
         <>
-          <Field label={t.deliveryDate} value={date} onChange={setDate} error={errors.starts_at} />
-          <Field label={t.deliveryTime} value={time} onChange={setTime} />
-          <Field label={t.quantity} value={quantity} onChange={setQuantity} keyboard="numeric" error={errors.quantity} />
-          <Button title={t.check} onPress={check} />
-          {avail?.days?.[0] && <Text>{avail.days[0].available ? t.capacity(avail.days[0].remaining) : t.noCapacity}</Text>}
+          <Field label={t.deliveryTime} value={time} onChange={setTime} error={errors.starts_at} />
           <View style={{ flexDirection: 'row', gap: 6 }}>
             <Choice selected={fulfillment === 'pickup'} label={t.pickup} onPress={() => setFulfillment('pickup')} />
             <Choice selected={fulfillment === 'delivery'} label={t.delivery} onPress={() => setFulfillment('delivery')} />
@@ -187,15 +234,12 @@ export default function NewBooking() {
         </>
       )}
 
-      {item?.kind === 'rental' && (
+      {item?.kind === 'rental' && from && (
         <>
-          <Field label={t.outDate} value={date} onChange={setDate} />
           <Field label={t.outTime} value={time} onChange={setTime} />
-          <Field label={t.backDate} value={backDate} onChange={setBackDate} error={errors.ends_at} />
-          <Field label={t.backTime} value={backTime} onChange={setBackTime} />
-          <Field label={t.quantity} value={quantity} onChange={setQuantity} keyboard="numeric" error={errors.quantity} />
-          <Button title={t.check} onPress={check} />
-          {avail && <Text>{avail.available ? t.free(avail.free_units?.length ?? 0) : t.notEnough}</Text>}
+          {to && <Field label={t.backTime} value={backTime} onChange={setBackTime} error={errors.ends_at} />}
+          {to && !exact && !message && <Text>{t.checking}</Text>}
+          {exact && <Text>{exact.available ? t.free(exact.free_units?.length ?? 0) : t.notEnough}</Text>}
         </>
       )}
 
@@ -207,7 +251,7 @@ export default function NewBooking() {
           <Field label={t.notes} value={notes} onChange={setNotes} />
           {Object.entries(errors).filter(([k]) => k.startsWith('options.')).map(([k, v]) => <Text key={k} accessibilityRole="alert">{v}</Text>)}
           {message && <Text accessibilityRole="alert">{message}</Text>}
-          <Button title={busy ? '…' : t.save} onPress={save} disabled={busy} />
+          <Button title={busy ? '…' : t.save} onPress={save} disabled={busy || !canSave} />
         </>
       )}
     </ScrollView>

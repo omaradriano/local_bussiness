@@ -444,6 +444,28 @@ paths:
   /v1/b/{businessId}/bookings:
     parameters:
       - $ref: "#/components/parameters/BusinessId"
+    get:
+      operationId: listBookings
+      summary: Reservas que se cruzan con [from, to) (máx. 3 meses); activas por defecto
+      parameters:
+        - { name: from, in: query, required: true, schema: { type: string, format: date-time } }
+        - { name: to, in: query, required: true, schema: { type: string, format: date-time } }
+        - { name: kind, in: query, schema: { $ref: "#/components/schemas/ItemKind" } }
+        - { name: status, in: query, schema: { type: string, enum: [active, all], default: active } }
+      responses:
+        "200":
+          description: OK
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [bookings]
+                properties:
+                  bookings:
+                    type: array
+                    items: { $ref: "#/components/schemas/BookingSummary" }
+        "403": { $ref: "#/components/responses/Error" }
+        "422": { $ref: "#/components/responses/Error" }
     post:
       operationId: createBooking
       summary: Alta de cita, pedido o renta en mostrador (dueño o empleado)
@@ -712,6 +734,23 @@ components:
         hold_expires_at: { type: [string, "null"], format: date-time }
         public_token: { type: string }
         created_at: { type: string, format: date-time }
+
+    BookingSummary:
+      type: object
+      required: [id, kind, status, starts_at, ends_at, customer_name, customer_phone, items, units, staff, total, deposit_required]
+      properties:
+        id: { type: string, format: uuid }
+        kind: { $ref: "#/components/schemas/ItemKind" }
+        status: { $ref: "#/components/schemas/BookingStatus" }
+        starts_at: { type: string, format: date-time }
+        ends_at: { type: [string, "null"], format: date-time }
+        customer_name: { type: string }
+        customer_phone: { type: string }
+        items: { type: string }
+        units: { type: array, items: { type: string } }
+        staff: { type: array, items: { type: string } }
+        total: { type: integer, format: int64 }
+        deposit_required: { type: integer, format: int64 }
 
     Ref:
       type: object
