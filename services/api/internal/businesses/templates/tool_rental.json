@@ -51,7 +51,21 @@
       "required": true,
       "config": {
         "bucket": "private-docs",
-        "max_files": 2
+        "max_files": 2,
+        "customer_doc": "ine"
+      }
+    },
+    {
+      "applies_to_kind": "rental",
+      "moment": "before_status",
+      "to_status": "checked_out",
+      "step_type": "photo",
+      "label": "Comprobante de domicilio",
+      "required": true,
+      "config": {
+        "bucket": "private-docs",
+        "max_files": 2,
+        "customer_doc": "proof_of_address"
       }
     },
     {

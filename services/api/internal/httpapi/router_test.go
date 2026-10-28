@@ -16,6 +16,7 @@ import (
 	"github.com/omaradriano/local_bussiness/services/api/internal/bookings"
 	"github.com/omaradriano/local_bussiness/services/api/internal/businesses"
 	"github.com/omaradriano/local_bussiness/services/api/internal/catalog"
+	"github.com/omaradriano/local_bussiness/services/api/internal/customers"
 	"github.com/omaradriano/local_bussiness/services/api/internal/files"
 	"github.com/omaradriano/local_bussiness/services/api/internal/media"
 	"github.com/omaradriano/local_bussiness/services/api/internal/settings"
@@ -149,6 +150,7 @@ func doBody(method, path, token string, body io.Reader, headers ...string) *http
 		Availability:   fakeAvailability{},
 		Bookings:       fakeBookings{},
 		Settings:       &fakeSettings{r: settings.DefaultRentals()},
+		Customers:      &fakeCustomers{},
 		Now:            func() time.Time { return fixedNow },
 		Photos:         &Photos{Media: fakeMedia{}, Files: fakeFiles{}, EnqueueImage: fakeEnqueue, CDNBase: "https://cdn.test"},
 		AllowedOrigins: []string{"http://localhost:8082", "https://local-bussiness-staging-*.vercel.app"},
@@ -759,5 +761,78 @@ func TestSettingsRoutes(t *testing.T) {
 	}
 	if rec := doBody(http.MethodPatch, path, "ok", strings.NewReader(`{"rentals":{"late_fee_multiplier":20}}`)); rec.Code != http.StatusUnprocessableEntity {
 		t.Fatalf("invalid multiplier: %d", rec.Code)
+	}
+}
+
+const customerID = "c0c0c0c0-c0c0-c0c0-c0c0-c0c0c0c0c0c0"
+
+type fakeCustomers struct{ saved customers.Customer }
+
+func (*fakeCustomers) Vertical(context.Context, string) (string, error) { return "tool_rental", nil }
+func (*fakeCustomers) Search(_ context.Context, _, q string, _ int) ([]customers.Customer, error) {
+	return []customers.Customer{{ID: customerID, Name: "Ana " + q}}, nil
+}
+func (*fakeCustomers) Get(_ context.Context, _, id string) (customers.Customer, error) {
+	if id != customerID {
+		return customers.Customer{}, customers.ErrNotFound
+	}
+	a, g, gp := "Calle 1", "Pedro", "+526147654321"
+	return customers.Customer{ID: id, Name: "Ana", Phone: "+526141234567", Address: &a, GuarantorName: &g, GuarantorPhone: &gp}, nil
+}
+func (f *fakeCustomers) Create(_ context.Context, _ string, c customers.Customer) (customers.Customer, error) {
+	if c.Phone == "+526140000000" {
+		return customers.Customer{}, customers.ErrPhoneTaken
+	}
+	c.ID = customerID
+	f.saved = c
+	return c, nil
+}
+func (*fakeCustomers) IDByPhone(context.Context, string, string) (string, error) {
+	return customerID, nil
+}
+func (f *fakeCustomers) Update(_ context.Context, _ string, c customers.Customer) (customers.Customer, error) {
+	f.saved = c
+	return c, nil
+}
+func (*fakeCustomers) AddDocuments(_ context.Context, _, id, docType string, keys []string, _ string) (customers.Customer, error) {
+	return customers.Customer{ID: id, Documents: []customers.Document{{Type: docType, Key: keys[0]}}}, nil
+}
+func (*fakeCustomers) DeleteDocument(context.Context, string, string, string) (string, error) {
+	return "k", nil
+}
+
+func TestCustomerRoutes(t *testing.T) {
+	base := "/v1/b/" + bizA + "/customers"
+	one := base + "/" + customerID
+	prefix := bizA + "/customers/" + customerID + "/"
+	full := `{"name":"Ana","phone":"614 123 4567","address":"Calle 1","guarantor_name":"Pedro","guarantor_phone":"6147654321"`
+	cases := []struct {
+		name, method, path, token, body string
+		wantCode                        int
+		wantIn                          string
+	}{
+		{"buscar", http.MethodGet, base + "?q=López", "staff", "", http.StatusOK, `"name":"Ana López"`},
+		{"alta completa (teléfono normalizado)", http.MethodPost, base, "staff", full + `}`, http.StatusCreated, `"phone":"+526141234567"`},
+		{"renta exige aval", http.MethodPost, base, "ok", `{"name":"Ana","phone":"6141234567","address":"Calle 1"}`, http.StatusUnprocessableEntity, `"guarantor_name"`},
+		{"teléfono repetido", http.MethodPost, base, "ok", strings.Replace(full, "614 123 4567", "6140000000", 1) + `}`, http.StatusConflict, `"customer_id":"` + customerID},
+		{"empleada no marca de confianza", http.MethodPatch, one + "/", "staff", `{"trusted":true}`, http.StatusOK, `"trusted":false`},
+		{"dueño marca de confianza", http.MethodPatch, one + "/", "ok", `{"trusted":true}`, http.StatusOK, `"trusted":true`},
+		{"cliente inexistente", http.MethodGet, base + "/eeeeeeee-0000-0000-0000-000000000000/", "ok", "", http.StatusNotFound, `"not_found"`},
+		{"subir INE", http.MethodPost, one + "/uploads", "staff", `{"doc_type":"ine","content_type":"image/jpeg","size":500000}`, http.StatusCreated, `"key":"` + prefix},
+		{"tipo de documento inválido", http.MethodPost, one + "/uploads", "staff", `{"doc_type":"pasaporte","content_type":"image/jpeg","size":1}`, http.StatusUnprocessableEntity, `"doc_type"`},
+		{"registrar documento", http.MethodPost, one + "/documents", "staff", `{"doc_type":"proof_of_address","keys":["` + prefix + `a.jpg"]}`, http.StatusOK, `"doc_type":"proof_of_address"`},
+		{"documento de otro cliente", http.MethodPost, one + "/documents", "staff", `{"doc_type":"ine","keys":["` + bizA + `/customers/otro/a.jpg"]}`, http.StatusUnprocessableEntity, `"keys"`},
+		{"ver documento", http.MethodGet, one + "/files?key=" + prefix + "a.jpg", "staff", "", http.StatusOK, `"url":"https://s3.test/private-docs/`},
+		{"documento de otro negocio", http.MethodGet, one + "/files?key=" + bizB + "/x.jpg", "staff", "", http.StatusNotFound, `"not_found"`},
+		{"empleada no borra documentos", http.MethodDelete, one + "/documents/" + customerID, "staff", "", http.StatusForbidden, `"forbidden"`},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			uploaded = true
+			rec := doBody(tc.method, tc.path, tc.token, strings.NewReader(tc.body))
+			if rec.Code != tc.wantCode || !strings.Contains(rec.Body.String(), tc.wantIn) {
+				t.Fatalf("got %d %s", rec.Code, rec.Body)
+			}
+		})
 	}
 }

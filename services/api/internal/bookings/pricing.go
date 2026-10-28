@@ -3,30 +3,13 @@
 package bookings
 
 import (
-	"strings"
 	"time"
-	"unicode"
+
+	"github.com/omaradriano/local_bussiness/services/api/internal/phone"
 )
 
-// NormalizePhone returns E.164 or "" if it can't be a phone. A bare 10-digit number is Mexican (+52).
-func NormalizePhone(in string) string {
-	plus := strings.HasPrefix(strings.TrimSpace(in), "+")
-	var digits strings.Builder
-	for _, r := range in {
-		if unicode.IsDigit(r) {
-			digits.WriteRune(r)
-		}
-	}
-	d := digits.String()
-	switch {
-	case len(d) == 10 && !plus:
-		return "+52" + d
-	case len(d) >= 11 && len(d) <= 15 && d[0] != '0':
-		return "+" + d
-	default:
-		return ""
-	}
-}
+// NormalizePhone returns E.164 or "" (see phone.Normalize).
+func NormalizePhone(in string) string { return phone.Normalize(in) }
 
 // RentalPeriods: how many price units a rental lasts. A started unit counts as a whole one.
 // day = 24 h, weekend = up to 3 days (Fri–Mon), week = 7 days.
