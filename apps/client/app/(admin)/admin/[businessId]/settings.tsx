@@ -6,7 +6,7 @@ import { api } from '../../../../lib/api';
 import { errorText, fieldErrors } from '../../../../lib/errors';
 import { useBusiness } from '../../../../lib/useMe';
 import { useSettings, type Settings } from '../../../../lib/useSettings';
-import { Button, Cell, Field, Group, Notice, Screen, Text } from '../../../../ui';
+import { Button, Cell, Field, Group, Notice, Screen, Text, useToast } from '../../../../ui';
 
 const t = strings.settings;
 type Rentals = Settings['rentals'];
@@ -15,11 +15,11 @@ export default function SettingsScreen() {
   const { businessId } = useLocalSearchParams<{ businessId: string }>();
   const { business } = useBusiness(businessId);
   const { settings, setSettings } = useSettings(businessId);
+  const toast = useToast();
   const [r, setR] = useState<Rentals | null>(null);
   const [multiplier, setMultiplier] = useState('1');
   const [inspection, setInspection] = useState('0');
   const [errors, setErrors] = useState<Record<string, string>>({});
-  const [message, setMessage] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
 
   useEffect(() => {
@@ -36,15 +36,14 @@ export default function SettingsScreen() {
   async function save() {
     setBusy(true);
     setErrors({});
-    setMessage(null);
     const { data, error, response } = await api.PATCH('/v1/b/{businessId}/settings', {
       params: { path: { businessId } },
       body: { rentals: { ...r!, late_fee_multiplier: Number(multiplier.replace(',', '.')), inspection_minutes: Number(inspection) || 0 } },
     });
     setBusy(false);
-    if (data) { setSettings(data); return setMessage(t.saved); }
+    if (data) { setSettings(data); return toast(t.saved); }
     setErrors(fieldErrors(error));
-    setMessage(errorText(error, response.status));
+    toast(errorText(error, response.status), 'error');
   }
 
   return (
@@ -75,7 +74,6 @@ export default function SettingsScreen() {
           hint={t.inspectionHint} error={errors.inspection_minutes} />
       </Group>
 
-      {message && <View style={{ marginBottom: 16 }}><Notice tone={message === t.saved ? 'success' : 'warning'}>{message}</Notice></View>}
       {isOwner && <Button variant="primary" busy={busy} onPress={save}>{t.save}</Button>}
     </Screen>
   );

@@ -4,7 +4,7 @@ import { splitE164, strings, toE164, type CountryCode } from '@lb/shared';
 import { ZoomableImage } from './ZoomableImage';
 import { useEffect, useState } from 'react';
 import { Switch, View } from 'react-native';
-import { Button, Cell, Field, Group, Notice, Text, useUI } from '../ui';
+import { Button, Cell, Field, Group, Text, useToast, useUI } from '../ui';
 import { api } from '../lib/api';
 import { errorText, fieldErrors } from '../lib/errors';
 import { pickPhotos, uploadCustomerDoc } from '../lib/photos';
@@ -29,7 +29,7 @@ export function CustomerForm({ businessId, customer, isOwner, onSaved, onExistin
     guarantorName: customer?.guarantor_name ?? '', gCode: g.code, gNational: g.national, trusted: customer?.trusted ?? false, notes: customer?.notes ?? '',
   });
   const [errors, setErrors] = useState<Record<string, string>>({});
-  const [message, setMessage] = useState<string | null>(null);
+  const toast = useToast();
   const [existing, setExisting] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
   const set = (patch: Partial<typeof f>) => setF({ ...f, ...patch });
@@ -43,7 +43,6 @@ export function CustomerForm({ businessId, customer, isOwner, onSaved, onExistin
     if (Object.keys(local).length) return setErrors(local);
     setBusy(true);
     setErrors({});
-    setMessage(null);
     setExisting(null);
     const body = {
       name: f.name, phone: phone!, email: f.email, address: f.address, guarantor_name: f.guarantorName, guarantor_phone: gPhone ?? '', notes: f.notes,
@@ -53,11 +52,11 @@ export function CustomerForm({ businessId, customer, isOwner, onSaved, onExistin
       ? await api.PATCH('/v1/b/{businessId}/customers/{customerId}/', { params: { path: { businessId, customerId: customer.id } }, body })
       : await api.POST('/v1/b/{businessId}/customers', { params: { path: { businessId } }, body });
     setBusy(false);
-    if (res.data) { setMessage(t.saved); return onSaved(res.data); }
+    if (res.data) { toast(t.saved); return onSaved(res.data); }
     const fe = fieldErrors(res.error);
     setErrors(fe);
     if (res.response.status === 409) setExisting(fe.customer_id ?? null);
-    setMessage(errorText(res.error, res.response.status));
+    toast(errorText(res.error, res.response.status), 'error');
   }
 
   return (
@@ -80,7 +79,6 @@ export function CustomerForm({ businessId, customer, isOwner, onSaved, onExistin
           <Cell label={t.trustedShort} accessory={<Switch accessibilityLabel={t.trusted} value={f.trusted} onValueChange={(trusted) => set({ trusted })} />} />
         </Group>
       )}
-      {message && <View style={{ marginBottom: 12 }}><Notice tone={message === t.saved ? 'success' : 'warning'}>{message}</Notice></View>}
       {existing && onExisting && <Button onPress={() => onExisting(existing)} style={{ marginBottom: 8 }}>{t.openExisting}</Button>}
       <Button variant="primary" busy={busy} onPress={save}>{t.save}</Button>
     </View>
@@ -92,6 +90,7 @@ export function CustomerDocuments({ businessId, customer, isOwner, onChange }: {
   businessId: string; customer: Customer; isOwner: boolean; onChange: (c: Customer) => void;
 }) {
   const ui = useUI();
+  const toast = useToast();
   const [busy, setBusy] = useState<DocType | null>(null);
   const [message, setMessage] = useState<string | null>(null);
   const [urls, setUrls] = useState<Record<string, string>>({});
@@ -102,18 +101,18 @@ export function CustomerDocuments({ businessId, customer, isOwner, onChange }: {
     setMessage(null);
     const picked = await pickPhotos(4);
     if (picked === 'cancelled') return setBusy(null);
-    if (typeof picked === 'string') { setBusy(null); return setMessage(picked); }
+    if (typeof picked === 'string') { setBusy(null); setMessage(null); return toast(picked, 'error'); }
     const keys: string[] = [];
     for (const [i, photo] of picked.photos.entries()) {
       setMessage(strings.photos.progress(i + 1, picked.photos.length));
       const up = await uploadCustomerDoc(businessId, customer.id, docType, photo);
-      if ('error' in up) { setBusy(null); return setMessage(up.error); }
+      if ('error' in up) { setBusy(null); setMessage(null); return toast(up.error, 'error'); }
       keys.push(up.key);
     }
     const { data, error, response } = await api.POST('/v1/b/{businessId}/customers/{customerId}/documents', { params: { path }, body: { doc_type: docType, keys } });
     setBusy(null);
-    setMessage(data ? null : errorText(error, response.status));
-    if (data) onChange(data);
+    setMessage(null);
+    if (data) { toast(t.docSaved); onChange(data); } else toast(errorText(error, response.status), 'error');
   }
 
   // Load the thumbnails right away (short-lived signed URLs from the private bucket).

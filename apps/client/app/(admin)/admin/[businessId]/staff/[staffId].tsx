@@ -8,7 +8,7 @@ import { HoursEditor } from '../../../../../components/HoursEditor';
 import { api } from '../../../../../lib/api';
 import { errorText, fieldErrors } from '../../../../../lib/errors';
 import { useBusiness } from '../../../../../lib/useMe';
-import { Button, Cell, Field, Group, Notice, Screen, Text, useUI } from '../../../../../ui';
+import { Button, Cell, Field, Group, Screen, Text, useToast, useUI } from '../../../../../ui';
 
 type Staff = components['schemas']['StaffMember'];
 type Item = components['schemas']['CatalogItem'];
@@ -19,6 +19,7 @@ export default function StaffDetail() {
   const { business } = useBusiness(businessId);
   const isOwner = business?.role === 'owner';
   const ui = useUI();
+  const toast = useToast();
   const [person, setPerson] = useState<Staff | null>(null);
   const [services, setServices] = useState<Item[]>([]);
   const [selected, setSelected] = useState<Set<string>>(new Set());
@@ -52,7 +53,6 @@ export default function StaffDetail() {
   // Name/active, services and hours are three calls; stop at the first one that fails.
   async function save(active = person!.active) {
     setBusy(true);
-    setMessage(null);
     const steps = [
       () => api.PATCH('/v1/b/{businessId}/staff/{staffId}/', { params: { path }, body: { name, active } }),
       () => api.PUT('/v1/b/{businessId}/staff/{staffId}/services', { params: { path }, body: { service_ids: [...selected] } }),
@@ -62,12 +62,12 @@ export default function StaffDetail() {
       const { error, response } = await step();
       if (!response.ok) {
         setBusy(false);
-        return setMessage(fieldErrors(error).name ?? errorText(error, response.status));
+        return toast(fieldErrors(error).name ?? errorText(error, response.status), 'error');
       }
     }
     setBusy(false);
     setPerson({ ...person!, name, active });
-    setMessage(t.saved);
+    toast(t.saved);
   }
 
   return (
@@ -85,7 +85,6 @@ export default function StaffDetail() {
       </Group>
       <Text variant="footnote" color="labelSecondary" style={{ marginHorizontal: 16, marginBottom: 6 }}>{t.hours.toUpperCase()}</Text>
       <HoursEditor week={week} onChange={setWeek} editable={isOwner} />
-      {message && <View style={{ marginBottom: 12 }}><Notice tone={message === t.saved ? 'success' : 'warning'}>{message}</Notice></View>}
       {isOwner && (
         <View style={{ gap: 8 }}>
           <Button variant="primary" busy={busy} onPress={() => save()}>{t.save}</Button>

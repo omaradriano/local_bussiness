@@ -10,7 +10,7 @@ import { api } from '../../../../../lib/api';
 import { errorText, fieldErrors } from '../../../../../lib/errors';
 import { useBusiness } from '../../../../../lib/useMe';
 import { useSettings } from '../../../../../lib/useSettings';
-import { Button, Chip, Chips, Field as UIField, Notice, Row, Screen, Segmented, Step, Text, type StepState } from '../../../../../ui';
+import { Button, Chip, Chips, Field as UIField, Notice, Row, Screen, Segmented, Step, Text, useToast, type StepState } from '../../../../../ui';
 
 type Item = components['schemas']['CatalogItem'];
 type Availability = components['schemas']['Availability'];
@@ -30,6 +30,7 @@ export default function NewBooking() {
   const { businessId } = useLocalSearchParams<{ businessId: string }>();
   const { business } = useBusiness(businessId);
   const { settings } = useSettings(businessId);
+  const toast = useToast();
   const today = todayISO();
   const [items, setItems] = useState<Item[] | null>(null);
   const [staffNames, setStaffNames] = useState<Record<string, string>>({});
@@ -144,8 +145,8 @@ export default function NewBooking() {
     // stays with the customer). Only the visible month is loaded; the exact check of the whole range runs right after.
     const spanClosed = settings?.rentals.rentals_span_closed_days ?? true;
     for (let d = from; d <= date; d = addDays(d, 1)) {
-      if (days[d] && days[d].remaining < qty) { setMessage(t.rangeBlocked); return; }
-      if (!spanClosed && days[d]?.closed) { setMessage(t.closedNotAllowed); return; }
+      if (days[d] && days[d].remaining < qty) { toast(t.rangeBlocked, 'error'); return; }
+      if (!spanClosed && days[d]?.closed) { toast(t.closedNotAllowed, 'error'); return; }
     }
     setTo(date);
   }
@@ -153,9 +154,9 @@ export default function NewBooking() {
   async function save() {
     if (!item) return;
     const startsAt = item.kind === 'service' ? slot?.starts_at : outISO;
-    if (!startsAt) return setMessage(item.kind === 'service' ? t.pickDay : item.kind === 'rental' ? t.pickRange : t.pickDay);
-    if (item.kind === 'rental' && !backISO) return setMessage(t.pickReturn);
-    if (!customer) return setMessage(strings.customers.pick);
+    if (!startsAt) return toast(item.kind === 'rental' ? t.pickRange : t.pickDay, 'error');
+    if (item.kind === 'rental' && !backISO) return toast(t.pickReturn, 'error');
+    if (!customer) return toast(strings.customers.pick, 'error');
     const partial = payMode === 'partial' ? parsePesos(payAmount) : null;
     if (payMode === 'partial' && !partial) return setErrors({ amount: t.invalidAmount });
     setBusy(true);
@@ -179,9 +180,9 @@ export default function NewBooking() {
     if (res.data) {
       return router.replace({ pathname: '/admin/[businessId]/bookings/[bookingId]', params: { businessId, bookingId: res.data.id } });
     }
-    if (res.response.status === 409) { setSlot(null); setTo(null); setRefresh((n) => n + 1); return setMessage(t.taken); }
+    if (res.response.status === 409) { setSlot(null); setTo(null); setRefresh((n) => n + 1); return toast(t.taken, 'error'); }
     setErrors(fieldErrors(res.error));
-    setMessage(errorText(res.error, res.response.status));
+    toast(errorText(res.error, res.response.status), 'error');
   }
 
   if (!business || !items) return <ActivityIndicator style={{ marginTop: 24 }} />;
