@@ -55,12 +55,13 @@ type Booking struct {
 	PublicToken     string     `json:"public_token"`
 	CreatedAt       time.Time  `json:"created_at"`
 
-	Payments []Payment   `json:"payments"`
-	Balance  Balance     `json:"balance"`
-	Events   []Event     `json:"events"`
-	Steps    []Step      `json:"steps"`
-	Next     []string    `json:"next"` // status moves available from the panel
-	Rental   *RentalInfo `json:"rental"`
+	Payments  []Payment   `json:"payments"`
+	Documents []Document  `json:"documents"` // files attached with a free name
+	Balance   Balance     `json:"balance"`
+	Events    []Event     `json:"events"`
+	Steps     []Step      `json:"steps"`
+	Next      []string    `json:"next"` // status moves available from the panel
+	Rental    *RentalInfo `json:"rental"`
 }
 
 // RentalInfo: when the units went out and came back, and the late fee it suggests.
@@ -133,6 +134,9 @@ func Get(ctx context.Context, db store.DB, businessID, id string) (Booking, erro
 	}
 
 	if b.Payments, err = payments(ctx, db, b.ID); err != nil {
+		return b, err
+	}
+	if b.Documents, err = documents(ctx, db, b.ID); err != nil {
 		return b, err
 	}
 	b.Balance = ComputeBalance(b.Total, b.Payments)

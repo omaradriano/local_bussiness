@@ -72,14 +72,15 @@
       "applies_to_kind": "rental",
       "moment": "before_status",
       "to_status": "checked_out",
-      "step_type": "photo",
+      "step_type": "file_upload",
       "label": "Pagaré",
       "required": true,
       "config": {
         "bucket": "private-docs",
         "max_files": 4,
         "section": "additional"
-      }
+      },
+      "active": false
     },
     {
       "applies_to_kind": "rental",

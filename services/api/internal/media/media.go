@@ -31,6 +31,28 @@ func ValidateUpload(contentType string, size int64) string {
 	return ""
 }
 
+// MaxDocumentBytes: a scanned contract or a PDF can be bigger than a photo.
+const MaxDocumentBytes = 10 << 20
+
+// ValidateDocument: private documents accept the photo formats and PDF.
+func ValidateDocument(contentType string, size int64) string {
+	if _, ok := extByType[contentType]; !ok && contentType != "application/pdf" {
+		return "Solo se aceptan fotos (JPG, PNG, WebP) o PDF."
+	}
+	if size <= 0 || size > MaxDocumentBytes {
+		return "El archivo debe pesar como máximo 10 MB."
+	}
+	return ""
+}
+
+// DocumentExt: file extension for a document upload.
+func DocumentExt(contentType string) string {
+	if contentType == "application/pdf" {
+		return "pdf"
+	}
+	return Ext(contentType)
+}
+
 type Image struct {
 	ID       string            `json:"id"`
 	ItemID   string            `json:"item_id"`

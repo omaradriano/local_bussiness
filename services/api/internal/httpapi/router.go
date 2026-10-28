@@ -51,6 +51,10 @@ type Deps struct {
 type SettingsRepo interface {
 	Rentals(ctx context.Context, businessID string) (settings.Rentals, error)
 	SaveRentals(ctx context.Context, businessID string, r settings.Rentals) error
+	DocumentTypes(ctx context.Context, businessID string) ([]settings.DocumentType, error)
+	DocumentType(ctx context.Context, businessID, id string) (settings.DocumentType, error)
+	CreateDocumentType(ctx context.Context, businessID string, d settings.DocumentType) (settings.DocumentType, error)
+	UpdateDocumentType(ctx context.Context, businessID string, d settings.DocumentType) (settings.DocumentType, error)
 }
 
 type BookingsRepo interface {
@@ -68,6 +72,8 @@ type BookingsRepo interface {
 	Quote(ctx context.Context, businessID string, in bookings.QuoteRequest) (bookings.QuoteResult, error)
 	History(ctx context.Context, businessID string, f bookings.HistoryFilter) ([]bookings.Summary, error)
 	RemoveStepFile(ctx context.Context, businessID, bookingID, stepID, key string) (bookings.Booking, error)
+	AddDocument(ctx context.Context, businessID, bookingID, name string, keys []string, actor string, exists bookings.FileExists) (bookings.Booking, error)
+	RemoveDocument(ctx context.Context, businessID, bookingID, docID string) (bookings.Booking, []string, error)
 }
 
 // writeBooking maps the bookings errors to HTTP and writes the booking on success.
@@ -318,6 +324,57 @@ func NewRouter(d Deps) http.Handler {
 				apierr.JSON(w, http.StatusOK, map[string]any{"rentals": rs})
 			})
 
+			// Extra documents asked in every rental ("Documentos adicionales"), configured by the owner.
+			r.Get("/settings/documents", func(w http.ResponseWriter, r *http.Request) {
+				m, _ := auth.MemberFrom(r.Context())
+				list, err := d.Settings.DocumentTypes(r.Context(), m.BusinessID)
+				if err != nil {
+					internalError(w, r, "document types", err)
+					return
+				}
+				apierr.JSON(w, http.StatusOK, map[string]any{"documents": list})
+			})
+			saveDocType := func(w http.ResponseWriter, r *http.Request, current settings.DocumentType, create bool) {
+				m, _ := auth.MemberFrom(r.Context())
+				var in settings.DocumentTypeInput
+				if !decode(w, r, &in) {
+					return
+				}
+				next := current.Apply(in)
+				if errs := next.Validate(); errs != nil {
+					invalid(w, "Revisa el documento.", errs)
+					return
+				}
+				var saved settings.DocumentType
+				var err error
+				if create {
+					saved, err = d.Settings.CreateDocumentType(r.Context(), m.BusinessID, next)
+				} else {
+					saved, err = d.Settings.UpdateDocumentType(r.Context(), m.BusinessID, next)
+				}
+				if err != nil {
+					internalError(w, r, "save document type", err)
+					return
+				}
+				apierr.JSON(w, map[bool]int{true: http.StatusCreated, false: http.StatusOK}[create], saved)
+			}
+			r.With(auth.RequireRole("owner")).Post("/settings/documents", func(w http.ResponseWriter, r *http.Request) {
+				saveDocType(w, r, settings.DocumentType{Active: true}, true)
+			})
+			r.With(auth.RequireRole("owner"), requireUUIDParam("docTypeId", "El documento no existe.")).Patch("/settings/documents/{docTypeId}", func(w http.ResponseWriter, r *http.Request) {
+				m, _ := auth.MemberFrom(r.Context())
+				current, err := d.Settings.DocumentType(r.Context(), m.BusinessID, chi.URLParam(r, "docTypeId"))
+				if errors.Is(err, settings.ErrNotFound) {
+					notFound(w, "El documento no existe.")
+					return
+				}
+				if err != nil {
+					internalError(w, r, "document type", err)
+					return
+				}
+				saveDocType(w, r, current, false)
+			})
+
 			r.With(auth.RequireRole("owner")).Patch("/settings", func(w http.ResponseWriter, r *http.Request) {
 				m, _ := auth.MemberFrom(r.Context())
 				var body struct {
@@ -513,12 +570,41 @@ func NewRouter(d Deps) http.Handler {
 					if !decode(w, r, &body) {
 						return
 					}
-					if msg := media.ValidateUpload(body.ContentType, body.Size); msg != "" {
-						invalid(w, msg, map[string]string{"file": msg})
-						return
+					// Photos only, except private documents (free documents and private steps like an
+					// ID or a promissory note), which also take PDF.
+					check := func(document bool) bool {
+						msg := media.ValidateUpload(body.ContentType, body.Size)
+						if document {
+							msg = media.ValidateDocument(body.ContentType, body.Size)
+						}
+						if msg != "" {
+							invalid(w, msg, map[string]string{"file": msg})
+						}
+						return msg == ""
 					}
 					bookingID := chi.URLParam(r, "bookingId")
+					if body.Purpose == "document" {
+						if !check(true) {
+							return
+						}
+						if _, err := d.Bookings.Get(r.Context(), m.BusinessID, bookingID); err != nil {
+							writeBooking(w, r, bookings.Booking{}, err)
+							return
+						}
+						key := bookings.DocumentFilePrefix(m.BusinessID, bookingID) + bookings.RandomName(media.DocumentExt(body.ContentType))
+						url, err := d.Photos.Files.PresignPut(r.Context(), files.PrivateDocs, key, body.ContentType, body.Size)
+						if err != nil {
+							internalError(w, r, "presign", err)
+							return
+						}
+						apierr.JSON(w, http.StatusCreated, map[string]any{"key": key, "upload_url": url,
+							"upload_headers": map[string]string{"Content-Type": body.ContentType}})
+						return
+					}
 					if body.Purpose == "payment" {
+						if !check(false) {
+							return
+						}
 						if _, err := d.Bookings.Get(r.Context(), m.BusinessID, bookingID); err != nil {
 							writeBooking(w, r, bookings.Booking{}, err)
 							return
@@ -546,7 +632,10 @@ func NewRouter(d Deps) http.Handler {
 						internalError(w, r, "step upload", err)
 						return
 					}
-					key := bookings.NewFileKey(m.BusinessID, bookingID, media.Ext(body.ContentType))
+					if !check(bucket == files.PrivateDocs) {
+						return
+					}
+					key := bookings.NewFileKey(m.BusinessID, bookingID, media.DocumentExt(body.ContentType))
 					url, err := d.Photos.Files.PresignPut(r.Context(), bucket, key, body.ContentType, body.Size)
 					if err != nil {
 						internalError(w, r, "presign", err)
@@ -599,6 +688,30 @@ func NewRouter(d Deps) http.Handler {
 						// best effort: the reference is gone either way; the step's bucket is one of the two private ones
 						_ = d.Photos.Files.Delete(r.Context(), files.PrivateDocs, key)
 						_ = d.Photos.Files.Delete(r.Context(), files.RentalEvidence, key)
+					}
+					writeBooking(w, r, b, err)
+				})
+
+				r.Post("/documents", func(w http.ResponseWriter, r *http.Request) {
+					m, _ := auth.MemberFrom(r.Context())
+					var body struct {
+						Name  string   `json:"name"`
+						Files []string `json:"files"`
+					}
+					if !decode(w, r, &body) {
+						return
+					}
+					b, err := d.Bookings.AddDocument(r.Context(), m.BusinessID, chi.URLParam(r, "bookingId"), body.Name, body.Files, m.UserID, d.fileExists)
+					writeBooking(w, r, b, err)
+				})
+
+				r.With(requireUUIDParam("docId", "El documento no existe.")).Delete("/documents/{docId}", func(w http.ResponseWriter, r *http.Request) {
+					m, _ := auth.MemberFrom(r.Context())
+					b, keys, err := d.Bookings.RemoveDocument(r.Context(), m.BusinessID, chi.URLParam(r, "bookingId"), chi.URLParam(r, "docId"))
+					if err == nil && d.Photos != nil && d.Photos.Files != nil {
+						for _, k := range keys {
+							_ = d.Photos.Files.Delete(r.Context(), files.PrivateDocs, k) // best effort: the row is gone
+						}
 					}
 					writeBooking(w, r, b, err)
 				})

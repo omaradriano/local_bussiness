@@ -47,3 +47,13 @@ func TestLateFeePerDay(t *testing.T) {
 		}
 	}
 }
+
+func TestDocumentTypeInput(t *testing.T) {
+	d := DocumentType{Name: "Pagaré", Required: true}.Apply(DocumentTypeInput{Name: ptr("  Contrato   de  renta "), Active: ptr(true)})
+	if d.Name != "Contrato de renta" || !d.Active || !d.Required || d.Validate() != nil {
+		t.Fatalf("apply: %+v %v", d, d.Validate())
+	}
+	if (DocumentType{}).Apply(DocumentTypeInput{Name: ptr("   ")}).Validate()["name"] == "" {
+		t.Fatal("blank name accepted")
+	}
+}

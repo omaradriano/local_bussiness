@@ -606,6 +606,17 @@ func (fakeBookings) RemoveStepFile(_ context.Context, _, id, _, key string) (boo
 	return bookings.Booking{ID: id, Status: "confirmed"}, nil
 }
 
+func (fakeBookings) AddDocument(_ context.Context, _, id, name string, keys []string, _ string, _ bookings.FileExists) (bookings.Booking, error) {
+	if name == "" {
+		return bookings.Booking{}, bookings.Invalid{Field: "name", Message: "nombre"}
+	}
+	return bookings.Booking{ID: id, Documents: []bookings.Document{{Name: name, Files: keys}}}, nil
+}
+
+func (fakeBookings) RemoveDocument(_ context.Context, _, id, _ string) (bookings.Booking, []string, error) {
+	return bookings.Booking{ID: id, Documents: []bookings.Document{}}, []string{"k"}, nil
+}
+
 func (fakeBookings) Inventory(context.Context, string) ([]bookings.InventoryRow, error) {
 	return []bookings.InventoryRow{{State: "available", UnitCode: "RM-01"}}, nil
 }
@@ -794,7 +805,7 @@ func TestRentalFlowRoutes(t *testing.T) {
 	}{
 		{"subir INE", http.MethodPost, one + "/uploads", `{"step_id":"` + stepID + `","content_type":"image/jpeg","size":900000}`, true, http.StatusCreated, `"key":"` + prefix},
 		{"paso sin archivos o ajeno", http.MethodPost, one + "/uploads", `{"step_id":"eeeeeeee-0000-0000-0000-000000000000","content_type":"image/jpeg","size":1}`, true, http.StatusNotFound, `"not_found"`},
-		{"tipo de archivo inválido", http.MethodPost, one + "/uploads", `{"step_id":"` + stepID + `","content_type":"application/pdf","size":1}`, true, http.StatusUnprocessableEntity, `"file"`},
+		{"tipo de archivo inválido", http.MethodPost, one + "/uploads", `{"step_id":"` + stepID + `","content_type":"text/plain","size":1}`, true, http.StatusUnprocessableEntity, `"file"`},
 		{"completar paso", http.MethodPost, one + "/steps/" + stepID, `{"files":["` + prefix + `a.jpg"]}`, true, http.StatusOK, `"status":"done"`},
 		{"completar con foto sin subir", http.MethodPost, one + "/steps/" + stepID, `{"files":["` + prefix + `a.jpg"]}`, false, http.StatusUnprocessableEntity, `"files"`},
 		{"ver archivo propio", http.MethodGet, one + "/files?bucket=private-docs&key=" + prefix + "a.jpg", "", true, http.StatusOK, `"url":"https://s3.test/private-docs/`},
@@ -805,6 +816,12 @@ func TestRentalFlowRoutes(t *testing.T) {
 		{"devolución con recargo sugerido", http.MethodPost, one + "/return", `{}`, true, http.StatusOK, `"late_fee_suggested":60000`},
 		{"quitar foto de un paso", http.MethodDelete, one + "/steps/" + stepID + "/files?key=" + prefix + "a.jpg", "", true, http.StatusOK, `"status":"confirmed"`},
 		{"quitar foto inexistente", http.MethodDelete, one + "/steps/" + stepID + "/files", "", true, http.StatusNotFound, `"not_found"`},
+		{"subir documento PDF", http.MethodPost, one + "/uploads", `{"purpose":"document","content_type":"application/pdf","size":2000000}`, true, http.StatusCreated, `.pdf"`},
+		{"PDF en evidencia de pago no", http.MethodPost, one + "/uploads", `{"purpose":"payment","content_type":"application/pdf","size":1000}`, true, http.StatusUnprocessableEntity, `"file"`},
+		{"PDF en paso privado", http.MethodPost, one + "/uploads", `{"step_id":"` + stepID + `","content_type":"application/pdf","size":1000}`, true, http.StatusCreated, `.pdf"`},
+		{"agregar documento", http.MethodPost, one + "/documents", `{"name":"Contrato","files":["` + prefix + `documents/a.pdf"]}`, true, http.StatusOK, `"name":"Contrato"`},
+		{"documento sin nombre", http.MethodPost, one + "/documents", `{"name":"","files":[]}`, true, http.StatusUnprocessableEntity, `"name"`},
+		{"quitar documento", http.MethodDelete, one + "/documents/" + stepID, "", true, http.StatusOK, `"documents":[]`},
 		{"subir comprobante de pago", http.MethodPost, one + "/uploads", `{"purpose":"payment","content_type":"image/jpeg","size":1000}`, true, http.StatusCreated, `"key":"` + prefix + `payments/`},
 		{"extender", http.MethodPost, one + "/extend", `{"ends_at":"2026-11-10T16:00:00Z"}`, true, http.StatusOK, `"ends_at":"2026-11-10T16:00:00Z"`},
 		{"extender sin fecha", http.MethodPost, one + "/extend", `{}`, true, http.StatusUnprocessableEntity, `"ends_at"`},
@@ -822,7 +839,51 @@ func TestRentalFlowRoutes(t *testing.T) {
 	uploaded = true
 }
 
-type fakeSettings struct{ r settings.Rentals }
+type fakeSettings struct {
+	r    settings.Rentals
+	docs []settings.DocumentType
+}
+
+func (f *fakeSettings) DocumentTypes(context.Context, string) ([]settings.DocumentType, error) {
+	return f.docs, nil
+}
+func (f *fakeSettings) DocumentType(_ context.Context, _, id string) (settings.DocumentType, error) {
+	if id != customerID { // the fake router is rebuilt per request: one known document type
+		return settings.DocumentType{}, settings.ErrNotFound
+	}
+	return settings.DocumentType{ID: id, Name: "Pagaré", Active: true}, nil
+}
+func (f *fakeSettings) CreateDocumentType(_ context.Context, _ string, d settings.DocumentType) (settings.DocumentType, error) {
+	d.ID = customerID
+	f.docs = append(f.docs, d)
+	return d, nil
+}
+func (f *fakeSettings) UpdateDocumentType(_ context.Context, _ string, d settings.DocumentType) (settings.DocumentType, error) {
+	return d, nil
+}
+
+func TestDocumentTypeRoutes(t *testing.T) {
+	base := "/v1/b/" + bizA + "/settings/documents"
+	if rec := doBody(http.MethodPost, base, "staff", strings.NewReader(`{"name":"Pagaré"}`)); rec.Code != http.StatusForbidden {
+		t.Fatalf("staff create: %d", rec.Code)
+	}
+	if rec := doBody(http.MethodPost, base, "ok", strings.NewReader(`{"name":"  "}`)); rec.Code != http.StatusUnprocessableEntity {
+		t.Fatalf("blank name: %d", rec.Code)
+	}
+	rec := doBody(http.MethodPost, base, "ok", strings.NewReader(`{"name":" Pagaré ","required":true}`))
+	if rec.Code != http.StatusCreated || !strings.Contains(rec.Body.String(), `"name":"Pagaré"`) || !strings.Contains(rec.Body.String(), `"active":true`) {
+		t.Fatalf("create: %d %s", rec.Code, rec.Body)
+	}
+	if rec := doBody(http.MethodPatch, base+"/"+customerID, "ok", strings.NewReader(`{"active":false}`)); rec.Code != http.StatusOK || !strings.Contains(rec.Body.String(), `"active":false`) {
+		t.Fatalf("deactivate: %d %s", rec.Code, rec.Body)
+	}
+	if rec := doBody(http.MethodPatch, base+"/eeeeeeee-0000-0000-0000-000000000000", "ok", strings.NewReader(`{}`)); rec.Code != http.StatusNotFound {
+		t.Fatalf("missing: %d", rec.Code)
+	}
+	if rec := do(http.MethodGet, base, "staff"); rec.Code != http.StatusOK || !strings.Contains(rec.Body.String(), `"documents"`) {
+		t.Fatalf("list: %d %s", rec.Code, rec.Body)
+	}
+}
 
 func (f *fakeSettings) Rentals(context.Context, string) (settings.Rentals, error) { return f.r, nil }
 func (f *fakeSettings) SaveRentals(_ context.Context, _ string, r settings.Rentals) error {

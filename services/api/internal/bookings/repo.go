@@ -66,3 +66,11 @@ func (r Repo) History(ctx context.Context, businessID string, f HistoryFilter) (
 func (r Repo) RemoveStepFile(ctx context.Context, businessID, bookingID, stepID, key string) (Booking, error) {
 	return RemoveStepFile(ctx, r.DB, businessID, bookingID, stepID, key)
 }
+
+func (r Repo) AddDocument(ctx context.Context, businessID, bookingID, name string, keys []string, actor string, exists FileExists) (Booking, error) {
+	return AddDocument(ctx, r.DB, businessID, bookingID, name, keys, actor, exists)
+}
+
+func (r Repo) RemoveDocument(ctx context.Context, businessID, bookingID, docID string) (Booking, []string, error) {
+	return RemoveDocument(ctx, r.DB, businessID, bookingID, docID)
+}
