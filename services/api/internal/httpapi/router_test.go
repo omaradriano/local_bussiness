@@ -149,7 +149,7 @@ func doBody(method, path, token string, body io.Reader, headers ...string) *http
 		Staff:          fakeStaff{},
 		Availability:   fakeAvailability{},
 		Bookings:       fakeBookings{},
-		Settings:       &fakeSettings{r: settings.DefaultRentals()},
+		Settings:       &fakeSettings{s: settings.From([]byte(`{}`))},
 		Customers:      &fakeCustomers{},
 		Now:            func() time.Time { return fixedNow },
 		Photos:         &Photos{Media: fakeMedia{}, Files: fakeFiles{}, EnqueueImage: fakeEnqueue, CDNBase: "https://cdn.test"},
@@ -840,7 +840,7 @@ func TestRentalFlowRoutes(t *testing.T) {
 }
 
 type fakeSettings struct {
-	r    settings.Rentals
+	s    settings.Settings
 	docs []settings.DocumentType
 }
 
@@ -885,9 +885,9 @@ func TestDocumentTypeRoutes(t *testing.T) {
 	}
 }
 
-func (f *fakeSettings) Rentals(context.Context, string) (settings.Rentals, error) { return f.r, nil }
-func (f *fakeSettings) SaveRentals(_ context.Context, _ string, r settings.Rentals) error {
-	f.r = r
+func (f *fakeSettings) Get(context.Context, string) (settings.Settings, error) { return f.s, nil }
+func (f *fakeSettings) Save(_ context.Context, _ string, s settings.Settings) error {
+	f.s = s
 	return nil
 }
 
@@ -905,6 +905,13 @@ func TestSettingsRoutes(t *testing.T) {
 	}
 	if rec := doBody(http.MethodPatch, path, "ok", strings.NewReader(`{"rentals":{"late_fee_multiplier":20}}`)); rec.Code != http.StatusUnprocessableEntity {
 		t.Fatalf("invalid multiplier: %d", rec.Code)
+	}
+	rec = doBody(http.MethodPatch, path, "ok", strings.NewReader(`{"general":{"deposit_percent":30},"delivery":{"delivery_zones":[{"name":"Centro","fee":5000}]}}`))
+	if rec.Code != http.StatusOK || !strings.Contains(rec.Body.String(), `"deposit_percent":30`) || !strings.Contains(rec.Body.String(), `"name":"Centro"`) {
+		t.Fatalf("general + delivery: %d %s", rec.Code, rec.Body)
+	}
+	if rec := doBody(http.MethodPatch, path, "ok", strings.NewReader(`{"general":{"hold_hours":0}}`)); rec.Code != http.StatusUnprocessableEntity || !strings.Contains(rec.Body.String(), `"hold_hours"`) {
+		t.Fatalf("invalid hold: %d %s", rec.Code, rec.Body)
 	}
 }
 

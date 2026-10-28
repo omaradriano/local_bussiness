@@ -49,8 +49,8 @@ type Deps struct {
 }
 
 type SettingsRepo interface {
-	Rentals(ctx context.Context, businessID string) (settings.Rentals, error)
-	SaveRentals(ctx context.Context, businessID string, r settings.Rentals) error
+	Get(ctx context.Context, businessID string) (settings.Settings, error)
+	Save(ctx context.Context, businessID string, s settings.Settings) error
 	DocumentTypes(ctx context.Context, businessID string) ([]settings.DocumentType, error)
 	DocumentType(ctx context.Context, businessID, id string) (settings.DocumentType, error)
 	CreateDocumentType(ctx context.Context, businessID string, d settings.DocumentType) (settings.DocumentType, error)
@@ -316,12 +316,12 @@ func NewRouter(d Deps) http.Handler {
 
 			r.Get("/settings", func(w http.ResponseWriter, r *http.Request) {
 				m, _ := auth.MemberFrom(r.Context())
-				rs, err := d.Settings.Rentals(r.Context(), m.BusinessID)
+				st, err := d.Settings.Get(r.Context(), m.BusinessID)
 				if err != nil {
 					internalError(w, r, "get settings", err)
 					return
 				}
-				apierr.JSON(w, http.StatusOK, map[string]any{"rentals": rs})
+				apierr.JSON(w, http.StatusOK, st)
 			})
 
 			// Extra documents asked in every rental ("Documentos adicionales"), configured by the owner.
@@ -377,27 +377,25 @@ func NewRouter(d Deps) http.Handler {
 
 			r.With(auth.RequireRole("owner")).Patch("/settings", func(w http.ResponseWriter, r *http.Request) {
 				m, _ := auth.MemberFrom(r.Context())
-				var body struct {
-					Rentals settings.RentalsPatch `json:"rentals"`
-				}
-				if !decode(w, r, &body) {
+				var patch settings.Patch
+				if !decode(w, r, &patch) {
 					return
 				}
-				current, err := d.Settings.Rentals(r.Context(), m.BusinessID)
+				current, err := d.Settings.Get(r.Context(), m.BusinessID)
 				if err != nil {
 					internalError(w, r, "get settings", err)
 					return
 				}
-				next := current.Apply(body.Rentals)
-				if errs := next.Validate(); len(errs) > 0 {
+				next, errs := current.Apply(patch)
+				if len(errs) > 0 {
 					invalid(w, "Revisa los ajustes.", errs)
 					return
 				}
-				if err := d.Settings.SaveRentals(r.Context(), m.BusinessID, next); err != nil {
+				if err := d.Settings.Save(r.Context(), m.BusinessID, next); err != nil {
 					internalError(w, r, "save settings", err)
 					return
 				}
-				apierr.JSON(w, http.StatusOK, map[string]any{"rentals": next})
+				apierr.JSON(w, http.StatusOK, next)
 			})
 
 			// Counter booking: owner and staff can take it.

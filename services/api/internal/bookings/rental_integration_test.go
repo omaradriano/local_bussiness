@@ -485,3 +485,31 @@ func TestIntegrationAdditionalDocuments(t *testing.T) {
 		t.Fatalf("add after cancel: %v", err)
 	}
 }
+
+func TestIntegrationGeneralSettingsDriveBookings(t *testing.T) {
+	p := pool(t)
+	ctx := context.Background()
+	f := setup(t, p, "tool_rental", `{"late_fee_multiplier": 2}`)
+	repo := settings.Repo{DB: p}
+	st, err := repo.Get(ctx, f.business)
+	if err != nil {
+		t.Fatal(err)
+	}
+	next, errs := st.Apply(settings.Patch{General: &settings.GeneralPatch{DepositPercent: ptrInt(50), HoldHours: ptrInt(6)}})
+	if len(errs) > 0 {
+		t.Fatal(errs)
+	}
+	if err := repo.Save(ctx, f.business, next); err != nil {
+		t.Fatal(err)
+	}
+	again, _ := repo.Get(ctx, f.business)
+	if again.General.DepositPercent != 50 || again.Rentals.LateFeeMultiplier != 2 {
+		t.Fatalf("saved sections lost a key: %+v", again)
+	}
+	b, _, err := Create(ctx, p, f.business, CreateInput{Customer: cust("6143030030"), ItemID: f.item, StartsAt: at("2026-11-02T15:00:00Z"), EndsAt: at("2026-11-03T15:00:00Z"), Source: "admin"}, now)
+	if err != nil || b.Status != "pending_deposit" || b.DepositRequired != 15000 || !b.HoldExpiresAt.Equal(now.Add(6*time.Hour)) {
+		t.Fatalf("advance from Ajustes: %v %d %v %v", b.Status, b.DepositRequired, b.HoldExpiresAt, err)
+	}
+}
+
+func ptrInt(v int) *int { return &v }

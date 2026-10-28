@@ -994,7 +994,22 @@ export interface components {
                 created_at: string;
             }[];
         };
+        DeliveryZone: {
+            name: string;
+            /** @description centavos */
+            fee: number;
+        };
+        /** @description Todas las secciones; la app muestra las que le tocan al giro del negocio */
         Settings: {
+            general: {
+                /** @description Anticipo al apartar, % del total (0 = sin anticipo) */
+                deposit_percent: number;
+                /** @description Horas que espera un apartado sin anticipo */
+                hold_hours: number;
+            };
+            delivery: {
+                delivery_zones: components["schemas"]["DeliveryZone"][];
+            };
             rentals: {
                 /** @description Pedir depósito de garantía reembolsable */
                 security_deposit_enabled: boolean;
@@ -2037,6 +2052,13 @@ export interface operations {
         requestBody: {
             content: {
                 "application/json": {
+                    general?: {
+                        deposit_percent?: number;
+                        hold_hours?: number;
+                    };
+                    delivery?: {
+                        delivery_zones?: components["schemas"]["DeliveryZone"][];
+                    };
                     rentals?: {
                         security_deposit_enabled?: boolean;
                         late_fee_multiplier?: number;
