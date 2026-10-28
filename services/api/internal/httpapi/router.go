@@ -58,7 +58,7 @@ type BookingsRepo interface {
 	Get(ctx context.Context, businessID, id string) (bookings.Booking, error)
 	List(ctx context.Context, businessID string, f bookings.ListFilter) ([]bookings.Summary, error)
 	Transition(ctx context.Context, businessID, id, to, actor, note string) (bookings.Booking, error)
-	AddPayment(ctx context.Context, businessID, id string, p bookings.Payment, actor string, now time.Time) (bookings.Booking, error)
+	AddPayment(ctx context.Context, businessID, id string, p bookings.Payment, actor string, now time.Time, exists bookings.FileExists) (bookings.Booking, error)
 	StepUpload(ctx context.Context, businessID, bookingID, stepID string) (string, error)
 	CompleteStep(ctx context.Context, businessID, bookingID, stepID string, sub steps.Submission, actor string, now time.Time, exists bookings.FileExists) (bookings.Booking, error)
 	Checkout(ctx context.Context, businessID, id, condition, actor string, now time.Time) (bookings.Booking, error)
@@ -66,6 +66,7 @@ type BookingsRepo interface {
 	Extend(ctx context.Context, businessID, id string, newEnd time.Time, actor string, now time.Time) (bookings.Booking, error)
 	Inventory(ctx context.Context, businessID string) ([]bookings.InventoryRow, error)
 	Quote(ctx context.Context, businessID string, in bookings.QuoteRequest) (bookings.QuoteResult, error)
+	History(ctx context.Context, businessID string, f bookings.HistoryFilter) ([]bookings.Summary, error)
 }
 
 // writeBooking maps the bookings errors to HTTP and writes the booking on success.
@@ -86,6 +87,15 @@ func writeBooking(w http.ResponseWriter, r *http.Request, b bookings.Booking, er
 	default:
 		apierr.JSON(w, http.StatusOK, b)
 	}
+}
+
+// fileExists checks an uploaded object is really in the bucket (before referencing it).
+func (d Deps) fileExists(ctx context.Context, bucket, key string) error {
+	if d.Photos == nil || d.Photos.Files == nil {
+		return errors.New("files not configured")
+	}
+	_, _, err := d.Photos.Files.Head(ctx, bucket, key)
+	return err
 }
 
 func (d Deps) now() time.Time {
@@ -431,6 +441,35 @@ func NewRouter(d Deps) http.Handler {
 				apierr.JSON(w, http.StatusOK, map[string]any{"bookings": list})
 			})
 
+			// History: newest first, by group, search and customer; paged with before + before_id.
+			r.Get("/bookings/history", func(w http.ResponseWriter, r *http.Request) {
+				m, _ := auth.MemberFrom(r.Context())
+				q := r.URL.Query()
+				f := bookings.HistoryFilter{Group: q.Get("group"), Query: q.Get("q"), CustomerID: q.Get("customer_id"), BeforeID: q.Get("before_id")}
+				f.Limit, _ = strconv.Atoi(q.Get("limit"))
+				if f.Limit == 0 {
+					f.Limit = 30
+				}
+				if !bookings.ValidHistoryGroup(f.Group) || (f.CustomerID != "" && !auth.IsUUID(f.CustomerID)) || len(f.Query) > 80 {
+					invalid(w, "Filtro inválido.", map[string]string{"group": "Filtro inválido."})
+					return
+				}
+				if v := q.Get("before"); v != "" {
+					t, err := time.Parse(time.RFC3339Nano, v)
+					if err != nil {
+						invalid(w, "Cursor inválido.", map[string]string{"before": "Fecha inválida."})
+						return
+					}
+					f.Before = &t
+				}
+				list, err := d.Bookings.History(r.Context(), m.BusinessID, f)
+				if err != nil {
+					internalError(w, r, "history", err)
+					return
+				}
+				apierr.JSON(w, http.StatusOK, map[string]any{"bookings": list})
+			})
+
 			r.Route("/bookings/{bookingId}", func(r chi.Router) {
 				r.Use(requireUUIDParam("bookingId", "La reserva no existe."))
 
@@ -466,6 +505,7 @@ func NewRouter(d Deps) http.Handler {
 					m, _ := auth.MemberFrom(r.Context())
 					var body struct {
 						StepID      string `json:"step_id"`
+						Purpose     string `json:"purpose"` // "" (a step) | "payment" (evidence of a payment)
 						ContentType string `json:"content_type"`
 						Size        int64  `json:"size"`
 					}
@@ -476,11 +516,26 @@ func NewRouter(d Deps) http.Handler {
 						invalid(w, msg, map[string]string{"file": msg})
 						return
 					}
+					bookingID := chi.URLParam(r, "bookingId")
+					if body.Purpose == "payment" {
+						if _, err := d.Bookings.Get(r.Context(), m.BusinessID, bookingID); err != nil {
+							writeBooking(w, r, bookings.Booking{}, err)
+							return
+						}
+						key := bookings.PaymentFilePrefix(m.BusinessID, bookingID) + bookings.RandomName(media.Ext(body.ContentType))
+						url, err := d.Photos.Files.PresignPut(r.Context(), files.PrivateDocs, key, body.ContentType, body.Size)
+						if err != nil {
+							internalError(w, r, "presign", err)
+							return
+						}
+						apierr.JSON(w, http.StatusCreated, map[string]any{"key": key, "upload_url": url,
+							"upload_headers": map[string]string{"Content-Type": body.ContentType}})
+						return
+					}
 					if !auth.IsUUID(body.StepID) {
 						notFound(w, "El paso no existe.")
 						return
 					}
-					bookingID := chi.URLParam(r, "bookingId")
 					bucket, err := d.Bookings.StepUpload(r.Context(), m.BusinessID, bookingID, body.StepID)
 					if errors.Is(err, bookings.ErrNotFound) {
 						notFound(w, "El paso no existe o no lleva archivos.")
@@ -510,14 +565,7 @@ func NewRouter(d Deps) http.Handler {
 						invalid(w, "Demasiados archivos.", map[string]string{"files": "Máximo 20."})
 						return
 					}
-					exists := func(ctx context.Context, bucket, key string) error {
-						if d.Photos == nil || d.Photos.Files == nil {
-							return errors.New("files not configured")
-						}
-						_, _, err := d.Photos.Files.Head(ctx, bucket, key)
-						return err
-					}
-					b, err := d.Bookings.CompleteStep(r.Context(), m.BusinessID, chi.URLParam(r, "bookingId"), chi.URLParam(r, "stepId"), sub, m.UserID, d.now(), exists)
+					b, err := d.Bookings.CompleteStep(r.Context(), m.BusinessID, chi.URLParam(r, "bookingId"), chi.URLParam(r, "stepId"), sub, m.UserID, d.now(), d.fileExists)
 					writeBooking(w, r, b, err)
 				})
 
@@ -591,7 +639,7 @@ func NewRouter(d Deps) http.Handler {
 						invalid(w, "La nota es muy larga.", map[string]string{"notes": "Máximo 500 caracteres."})
 						return
 					}
-					b, err := d.Bookings.AddPayment(r.Context(), m.BusinessID, chi.URLParam(r, "bookingId"), p, m.UserID, d.now())
+					b, err := d.Bookings.AddPayment(r.Context(), m.BusinessID, chi.URLParam(r, "bookingId"), p, m.UserID, d.now(), d.fileExists)
 					writeBooking(w, r, b, err)
 				})
 			})

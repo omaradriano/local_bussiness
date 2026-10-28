@@ -14,6 +14,7 @@ type Payment struct {
 	PaidAt     time.Time `json:"paid_at"`
 	RecordedBy *string   `json:"recorded_by"`
 	Notes      *string   `json:"notes"`
+	Evidence   []string  `json:"evidence"` // photos of the transfer or card ticket (private-docs)
 }
 
 // Balance of a booking:
@@ -66,6 +67,22 @@ func ValidatePayment(p Payment, b Balance) error {
 		return Invalid{"amount", "El monto es mayor que el saldo pendiente."}
 	case p.Type == "refund" && p.Amount > b.DepositHeld:
 		return Invalid{"amount", "No se puede devolver más del depósito retenido."}
+	}
+	return nil
+}
+
+// PaymentAllowed: some rental charges only make sense at a given moment. The security deposit is
+// taken until the tool comes back; late and damage fees only once it's back (that's when they're known).
+func PaymentAllowed(kind, status, typ string) error {
+	if kind != "rental" {
+		return nil
+	}
+	returned := status == "returned" || status == "completed"
+	switch {
+	case (typ == "late_fee" || typ == "damage_fee") && !returned:
+		return Invalid{"type", "Los recargos por retraso o daño se registran después de la devolución."}
+	case typ == "security_deposit" && returned:
+		return Invalid{"type", "El depósito se cobra antes de que regrese la herramienta."}
 	}
 	return nil
 }

@@ -9,6 +9,7 @@ import (
 
 	"github.com/jackc/pgx/v5"
 
+	"github.com/omaradriano/local_bussiness/services/api/internal/files"
 	"github.com/omaradriano/local_bussiness/services/api/internal/store"
 )
 
@@ -47,7 +48,7 @@ func lockBooking(ctx context.Context, tx pgx.Tx, businessID, id string) (locked,
 func payments(ctx context.Context, q interface {
 	Query(context.Context, string, ...any) (pgx.Rows, error)
 }, bookingID string) ([]Payment, error) {
-	rows, err := q.Query(ctx, `select id::text, type, method, amount, paid_at, recorded_by::text, notes
+	rows, err := q.Query(ctx, `select id::text, type, method, amount, paid_at, recorded_by::text, notes, evidence_keys
 		from public.payments where booking_id = $1 order by paid_at, created_at`, bookingID)
 	if err != nil {
 		return nil, err
@@ -136,7 +137,7 @@ func pendingSteps(ctx context.Context, tx pgx.Tx, bookingID, to string) ([]strin
 }
 
 // AddPayment records money for the booking. Paying the full advance of a hold confirms it.
-func AddPayment(ctx context.Context, db store.DB, businessID, id string, p Payment, actor string, now time.Time) (Booking, error) {
+func AddPayment(ctx context.Context, db store.DB, businessID, id string, p Payment, actor string, now time.Time, exists FileExists) (Booking, error) {
 	tx, err := db.Begin(ctx)
 	if err != nil {
 		return Booking{}, err
@@ -149,6 +150,23 @@ func AddPayment(ctx context.Context, db store.DB, businessID, id string, p Payme
 	if Releases(b.status) && p.Type != "refund" {
 		return Booking{}, Invalid{"type", fmt.Sprintf("La reserva está «%s»; solo se pueden registrar devoluciones.", statusLabel[b.status])}
 	}
+	if err := PaymentAllowed(b.kind, b.status, p.Type); err != nil {
+		return Booking{}, err
+	}
+	if len(p.Evidence) > 4 {
+		return Booking{}, Invalid{"evidence", "Máximo 4 fotos de evidencia."}
+	}
+	for _, k := range p.Evidence {
+		if !strings.HasPrefix(k, PaymentFilePrefix(businessID, id)) || strings.Contains(k, "..") {
+			return Booking{}, Invalid{"evidence", "Hay un archivo que no pertenece a esta reserva."}
+		}
+		if err := exists(ctx, files.PrivateDocs, k); err != nil {
+			return Booking{}, Invalid{"evidence", "Una foto no se terminó de subir; vuelve a intentarlo."}
+		}
+	}
+	if p.Evidence == nil {
+		p.Evidence = []string{}
+	}
 	ps, err := payments(ctx, tx, id)
 	if err != nil {
 		return Booking{}, err
@@ -157,9 +175,9 @@ func AddPayment(ctx context.Context, db store.DB, businessID, id string, p Payme
 	if err := ValidatePayment(p, bal); err != nil {
 		return Booking{}, err
 	}
-	if _, err := tx.Exec(ctx, `insert into public.payments (business_id, booking_id, type, method, amount, paid_at, recorded_by, notes)
-		values ($1, $2, $3, $4, $5, $6, nullif($7, '')::uuid, nullif($8, ''))`,
-		businessID, id, p.Type, p.Method, p.Amount, now, actor, strings.TrimSpace(deref(p.Notes))); err != nil {
+	if _, err := tx.Exec(ctx, `insert into public.payments (business_id, booking_id, type, method, amount, paid_at, recorded_by, notes, evidence_keys)
+		values ($1, $2, $3, $4, $5, $6, nullif($7, '')::uuid, nullif($8, ''), $9)`,
+		businessID, id, p.Type, p.Method, p.Amount, now, actor, strings.TrimSpace(deref(p.Notes)), p.Evidence); err != nil {
 		return Booking{}, err
 	}
 	if b.status == "pending_deposit" && (p.Type == "advance" || p.Type == "balance") && bal.Paid+p.Amount >= b.depositRequired {

@@ -27,8 +27,8 @@ func (r Repo) Transition(ctx context.Context, businessID, id, to, actor, note st
 	return Transition(ctx, r.DB, businessID, id, to, actor, note)
 }
 
-func (r Repo) AddPayment(ctx context.Context, businessID, id string, p Payment, actor string, now time.Time) (Booking, error) {
-	return AddPayment(ctx, r.DB, businessID, id, p, actor, now)
+func (r Repo) AddPayment(ctx context.Context, businessID, id string, p Payment, actor string, now time.Time, exists FileExists) (Booking, error) {
+	return AddPayment(ctx, r.DB, businessID, id, p, actor, now, exists)
 }
 
 func (r Repo) StepUpload(ctx context.Context, businessID, bookingID, stepID string) (string, error) {
@@ -57,4 +57,8 @@ func (r Repo) Inventory(ctx context.Context, businessID string) ([]InventoryRow,
 
 func (r Repo) Quote(ctx context.Context, businessID string, in QuoteRequest) (QuoteResult, error) {
 	return QuoteBooking(ctx, r.DB, businessID, in)
+}
+
+func (r Repo) History(ctx context.Context, businessID string, f HistoryFilter) ([]Summary, error) {
+	return History(ctx, r.DB, businessID, f)
 }

@@ -550,7 +550,7 @@ func (fakeBookings) Transition(_ context.Context, _, id, to, actor, _ string) (b
 	return bookings.Booking{ID: id, Status: to}, nil
 }
 
-func (fakeBookings) AddPayment(_ context.Context, _, id string, p bookings.Payment, actor string, now time.Time) (bookings.Booking, error) {
+func (fakeBookings) AddPayment(_ context.Context, _, id string, p bookings.Payment, actor string, now time.Time, _ bookings.FileExists) (bookings.Booking, error) {
 	if err := bookings.ValidatePayment(p, bookings.Balance{Due: 10000}); err != nil {
 		return bookings.Booking{}, err
 	}
@@ -620,6 +620,32 @@ func TestQuoteRoute(t *testing.T) {
 		{"cotiza", "&ends_at=2026-11-04T15:00:00Z", http.StatusOK, `"total":60000`},
 		{"regreso en domingo", "&ends_at=2026-11-08T15:00:00Z", http.StatusUnprocessableEntity, `"ends_at"`},
 		{"fecha inválida", "&ends_at=mañana", http.StatusUnprocessableEntity, `"ends_at"`},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			if rec := do(http.MethodGet, base+tc.query, "staff"); rec.Code != tc.code || !strings.Contains(rec.Body.String(), tc.want) {
+				t.Fatalf("got %d %s", rec.Code, rec.Body)
+			}
+		})
+	}
+}
+
+func (fakeBookings) History(_ context.Context, _ string, f bookings.HistoryFilter) ([]bookings.Summary, error) {
+	return []bookings.Summary{{ID: bookingID, Status: "completed", CustomerName: "Ana " + f.Group}}, nil
+}
+
+func TestHistoryRoute(t *testing.T) {
+	base := "/v1/b/" + bizA + "/bookings/history"
+	cases := []struct {
+		name, query string
+		code        int
+		want        string
+	}{
+		{"terminadas", "?group=finished", http.StatusOK, `"customer_name":"Ana finished"`},
+		{"todas", "", http.StatusOK, `"status":"completed"`},
+		{"grupo inválido", "?group=raro", http.StatusUnprocessableEntity, `"group"`},
+		{"cliente inválido", "?customer_id=x", http.StatusUnprocessableEntity, `"group"`},
+		{"cursor inválido", "?before=ayer", http.StatusUnprocessableEntity, `"before"`},
 	}
 	for _, tc := range cases {
 		t.Run(tc.name, func(t *testing.T) {
@@ -770,6 +796,7 @@ func TestRentalFlowRoutes(t *testing.T) {
 		{"salida con pasos pendientes", http.MethodPost, one + "/checkout", `{"condition":"sin ine"}`, true, http.StatusUnprocessableEntity, `"steps_pending"`},
 		{"salida", http.MethodPost, one + "/checkout", `{"condition":"ok"}`, true, http.StatusOK, `"status":"checked_out"`},
 		{"devolución con recargo sugerido", http.MethodPost, one + "/return", `{}`, true, http.StatusOK, `"late_fee_suggested":60000`},
+		{"subir comprobante de pago", http.MethodPost, one + "/uploads", `{"purpose":"payment","content_type":"image/jpeg","size":1000}`, true, http.StatusCreated, `"key":"` + prefix + `payments/`},
 		{"extender", http.MethodPost, one + "/extend", `{"ends_at":"2026-11-10T16:00:00Z"}`, true, http.StatusOK, `"ends_at":"2026-11-10T16:00:00Z"`},
 		{"extender sin fecha", http.MethodPost, one + "/extend", `{}`, true, http.StatusUnprocessableEntity, `"ends_at"`},
 		{"extender sobre otra renta", http.MethodPost, one + "/extend", `{"ends_at":"2030-01-10T16:00:00Z"}`, true, http.StatusConflict, `"slot_taken"`},

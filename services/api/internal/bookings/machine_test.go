@@ -89,3 +89,23 @@ func equalStrings(a, b []string) bool {
 	}
 	return true
 }
+
+func TestStillAhead(t *testing.T) {
+	cases := []struct {
+		from, to string
+		want     bool
+	}{
+		{"confirmed", "checked_out", true},    // out-photos can be added before check-out
+		{"checked_out", "checked_out", false}, // already out: they're evidence now
+		{"checked_out", "completed", true},    // return photos until it's closed
+		{"returned", "completed", true},
+		{"completed", "completed", false},
+		{"cancelled", "completed", false},
+		{"overdue", "returned", true},
+	}
+	for _, tc := range cases {
+		if got := StillAhead("rental", tc.from, tc.to); got != tc.want {
+			t.Errorf("%s -> %s = %v, want %v", tc.from, tc.to, got, tc.want)
+		}
+	}
+}

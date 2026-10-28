@@ -537,6 +537,25 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/v1/b/{businessId}/bookings/history": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                businessId: components["parameters"]["BusinessId"];
+            };
+            cookie?: never;
+        };
+        /** Historial, de la más reciente a la más antigua; se pagina con before + before_id de la última fila */
+        get: operations["bookingHistory"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/v1/b/{businessId}/bookings/{bookingId}": {
         parameters: {
             query?: never;
@@ -1000,6 +1019,8 @@ export interface components {
                 paid_at: string;
                 recorded_by: string | null;
                 notes: string | null;
+                /** @description Fotos del comprobante (private-docs) */
+                evidence: string[];
             }[];
             balance: {
                 /** Format: int64 */
@@ -2171,6 +2192,39 @@ export interface operations {
             422: components["responses"]["Error"];
         };
     };
+    bookingHistory: {
+        parameters: {
+            query?: {
+                group?: "active" | "finished" | "cancelled";
+                /** @description Cliente (nombre o teléfono) o artículo */
+                q?: string;
+                customer_id?: string;
+                before?: string;
+                before_id?: string;
+                limit?: number;
+            };
+            header?: never;
+            path: {
+                businessId: components["parameters"]["BusinessId"];
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        bookings: components["schemas"]["BookingSummary"][];
+                    };
+                };
+            };
+            422: components["responses"]["Error"];
+        };
+    };
     getBooking: {
         parameters: {
             query?: never;
@@ -2240,8 +2294,16 @@ export interface operations {
         requestBody: {
             content: {
                 "application/json": {
-                    /** Format: uuid */
-                    step_id: string;
+                    /**
+                     * Format: uuid
+                     * @description Paso al que pertenece (si no es evidencia de pago)
+                     */
+                    step_id?: string;
+                    /**
+                     * @description payment = evidencia de un pago
+                     * @enum {string}
+                     */
+                    purpose?: "payment";
                     /** @enum {string} */
                     content_type: "image/jpeg" | "image/png" | "image/webp";
                     size: number;
@@ -2447,6 +2509,8 @@ export interface operations {
                     /** Format: int64 */
                     amount: number;
                     notes?: string;
+                    /** @description Llaves de fotos subidas con purpose=payment (transferencia o ticket) */
+                    evidence?: string[];
                 };
             };
         };

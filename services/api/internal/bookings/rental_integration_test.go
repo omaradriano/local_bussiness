@@ -54,7 +54,7 @@ func TestIntegrationRentalCheckoutAndReturn(t *testing.T) {
 	if _, err := Checkout(ctx, p, f.business, b.ID, "", "", now); !errors.As(err, &inv) {
 		t.Fatalf("checkout without deposit: %v", err)
 	}
-	if _, err := AddPayment(ctx, p, f.business, b.ID, Payment{Type: "security_deposit", Method: "cash", Amount: 100000}, "", now); err != nil {
+	if _, err := AddPayment(ctx, p, f.business, b.ID, Payment{Type: "security_deposit", Method: "cash", Amount: 100000}, "", now, noFiles); err != nil {
 		t.Fatal(err)
 	}
 	if b, err = Checkout(ctx, p, f.business, b.ID, "Sin golpes, con broca", "", now); err != nil || b.Status != "checked_out" || b.Rental.CheckedOutAt == nil {
@@ -77,10 +77,10 @@ func TestIntegrationRentalCheckoutAndReturn(t *testing.T) {
 	}
 
 	// Refund the deposit and close it.
-	if _, err := AddPayment(ctx, p, f.business, b.ID, Payment{Type: "balance", Method: "cash", Amount: b.Balance.Due}, "", now); err != nil {
+	if _, err := AddPayment(ctx, p, f.business, b.ID, Payment{Type: "balance", Method: "cash", Amount: b.Balance.Due}, "", now, noFiles); err != nil {
 		t.Fatal(err)
 	}
-	if b, err = AddPayment(ctx, p, f.business, b.ID, Payment{Type: "refund", Method: "cash", Amount: 100000}, "", now); err != nil || b.Balance.DepositHeld != 0 {
+	if b, err = AddPayment(ctx, p, f.business, b.ID, Payment{Type: "refund", Method: "cash", Amount: 100000}, "", now, noFiles); err != nil || b.Balance.DepositHeld != 0 {
 		t.Fatalf("refund: %+v %v", b.Balance, err)
 	}
 	if b, err = Transition(ctx, p, f.business, b.ID, "completed", "", ""); err != nil || b.Status != "completed" {
@@ -100,7 +100,7 @@ func TestIntegrationLateReturnSuggestsFee(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	AddPayment(ctx, p, f.business, b.ID, Payment{Type: "security_deposit", Method: "cash", Amount: 100000}, "", now)
+	AddPayment(ctx, p, f.business, b.ID, Payment{Type: "security_deposit", Method: "cash", Amount: 100000}, "", now, noFiles)
 	if _, err := Checkout(ctx, p, f.business, b.ID, "", "", now); err != nil {
 		t.Fatal(err)
 	}
@@ -314,5 +314,93 @@ func TestIntegrationQuoteMatchesCreate(t *testing.T) {
 	var bad Invalid
 	if _, err := QuoteBooking(ctx, p, f.business, QuoteRequest{ItemID: f.item, StartsAt: *at("2026-11-07T15:00:00Z"), EndsAt: at("2026-11-08T15:00:00Z")}); !errors.As(err, &bad) {
 		t.Fatalf("return on Sunday: %v", err)
+	}
+}
+
+func TestIntegrationMorePhotosAndPaymentEvidence(t *testing.T) {
+	p := pool(t)
+	ctx := context.Background()
+	f := setup(t, p, "tool_rental", `{"security_deposit_enabled": false}`)
+	b, _, err := Create(ctx, p, f.business, CreateInput{Customer: cust("6143030006"), ItemID: f.item, StartsAt: at("2026-11-02T15:00:00Z"), EndsAt: at("2026-11-03T15:00:00Z"), Source: "admin"}, now)
+	if err != nil {
+		t.Fatal(err)
+	}
+	ok := func(context.Context, string, string) error { return nil }
+	step := b.Steps[0].ID
+	key := func() string { return NewFileKey(f.business, b.ID, "jpg") }
+	if _, err := CompleteStep(ctx, p, f.business, b.ID, step, steps.Submission{Files: []string{key()}}, "", now, ok); err != nil {
+		t.Fatal(err)
+	}
+	// Before check-out the done photo step takes more photos.
+	b, err = CompleteStep(ctx, p, f.business, b.ID, step, steps.Submission{Files: []string{key()}}, "", now, ok)
+	if err != nil || len(b.Steps[0].Files) != 2 || b.Steps[0].Status != "done" {
+		t.Fatalf("append: %+v %v", b.Steps[0], err)
+	}
+	// Late fee before the tool comes back: refused.
+	var bad Invalid
+	if _, err := AddPayment(ctx, p, f.business, b.ID, Payment{Type: "late_fee", Method: "cash", Amount: 100}, "", now, ok); !errors.As(err, &bad) || bad.Field != "type" {
+		t.Fatalf("late fee before return: %v", err)
+	}
+	// Transfer with its evidence photo; a key from elsewhere is refused.
+	if _, err := AddPayment(ctx, p, f.business, b.ID, Payment{Type: "balance", Method: "transfer", Amount: 100, Evidence: []string{key()}}, "", now, ok); !errors.As(err, &bad) || bad.Field != "evidence" {
+		t.Fatalf("evidence outside payments/: %v", err)
+	}
+	ev := PaymentFilePrefix(f.business, b.ID) + RandomName("jpg")
+	b, err = AddPayment(ctx, p, f.business, b.ID, Payment{Type: "balance", Method: "transfer", Amount: 10000, Evidence: []string{ev}}, "", now, ok)
+	if err != nil || len(b.Payments) != 1 || len(b.Payments[0].Evidence) != 1 || b.Payments[0].Evidence[0] != ev {
+		t.Fatalf("payment evidence: %+v %v", b.Payments, err)
+	}
+	// After check-out the out-photos are evidence: no more changes.
+	if _, err := Checkout(ctx, p, f.business, b.ID, "", "", now); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := CompleteStep(ctx, p, f.business, b.ID, step, steps.Submission{Files: []string{key()}}, "", now, ok); !errors.As(err, &bad) || bad.Field != "step" {
+		t.Fatalf("append after check-out: %v", err)
+	}
+}
+
+func TestIntegrationHistory(t *testing.T) {
+	p := pool(t)
+	ctx := context.Background()
+	f := setup(t, p, "tool_rental", `{}`)
+	var ids []string
+	for i, day := range []string{"02", "03", "04"} {
+		b, _, err := Create(ctx, p, f.business, CreateInput{Customer: cust(fmt.Sprintf("614303001%d", i)), ItemID: f.item,
+			StartsAt: at("2026-11-" + day + "T15:00:00Z"), EndsAt: at("2026-11-" + day + "T20:00:00Z"), Source: "admin"}, now)
+		if err != nil {
+			t.Fatal(err)
+		}
+		ids = append(ids, b.ID)
+	}
+	if _, err := Transition(ctx, p, f.business, ids[0], "cancelled", "", ""); err != nil {
+		t.Fatal(err)
+	}
+	all, err := History(ctx, p, f.business, HistoryFilter{Limit: 10})
+	if err != nil || len(all) != 3 || all[0].ID != ids[2] || all[2].ID != ids[0] {
+		t.Fatalf("newest first: %v %v", all, err)
+	}
+	if got, _ := History(ctx, p, f.business, HistoryFilter{Group: "cancelled", Limit: 10}); len(got) != 1 || got[0].ID != ids[0] {
+		t.Fatalf("cancelled: %v", got)
+	}
+	// Paging: 2 then the rest, without repeats.
+	page1, _ := History(ctx, p, f.business, HistoryFilter{Limit: 2})
+	last := page1[len(page1)-1]
+	page2, _ := History(ctx, p, f.business, HistoryFilter{Limit: 2, Before: &last.StartsAt, BeforeID: last.ID})
+	if len(page1) != 2 || len(page2) != 1 || page2[0].ID != ids[0] {
+		t.Fatalf("paging: %v / %v", page1, page2)
+	}
+	// Search by phone digits and by item name; one customer's rentals.
+	if got, _ := History(ctx, p, f.business, HistoryFilter{Query: "6143030011", Limit: 10}); len(got) != 1 || got[0].ID != ids[1] {
+		t.Fatalf("by phone: %v", got)
+	}
+	if got, _ := History(ctx, p, f.business, HistoryFilter{Query: "roto", Limit: 10}); len(got) != 3 {
+		t.Fatalf("by item: %v", got)
+	}
+	var cid string
+	if err := p.QueryRow(ctx, `select customer_id::text from public.bookings where id = $1`, ids[2]).Scan(&cid); err != nil {
+		t.Fatal(err)
+	}
+	if got, _ := History(ctx, p, f.business, HistoryFilter{CustomerID: cid, Limit: 10}); len(got) != 1 || got[0].ID != ids[2] {
+		t.Fatalf("by customer: %v", got)
 	}
 }

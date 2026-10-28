@@ -21,11 +21,21 @@ func FilePrefix(businessID, bookingID string) string {
 	return businessID + "/bookings/" + bookingID + "/"
 }
 
+// PaymentFilePrefix: evidence photos of the booking's payments.
+func PaymentFilePrefix(businessID, bookingID string) string {
+	return FilePrefix(businessID, bookingID) + "payments/"
+}
+
 // NewFileKey returns a fresh key for an upload of the booking.
 func NewFileKey(businessID, bookingID, ext string) string {
+	return FilePrefix(businessID, bookingID) + RandomName(ext)
+}
+
+// RandomName: an unguessable file name with that extension.
+func RandomName(ext string) string {
 	b := make([]byte, 12)
 	rand.Read(b)
-	return FilePrefix(businessID, bookingID) + hex.EncodeToString(b) + "." + ext
+	return hex.EncodeToString(b) + "." + ext
 }
 
 // StepUpload resolves where a step's files go; ErrNotFound if the step isn't the booking's or takes no files.
@@ -57,13 +67,16 @@ func CompleteStep(ctx context.Context, db store.DB, businessID, bookingID, stepI
 		return Booking{}, err
 	}
 	defer tx.Rollback(ctx)
-	if _, err := lockBooking(ctx, tx, businessID, bookingID); err != nil {
+	bk, err := lockBooking(ctx, tx, businessID, bookingID)
+	if err != nil {
 		return Booking{}, err
 	}
-	var stepType, status string
+	var stepType, status, toStatus string
 	var config json.RawMessage
-	err = tx.QueryRow(ctx, `select coalesce(step_snapshot->>'step_type', ''), coalesce(step_snapshot->'config', '{}'), status
-		from public.booking_steps where booking_id = $1 and id = $2 for update`, bookingID, stepID).Scan(&stepType, &config, &status)
+	var existing []string
+	err = tx.QueryRow(ctx, `select coalesce(step_snapshot->>'step_type', ''), coalesce(step_snapshot->'config', '{}'), status,
+		coalesce(step_snapshot->>'to_status', ''), s3_keys
+		from public.booking_steps where booking_id = $1 and id = $2 for update`, bookingID, stepID).Scan(&stepType, &config, &status, &toStatus, &existing)
 	if errors.Is(err, pgx.ErrNoRows) {
 		return Booking{}, ErrNotFound
 	}
@@ -74,14 +87,24 @@ func CompleteStep(ctx context.Context, db store.DB, businessID, bookingID, stepI
 	if !ok {
 		return Booking{}, Invalid{"step", "Este tipo de paso todavía no se puede completar desde la app."}
 	}
+	// A done photo step takes more photos while its moment hasn't passed (e.g. out-photos until check-out).
+	appending := false
 	if status == "done" {
-		return Booking{}, Invalid{"step", "Este paso ya está completo."}
+		canAdd := st.Bucket(config) != "" && len(sub.Files) > 0 && len(sub.Data) == 0 && toStatus != "" && StillAhead(bk.kind, bk.status, toStatus)
+		if !canAdd {
+			return Booking{}, Invalid{"step", "Este paso ya está completo."}
+		}
+		appending = true
 	}
 	prefix := FilePrefix(businessID, bookingID)
 	for _, k := range sub.Files {
 		if !strings.HasPrefix(k, prefix) || strings.Contains(k, "..") {
 			return Booking{}, Invalid{"files", "Hay un archivo que no pertenece a esta reserva."}
 		}
+	}
+	newFiles := sub.Files
+	if appending {
+		sub.Files = append(append([]string{}, existing...), newFiles...) // the type validates the whole set (max files)
 	}
 	if err := st.ValidateData(config, sub); err != nil {
 		var ue steps.UserError
@@ -90,7 +113,7 @@ func CompleteStep(ctx context.Context, db store.DB, businessID, bookingID, stepI
 		}
 		return Booking{}, err
 	}
-	for _, k := range sub.Files {
+	for _, k := range newFiles {
 		if err := exists(ctx, st.Bucket(config), k); err != nil {
 			return Booking{}, Invalid{"files", "Una foto no se terminó de subir; vuelve a intentarlo."}
 		}
@@ -102,7 +125,11 @@ func CompleteStep(ctx context.Context, db store.DB, businessID, bookingID, stepI
 	if sub.Files == nil {
 		sub.Files = []string{}
 	}
-	if _, err := tx.Exec(ctx, `update public.booking_steps set status = 'done', data = $3, s3_keys = $4,
+	if appending {
+		if _, err := tx.Exec(ctx, `update public.booking_steps set s3_keys = $3 where booking_id = $1 and id = $2`, bookingID, stepID, sub.Files); err != nil {
+			return Booking{}, err
+		}
+	} else if _, err := tx.Exec(ctx, `update public.booking_steps set status = 'done', data = $3, s3_keys = $4,
 		completed_by = nullif($5, '')::uuid, completed_at = $6 where booking_id = $1 and id = $2`,
 		bookingID, stepID, data, sub.Files, actor, now); err != nil {
 		return Booking{}, err
@@ -114,7 +141,7 @@ func CompleteStep(ctx context.Context, db store.DB, businessID, bookingID, stepI
 		select b.business_id, b.customer_id, bs.step_snapshot->'config'->>'customer_doc', k, nullif($3, '')::uuid
 		from public.booking_steps bs join public.bookings b on b.id = bs.booking_id, unnest($4::text[]) k
 		where bs.booking_id = $1 and bs.id = $2 and bs.step_snapshot->'config'->>'customer_doc' is not null
-		on conflict (s3_key) do nothing`, bookingID, stepID, actor, sub.Files); err != nil {
+		on conflict (s3_key) do nothing`, bookingID, stepID, actor, newFiles); err != nil {
 		return Booking{}, err
 	}
 	if err := tx.Commit(ctx); err != nil {
