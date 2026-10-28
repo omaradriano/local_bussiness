@@ -5,6 +5,7 @@ import { useCallback, useEffect, useState } from 'react';
 import { ActivityIndicator, Linking, View } from 'react-native';
 import { ExtendRental } from '../../../../../components/ExtendRental';
 import { PaymentForm, PaymentList, paymentTypesFor, type PaymentType } from '../../../../../components/Payments';
+import { StatusBadge, statusLabel } from '../../../../../components/StatusBadge';
 import { StepCard } from '../../../../../components/StepCard';
 import { api } from '../../../../../lib/api';
 import { errorText } from '../../../../../lib/errors';
@@ -54,7 +55,7 @@ export default function BookingDetail() {
     const { data, error, response } = await api.POST('/v1/b/{businessId}/bookings/{bookingId}/transition', { params: { path }, body: { to } });
     setBusy(false);
     setConfirmCancel(false);
-    if (data) { show(data); toast(t.statusChanged(t.status[data.status])); return; }
+    if (data) { show(data); toast(t.statusChanged(statusLabel(data.kind, data.status))); return; }
     const pending = (error?.details as { steps?: string[] } | undefined)?.steps;
     toast(pending ? error!.message : errorText(error, response.status), 'error');
   }
@@ -86,12 +87,15 @@ export default function BookingDetail() {
   const closedNote = ['cancelled', 'expired', 'no_show'].includes(b.status);
 
   // Steps grouped by moment: customer documents and out-photos before check-out; return photos after.
+  // Additional documents (e.g. the promissory note) are steps marked config.section = 'additional'.
+  const isAdditional = (st: BookingStep) => (st.config as { section?: string }).section === 'additional';
   const docs = b.steps.filter((st) => st.customer_doc !== '');
-  const outPhotos = b.steps.filter((st) => st.customer_doc === '' && (st.to_status === 'checked_out' || !st.to_status));
+  const additional = b.steps.filter((st) => st.customer_doc === '' && isAdditional(st));
+  const outPhotos = b.steps.filter((st) => st.customer_doc === '' && !isAdditional(st) && (st.to_status === 'checked_out' || !st.to_status));
   const backPhotos = b.steps.filter((st) => st.to_status === 'returned' || st.to_status === 'completed');
   const allDone = (list: BookingStep[]) => list.every((st) => st.status === 'done' || st.on_file || !st.required);
-  const cards = (list: BookingStep[], canAddMore: boolean) => list.map((st) => (
-    <StepCard key={st.id} businessId={businessId} bookingId={bookingId} step={st} onDone={show} editable={editable} canAddMore={canAddMore} />
+  const cards = (list: BookingStep[], canChange: boolean) => list.map((st) => (
+    <StepCard key={st.id} businessId={businessId} bookingId={bookingId} step={st} onDone={show} editable={editable} canChange={canChange} />
   ));
 
   const balance = (
@@ -121,8 +125,9 @@ export default function BookingDetail() {
       <Stack.Screen options={{ title: bookingTerm }} />
       <View style={{ gap: 16 }}>
         <View style={{ gap: 4 }}>
-          <Text variant="footnote" color="labelSecondary">{b.items.map((i) => `${i.quantity} × ${i.name}`).join(', ')}{b.units.length ? ` · ${b.units.map((u) => u.name).join(', ')}` : ''}</Text>
-          <Text variant="largeTitle" accessibilityRole="header">{t.status[b.status]}</Text>
+          {b.units.length > 0 && <Text variant="footnote" color="labelSecondary">{b.units.map((u) => u.name).join(', ')}</Text>}
+          <Text variant="largeTitle" accessibilityRole="header">{b.items.map((i) => `${i.quantity > 1 ? `${i.quantity} × ` : ''}${i.name}`).join(', ')}</Text>
+          <StatusBadge kind={b.kind} status={b.status} size="md" />
           {b.status === 'overdue' && <Notice tone="warning">{f.overdue}</Notice>}
           {closedNote && <Notice tone="warning">{f.closed}</Notice>}
         </View>
@@ -154,7 +159,8 @@ export default function BookingDetail() {
             <Step n={2} title={f.checkout.title} description={f.checkout.description} state={stepState(1)}>
               {rentalStep === 1 && (
                 <>
-                  {docs.length > 0 && <SubStep title={f.sub.documents} description={f.sub.documentsHint} done={allDone(docs)}>{cards(docs, false)}</SubStep>}
+                  {docs.length > 0 && <SubStep title={f.sub.documents} description={f.sub.documentsHint} done={allDone(docs)}>{cards(docs, true)}</SubStep>}
+                  {additional.length > 0 && <SubStep title={f.sub.additional} description={f.sub.additionalHint} done={allDone(additional)}>{cards(additional, true)}</SubStep>}
                   {outPhotos.length > 0 && <SubStep title={f.sub.outPhotos} description={f.sub.outPhotosHint} done={allDone(outPhotos)}>{cards(outPhotos, true)}</SubStep>}
                   <SubStep title={f.sub.payment} description={f.sub.checkoutPaymentHint} done={settled}>{balance}{payments}</SubStep>
                   <SubStep title={f.sub.doCheckout} description={f.sub.doCheckoutHint}>

@@ -1,8 +1,7 @@
 import { strings, term } from '@lb/shared';
 import { router, Stack } from 'expo-router';
 import { ActivityIndicator } from 'react-native';
-import { supabase } from '../../../lib/supabase';
-import { useMe } from '../../../lib/useMe';
+import { signOut, useMe } from '../../../lib/useMe';
 import { Button, Cell, EmptyState, Group, Notice, Screen, Text, useUI } from '../../../ui';
 
 const t = strings.admin;
@@ -34,8 +33,13 @@ export default function AdminHome() {
           ))}
         </Group>
       )}
+      {businesses && businesses.length > 0 && (
+        <Group>
+          <Cell icon="add-circle" tint={ui.success} label={t.createAnother} onPress={() => router.push('/onboarding')} />
+        </Group>
+      )}
       <Group>
-        <Cell label={t.signOut} destructive onPress={() => supabase.auth.signOut()} />
+        <Cell label={t.signOut} destructive onPress={() => signOut()} />
       </Group>
     </Screen>
   );

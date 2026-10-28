@@ -46,3 +46,22 @@ export function monthWindow(monthStart: string): { from: string; to: string } {
   const [y, m] = monthStart.split('-').map(Number);
   return { from: new Date(y, m - 1, 1).toISOString(), to: new Date(y, m, 1).toISOString() };
 }
+
+/** The next full hour after `now` ("15:02" → "16:00"); 23:xx stays "23:00" (the last start of the day). */
+export function nextHour(now = new Date()): string {
+  const h = Math.min(now.getHours() + 1, 23);
+  return `${String(h).padStart(2, '0')}:00`;
+}
+
+/**
+ * A start time that isn't in the past: on today's date, a time at or before now becomes the next
+ * full hour; other days (and unreadable times) are left as they are. After 23:00 there is no later
+ * start that day, so it stays 23:00 (the API then refuses it).
+ */
+export function futureTime(date: string, time: string, now = new Date()): string {
+  if (date !== todayISO(now)) return time;
+  const t = normalizeTime(time);
+  if (!t) return time;
+  const [h, m] = t.split(':').map(Number);
+  return h * 60 + m <= now.getHours() * 60 + now.getMinutes() ? nextHour(now) : t;
+}
