@@ -46,3 +46,7 @@ func (r Repo) Checkout(ctx context.Context, businessID, id, condition, actor str
 func (r Repo) Return(ctx context.Context, businessID, id, condition, actor string, now time.Time) (Booking, error) {
 	return Return(ctx, r.DB, businessID, id, condition, actor, now)
 }
+
+func (r Repo) Extend(ctx context.Context, businessID, id string, newEnd time.Time, actor string, now time.Time) (Booking, error) {
+	return Extend(ctx, r.DB, businessID, id, newEnd, actor, now)
+}

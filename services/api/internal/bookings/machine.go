@@ -25,7 +25,7 @@ var transitions = map[string]map[string][]string{
 		"pending_deposit": {"confirmed", "cancelled", "expired"},
 		"confirmed":       {"checked_out", "cancelled", "no_show"},
 		"checked_out":     {"returned", "overdue"},
-		"overdue":         {"returned"},
+		"overdue":         {"returned", "checked_out"}, // back to checked_out only by extending it
 		"returned":        {"completed"},
 	},
 }
@@ -48,7 +48,7 @@ func Releases(status string) bool { return slices.Contains(releasing, status) }
 func Next(kind, from string) []string {
 	var out []string
 	for _, s := range transitions[kind][from] {
-		if ByPeople(s) {
+		if ByPeople(s) && !(from == "overdue" && s == "checked_out") {
 			out = append(out, s)
 		}
 	}
