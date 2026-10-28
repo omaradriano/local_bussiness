@@ -1,6 +1,6 @@
 import type { components } from '@lb/api-client';
 import { addDays, firstOfMonth, formatMXN, hhmm, lastOfMonth, localToISO, strings, term, todayISO } from '@lb/shared';
-import { router, Stack, useLocalSearchParams } from 'expo-router';
+import { Link, router, Stack, useLocalSearchParams } from 'expo-router';
 import { useEffect, useMemo, useState } from 'react';
 import { ActivityIndicator, Button, Pressable, ScrollView, Text, TextInput, View } from 'react-native';
 import { Calendar, type DayInfo } from '../../../../../components/Calendar';
@@ -63,6 +63,7 @@ export default function NewBooking() {
   const [notes, setNotes] = useState('');
 
   const [days, setDays] = useState<Record<string, Day>>({}); // calendar availability of the visible month
+  const [daysState, setDaysState] = useState<'loading' | 'ready' | string>('loading'); // string = error
   const [slots, setSlots] = useState<Slot[] | null>(null);
   const [exact, setExact] = useState<Availability | null>(null); // rental: the exact range with times
   const [errors, setErrors] = useState<Record<string, string>>({});
@@ -86,13 +87,18 @@ export default function NewBooking() {
   // Products and rentals: paint the visible month (closed / full / no free units are disabled).
   useEffect(() => {
     setDays({});
+    setDaysState('loading');
     if (!item || item.kind === 'service') return;
     const start = month < today ? today : month;
     const end = lastOfMonth(month);
-    if (start > end) return;
+    if (start > end) return setDaysState('ready');
     api.GET('/v1/b/{businessId}/availability', {
       params: { path: { businessId }, query: { item_id: item.id, from: start, to: end, quantity: qty } },
-    }).then(({ data }) => setDays(Object.fromEntries((data?.days ?? []).map((d) => [d.date, d]))));
+    }).then(({ data, error, response }) => {
+      if (!data) return setDaysState(`${t.availabilityError} ${errorText(error, response.status)}`);
+      setDays(Object.fromEntries((data.days ?? []).map((d) => [d.date, d])));
+      setDaysState('ready');
+    });
   }, [businessId, item, month, qty, today, refresh]);
 
   // Services: slots of the chosen day.
@@ -189,7 +195,14 @@ export default function NewBooking() {
       {item && (
         <>
           <Text>{item.kind === 'rental' ? (from && !to ? t.pickReturn : t.pickRange) : t.pickDay}</Text>
-          <Calendar month={month} onMonthChange={setMonth} from={from} to={item.kind === 'rental' ? to : null} onSelect={pick} dayInfo={dayInfo} />
+          <Calendar month={month} onMonthChange={setMonth} minMonth={firstOfMonth(today)} from={from} to={item.kind === 'rental' ? to : null}
+            onSelect={pick} dayInfo={dayInfo} />
+          {daysState !== 'loading' && daysState !== 'ready' && <Text accessibilityRole="alert">{daysState}</Text>}
+          {item.kind === 'rental' && daysState === 'ready' && Object.values(days).every((d) => d.remaining === 0) && (
+            <Link href={{ pathname: '/admin/[businessId]/catalog/[itemId]/units', params: { businessId, itemId: item.id } }}>
+              <Text accessibilityRole="alert" style={{ textDecorationLine: 'underline' }}>{t.noUnits}</Text>
+            </Link>
+          )}
         </>
       )}
 

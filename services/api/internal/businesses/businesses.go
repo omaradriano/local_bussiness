@@ -15,6 +15,8 @@ import (
 
 	"github.com/jackc/pgx/v5"
 	"github.com/jackc/pgx/v5/pgconn"
+
+	"github.com/omaradriano/local_bussiness/services/api/internal/catalog"
 )
 
 var Verticals = []string{"nails", "flowers", "tool_rental"}
@@ -108,6 +110,7 @@ type TemplateItem struct {
 	PriceUnit       *string `json:"price_unit"`
 	SecurityDeposit *int64  `json:"security_deposit"`
 	LateFeePerDay   *int64  `json:"late_fee_per_day"`
+	Units           int     `json:"units"` // rentals: physical pieces to create (codes like ROT-01)
 }
 
 type TemplateStep struct {
@@ -203,14 +206,21 @@ func Create(ctx context.Context, db Beginner, userID string, in Input) (Business
 	}
 
 	for i, it := range tpl.Items {
-		if _, err := tx.Exec(ctx, `
+		var itemID string
+		if err := tx.QueryRow(ctx, `
 			insert into public.catalog_items
 			  (business_id, kind, name, description, price, sort, duration_minutes, buffer_minutes,
 			   prep_hours, price_unit, security_deposit, late_fee_per_day)
-			values ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12)`,
+			values ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12) returning id::text`,
 			b.ID, it.Kind, it.Name, it.Description, it.Price, i+1, it.DurationMinutes, it.BufferMinutes,
-			it.PrepHours, it.PriceUnit, it.SecurityDeposit, it.LateFeePerDay); err != nil {
+			it.PrepHours, it.PriceUnit, it.SecurityDeposit, it.LateFeePerDay).Scan(&itemID); err != nil {
 			return Business{}, err
+		}
+		for n := 1; n <= it.Units; n++ {
+			if _, err := tx.Exec(ctx, `insert into public.item_units (business_id, item_id, code) values ($1, $2, $3)`,
+				b.ID, itemID, catalog.UnitCode(it.Name, n)); err != nil {
+				return Business{}, err
+			}
 		}
 	}
 

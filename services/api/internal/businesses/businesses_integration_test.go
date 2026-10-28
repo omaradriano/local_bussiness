@@ -67,6 +67,14 @@ func TestIntegrationCreateAppliesTemplate(t *testing.T) {
 		if !tpl.OwnerAttends && ownerStaff != 0 {
 			t.Fatalf("%s: owner should not be staff", v)
 		}
+		var units, want int
+		outer.QueryRow(ctx, `select count(*) from public.item_units where business_id = $1`, b.ID).Scan(&units)
+		for _, it := range tpl.Items {
+			want += it.Units
+		}
+		if units != want {
+			t.Fatalf("%s: units = %d, want %d", v, units, want)
+		}
 	}
 
 	_, err = Create(ctx, outer, user, Input{Name: "Otra", Slug: "prueba-unas", Vertical: "nails"}.Normalize())

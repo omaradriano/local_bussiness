@@ -191,11 +191,18 @@ func NewRouter(d Deps) http.Handler {
 
 			r.With(auth.RequireRole("owner")).Post("/catalog", func(w http.ResponseWriter, r *http.Request) {
 				m, _ := auth.MemberFrom(r.Context())
-				var it catalog.Item
-				if !decode(w, r, &it) {
+				var body struct {
+					catalog.Item
+					Units int `json:"units"` // rentals: how many pieces to create right away (codes like ROT-01)
+				}
+				if !decode(w, r, &body) {
 					return
 				}
-				it = it.Normalize()
+				if body.Units < 0 || body.Units > 50 {
+					invalid(w, "Revisa las unidades.", map[string]string{"units": "Escribe de 0 a 50 piezas."})
+					return
+				}
+				it := body.Item.Normalize()
 				if errs := it.Validate(); len(errs) > 0 {
 					invalid(w, "Revisa los datos del artículo.", errs)
 					return
@@ -204,6 +211,13 @@ func NewRouter(d Deps) http.Handler {
 				if err != nil {
 					internalError(w, r, "create catalog item", err)
 					return
+				}
+				for n := 1; created.Kind == "rental" && n <= body.Units; n++ {
+					u := catalog.Unit{ItemID: created.ID, Code: catalog.UnitCode(created.Name, n), Status: "available"}
+					if _, err := d.Catalog.CreateUnit(r.Context(), m.BusinessID, u); err != nil && !errors.Is(err, catalog.ErrCodeTaken) {
+						internalError(w, r, "create item units", err)
+						return
+					}
 				}
 				apierr.JSON(w, http.StatusCreated, created)
 			})

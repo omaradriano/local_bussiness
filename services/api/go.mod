@@ -17,6 +17,7 @@ require (
 	github.com/riverqueue/river/riverdriver/riverpgxv5 v0.50.0
 	github.com/riverqueue/river/rivertype v0.50.0
 	golang.org/x/image v0.47.0
+	golang.org/x/text v0.43.0
 )
 
 require (
@@ -47,6 +48,5 @@ require (
 	github.com/tidwall/pretty v1.2.1 // indirect
 	github.com/tidwall/sjson v1.2.5 // indirect
 	golang.org/x/sync v0.24.0 // indirect
-	golang.org/x/text v0.43.0 // indirect
 	golang.org/x/time v0.15.0 // indirect
 )

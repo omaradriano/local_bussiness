@@ -83,3 +83,12 @@ func TestRentalTemplateRequiresIDBeforeCheckout(t *testing.T) {
 	}
 	t.Fatal("rental template must require the INE photo before checked_out")
 }
+
+func TestRentalTemplateComesWithUnits(t *testing.T) {
+	tpl, _ := TemplateFor("tool_rental")
+	for _, it := range tpl.Items {
+		if it.Units < 1 {
+			t.Errorf("%s has no units: nothing could be rented", it.Name)
+		}
+	}
+}

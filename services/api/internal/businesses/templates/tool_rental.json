@@ -1,15 +1,82 @@
 {
-  "settings": { "deposit_percent": 0, "cancel_hours": 24, "hold_hours": 24, "inspection_minutes": 60 },
+  "settings": {
+    "deposit_percent": 0,
+    "cancel_hours": 24,
+    "hold_hours": 24,
+    "inspection_minutes": 60
+  },
   "hours": [
-    { "weekdays": [1, 2, 3, 4, 5, 6], "opens_at": "08:00", "closes_at": "18:00" }
+    {
+      "weekdays": [
+        1,
+        2,
+        3,
+        4,
+        5,
+        6
+      ],
+      "opens_at": "08:00",
+      "closes_at": "18:00"
+    }
   ],
   "items": [
-    { "kind": "rental", "name": "Rotomartillo", "description": "Rotomartillo con juego de brocas.", "price": 30000, "price_unit": "day", "security_deposit": 100000, "late_fee_per_day": 30000 },
-    { "kind": "rental", "name": "Revolvedora de concreto", "description": "Revolvedora de un saco.", "price": 60000, "price_unit": "day", "security_deposit": 300000, "late_fee_per_day": 60000 }
+    {
+      "kind": "rental",
+      "name": "Rotomartillo",
+      "description": "Rotomartillo con juego de brocas.",
+      "price": 30000,
+      "price_unit": "day",
+      "security_deposit": 100000,
+      "late_fee_per_day": 30000,
+      "units": 2
+    },
+    {
+      "kind": "rental",
+      "name": "Revolvedora de concreto",
+      "description": "Revolvedora de un saco.",
+      "price": 60000,
+      "price_unit": "day",
+      "security_deposit": 300000,
+      "late_fee_per_day": 60000,
+      "units": 2
+    }
   ],
   "steps": [
-    { "applies_to_kind": "rental", "moment": "before_status", "to_status": "checked_out", "step_type": "photo", "label": "Foto del INE", "required": true, "config": { "bucket": "private-docs", "max_files": 2 } },
-    { "applies_to_kind": "rental", "moment": "before_status", "to_status": "checked_out", "step_type": "photo", "label": "Fotos de la herramienta al salir", "required": true, "config": { "bucket": "rental-evidence", "max_files": 6 } },
-    { "applies_to_kind": "rental", "moment": "before_status", "to_status": "completed", "step_type": "photo", "label": "Fotos de la herramienta al regresar", "required": true, "config": { "bucket": "rental-evidence", "max_files": 6 } }
+    {
+      "applies_to_kind": "rental",
+      "moment": "before_status",
+      "to_status": "checked_out",
+      "step_type": "photo",
+      "label": "Foto del INE",
+      "required": true,
+      "config": {
+        "bucket": "private-docs",
+        "max_files": 2
+      }
+    },
+    {
+      "applies_to_kind": "rental",
+      "moment": "before_status",
+      "to_status": "checked_out",
+      "step_type": "photo",
+      "label": "Fotos de la herramienta al salir",
+      "required": true,
+      "config": {
+        "bucket": "rental-evidence",
+        "max_files": 6
+      }
+    },
+    {
+      "applies_to_kind": "rental",
+      "moment": "before_status",
+      "to_status": "completed",
+      "step_type": "photo",
+      "label": "Fotos de la herramienta al regresar",
+      "required": true,
+      "config": {
+        "bucket": "rental-evidence",
+        "max_files": 6
+      }
+    }
   ]
 }
