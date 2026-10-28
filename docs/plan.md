@@ -623,12 +623,24 @@ Catálogo público `/<slug>` con un diseño llamativo por giro, reservas y pedid
 - **Movimiento con propósito:** las animaciones apoyan la navegación y la respuesta a acciones (elegir horario, armar el ramo, confirmar), y se desactivan con `prefers-reduced-motion`.
 
 * [ ] Cada giro tiene su plantilla visual de catálogo, y el negocio puede usar su logo y colores.
+* [ ] **Landing personalizada (servicio extra de pago):** página de inicio propia para el negocio que la contrate, con bloques configurables o diseño a la medida y dominio propio opcional; la reserva usa el mismo flujo del catálogo. Ver `docs/mapa-giros.md`.
 * [ ] Una reserva o pedido hecho desde la web aparece en el panel con el mismo flujo de la fase 3.
 * [ ] El cliente arma un ramo con tipos y cantidades y ve el precio actualizarse en cada paso.
 * [ ] Lighthouse móvil del catálogo con 90 o más en rendimiento y accesibilidad.
 * [ ] Playwright cubre reservar, pedir y rentar desde el catálogo de cada giro.
 
-**Fase 7 (posterior)** — WhatsApp Cloud API, pagos en línea del cliente, cobro de la suscripción, nuevos giros (limosinas, salones, casas por noche) y editor para que cada dueño configure sus propios pasos.
+**Fase 7 (posterior)** — WhatsApp Cloud API, pagos en línea del cliente, cobro de la suscripción, nuevos giros (lavado de autos, lavado de salas, tiendas, limosinas, salones, casas por noche) sobre el mapa por giro y editor para que cada dueño configure sus propios pasos.
+
+## Mapa por giro y superadministrador
+
+La plataforma debe adaptarse a muchos giros (renta de herramienta, uñas, florería, lavado de autos, lavado de salas, tiendas…) sin reescribir pantallas. Cada giro se describe con un **mapa** montado sobre un **motor** (cómo se aparta: agenda, entrega con fecha, renta por unidades, venta sin fecha) y cada negocio ajusta sus propios parámetros. El diseño completo, el mapa de renta de herramienta (el primero terminado) y el camino para llegar están en [`docs/mapa-giros.md`](mapa-giros.md).
+
+- [x] Textos y secciones de Ajustes por giro (`verticalTexts.ts`, 2026-10-28).
+- [ ] Fuente única por giro en código: un archivo con todo su mapa; las pantallas preguntan por funciones, no por giro.
+- [ ] Funciones encendibles por negocio (`settings.features`) por encima de lo que trae su giro.
+- [ ] Panel de superadministrador: negocios, su giro, plan, funciones y ajustes; entrar como el negocio con bitácora de auditoría.
+- [ ] Giros en la base (`business_types`), editables desde el panel de superadministrador y validados contra los motores.
+- [ ] Motores nuevos según los giros que entren: servicio a domicilio (dirección, zona y traslado) y venta sin fecha (existencias).
 
 ## Pendientes para después
 
@@ -656,7 +668,7 @@ Lista de puntos a considerar, agrupados por cuándo conviene resolverlos; ningun
 **Antes de vender**
 
 - [ ] **Planes y cobro de la suscripción:** periodo de prueba, límites por plan (empleadas, unidades en renta, reservas al mes), avisos de pago vencido y suspensión.
-- [ ] **Panel de superadministrador:** ver negocios, activar funciones, dar soporte y entrar como un negocio con registro de auditoría.
+- [ ] **Panel de superadministrador:** ver negocios, activar funciones, dar soporte y entrar como un negocio con registro de auditoría (detalle en «Mapa por giro y superadministrador»).
 - [ ] **Alta rápida:** importar catálogo desde Excel o CSV y generar QR y link imprimibles para el local.
 - [ ] **Marca del negocio en su catálogo:** logo, colores y foto de portada.
 - [ ] **Link de pago para anticipos:** link de Mercado Pago generado por la API y conciliado con `payments`.
@@ -696,6 +708,8 @@ Cinco decisiones conviene cerrarlas antes de la fase 1; el resto del plan ya se 
 - [x] **URL de cada negocio:** ruta `dominio.com/<slug>` (decidido 2026-10-26).
 - [x] **Acceso de clientes finales:** solo nombre y teléfono (decidido 2026-10-26); apartados falsos se controlan con rate limit, límite de pendientes por teléfono y expiración sin anticipo.
 - [x] **Cola de jobs:** librería River sobre Postgres (decidido 2026-10-26).
+- [x] **Giros en código o en base:** un archivo por giro en código (tipado y probado) y pasar a `business_types` cuando exista el panel de superadministrador (decidido 2026-10-28). Los giros se agregan uno a uno conforme lleguen negocios reales con sus requerimientos.
+- [ ] **Landing personalizada:** bloques configurables, diseño a la medida o ambos según el plan contratado.
 - [ ] **Pagos en línea (fase 7):** Mercado Pago, Stripe o Conekta, según comisiones y lo que usen los negocios piloto.
 
 **Instrucciones para Claude Code** (copiar a `CLAUDE.md`)
