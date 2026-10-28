@@ -12,14 +12,13 @@ import (
 
 	"github.com/omaradriano/local_bussiness/services/api/internal/apierr"
 	"github.com/omaradriano/local_bussiness/services/api/internal/auth"
-	"github.com/omaradriano/local_bussiness/services/api/internal/businesses"
 	"github.com/omaradriano/local_bussiness/services/api/internal/customers"
 	"github.com/omaradriano/local_bussiness/services/api/internal/files"
 	"github.com/omaradriano/local_bussiness/services/api/internal/media"
 )
 
 type CustomersRepo interface {
-	Vertical(ctx context.Context, businessID string) (string, error)
+	Rules(ctx context.Context, businessID string) (customers.Rules, error)
 	Search(ctx context.Context, businessID, q string, limit int) ([]customers.Customer, error)
 	Get(ctx context.Context, businessID, id string) (customers.Customer, error)
 	Create(ctx context.Context, businessID string, c customers.Customer) (customers.Customer, error)
@@ -67,12 +66,11 @@ func mountCustomers(r chi.Router, d Deps) {
 			in.Trusted = nil // only the owner decides who is trusted
 		}
 		c := current.Apply(in)
-		vertical, err := d.Customers.Vertical(r.Context(), m.BusinessID)
+		rules, err := d.Customers.Rules(r.Context(), m.BusinessID)
 		if err != nil {
-			internalError(w, r, "vertical", err)
+			internalError(w, r, "customer rules", err)
 			return
 		}
-		rules := customers.Rules{RequireAddress: businesses.HasFeature(vertical, "customerAddress"), RequireGuarantor: businesses.HasFeature(vertical, "guarantor")}
 		if errs := c.Validate(rules); len(errs) > 0 {
 			invalid(w, "Revisa los datos del cliente.", errs)
 			return

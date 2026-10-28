@@ -20,8 +20,10 @@ import (
 	"github.com/omaradriano/local_bussiness/services/api/internal/bookings"
 	"github.com/omaradriano/local_bussiness/services/api/internal/businesses"
 	"github.com/omaradriano/local_bussiness/services/api/internal/catalog"
+	"github.com/omaradriano/local_bussiness/services/api/internal/features"
 	"github.com/omaradriano/local_bussiness/services/api/internal/files"
 	"github.com/omaradriano/local_bussiness/services/api/internal/media"
+	"github.com/omaradriano/local_bussiness/services/api/internal/platform"
 	"github.com/omaradriano/local_bussiness/services/api/internal/settings"
 	"github.com/omaradriano/local_bussiness/services/api/internal/staff"
 	"github.com/omaradriano/local_bussiness/services/api/internal/steps"
@@ -31,6 +33,7 @@ import (
 type Store interface {
 	auth.Members
 	Memberships(ctx context.Context, userID string) ([]store.Membership, error)
+	IsPlatformAdmin(ctx context.Context, userID string) (bool, error)
 }
 
 type Deps struct {
@@ -45,7 +48,13 @@ type Deps struct {
 	Bookings       BookingsRepo
 	Settings       SettingsRepo
 	Customers      CustomersRepo
+	Platform       PlatformRepo
 	Now            func() time.Time // injectable clock; nil = time.Now
+}
+
+type PlatformRepo interface {
+	Businesses(ctx context.Context) ([]platform.Business, error)
+	SetGrant(ctx context.Context, id, feature string, grant *bool) (platform.Business, error)
 }
 
 type SettingsRepo interface {
@@ -188,7 +197,65 @@ func NewRouter(d Deps) http.Handler {
 			if ms == nil {
 				ms = []store.Membership{}
 			}
-			apierr.JSON(w, http.StatusOK, map[string]any{"user_id": user, "businesses": ms})
+			for i, m := range ms {
+				var s struct {
+					Features map[string]bool `json:"features"`
+				}
+				_ = json.Unmarshal(m.Settings, &s)
+				ms[i].Features = features.Active(m.Vertical, features.Parse(m.Grants), s.Features)
+			}
+			admin, err := d.Store.IsPlatformAdmin(r.Context(), user)
+			if err != nil {
+				internalError(w, r, "platform admin", err)
+				return
+			}
+			apierr.JSON(w, http.StatusOK, map[string]any{"user_id": user, "businesses": ms, "platform_admin": admin})
+		})
+
+		// Platform admin: every business and its features (not tied to one business).
+		r.Route("/admin", func(r chi.Router) {
+			r.Use(func(next http.Handler) http.Handler {
+				return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+					user, _ := auth.UserID(r.Context())
+					ok, err := d.Store.IsPlatformAdmin(r.Context(), user)
+					if err != nil {
+						internalError(w, r, "platform admin", err)
+						return
+					}
+					if !ok {
+						apierr.Write(w, http.StatusForbidden, "forbidden", "Solo el administrador de la plataforma.")
+						return
+					}
+					next.ServeHTTP(w, r)
+				})
+			})
+			r.Get("/businesses", func(w http.ResponseWriter, r *http.Request) {
+				list, err := d.Platform.Businesses(r.Context())
+				if err != nil {
+					internalError(w, r, "admin businesses", err)
+					return
+				}
+				apierr.JSON(w, http.StatusOK, map[string]any{"businesses": list})
+			})
+			r.With(requireUUIDParam("businessId", "El negocio no existe.")).Put("/businesses/{businessId}/features/{feature}", func(w http.ResponseWriter, r *http.Request) {
+				var body struct {
+					Grant *bool `json:"grant"` // true = give, false = remove, null = as the giro
+				}
+				if !decode(w, r, &body) {
+					return
+				}
+				b, err := d.Platform.SetGrant(r.Context(), chi.URLParam(r, "businessId"), chi.URLParam(r, "feature"), body.Grant)
+				switch {
+				case errors.Is(err, platform.ErrNotFound):
+					notFound(w, "El negocio no existe.")
+				case errors.Is(err, platform.ErrNotForBusiness):
+					invalid(w, "Esa función no aplica a este tipo de negocio.", map[string]string{"feature": "No aplica a este tipo de negocio."})
+				case err != nil:
+					internalError(w, r, "set grant", err)
+				default:
+					apierr.JSON(w, http.StatusOK, b)
+				}
+			})
 		})
 
 		r.Post("/businesses", func(w http.ResponseWriter, r *http.Request) {

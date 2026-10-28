@@ -47,16 +47,20 @@ func (s *Store) Role(ctx context.Context, businessID, userID string) (string, er
 }
 
 type Membership struct {
-	BusinessID string `json:"business_id"`
-	Slug       string `json:"slug"`
-	Name       string `json:"name"`
-	Vertical   string `json:"vertical"`
-	Role       string `json:"role"`
+	BusinessID string   `json:"business_id"`
+	Slug       string   `json:"slug"`
+	Name       string   `json:"name"`
+	Vertical   string   `json:"vertical"`
+	Role       string   `json:"role"`
+	Features   []string `json:"features"` // active features; filled by the caller from the two below
+
+	Grants   []byte `json:"-"` // businesses.feature_grants
+	Settings []byte `json:"-"` // businesses.settings (owner's feature choices)
 }
 
 func (s *Store) Memberships(ctx context.Context, userID string) ([]Membership, error) {
 	rows, err := s.db.Query(ctx, `
-		select b.id::text, b.slug, b.name, b.vertical, m.role
+		select b.id::text, b.slug, b.name, b.vertical, m.role, '{}'::text[], b.feature_grants, b.settings
 		from public.business_members m
 		join public.businesses b on b.id = m.business_id
 		where m.user_id = $1
@@ -65,4 +69,11 @@ func (s *Store) Memberships(ctx context.Context, userID string) ([]Membership, e
 		return nil, err
 	}
 	return pgx.CollectRows(rows, pgx.RowToStructByPos[Membership])
+}
+
+// IsPlatformAdmin reports whether the user administers the platform (not a business).
+func (s *Store) IsPlatformAdmin(ctx context.Context, userID string) (bool, error) {
+	var ok bool
+	err := s.db.QueryRow(ctx, `select exists (select 1 from public.platform_admins where user_id = $1)`, userID).Scan(&ok)
+	return ok, err
 }

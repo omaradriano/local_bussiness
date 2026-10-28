@@ -1,8 +1,9 @@
 import { describe, expect, it } from 'vitest';
+import barbershopApi from '../../../../services/api/internal/businesses/templates/barbershop.json';
 import flowersApi from '../../../../services/api/internal/businesses/templates/flowers.json';
 import nailsApi from '../../../../services/api/internal/businesses/templates/nails.json';
 import rentalApi from '../../../../services/api/internal/businesses/templates/tool_rental.json';
-import { VERTICALS, hasFeature, kindFor, settingsSectionsFor, term, textsFor, verticalMap, type Vertical } from './index';
+import { FEATURES, featureInfo, featureSupports, VERTICALS, hasFeature, kindFor, settingsSectionsFor, term, textsFor, verticalMap, type Vertical } from './index';
 
 describe('terms', () => {
   it('uses each giro vocabulary', () => {
@@ -49,9 +50,25 @@ describe('Ajustes and features', () => {
 
 // The API reads its side of each map from its template; both must say the same.
 describe('maps match the API templates', () => {
-  const api: Record<Vertical, { kind: string; features: string[] }> = { nails: nailsApi, flowers: flowersApi, tool_rental: rentalApi };
+  const api: Record<Vertical, { kind: string; features: string[] }> = { barbershop: barbershopApi, nails: nailsApi, flowers: flowersApi, tool_rental: rentalApi };
   it.each(VERTICALS)('%s: same engine and features', (v) => {
     expect(api[v].kind).toBe(kindFor(v));
     expect([...api[v].features].sort()).toEqual([...verticalMap(v).features].sort());
+  });
+});
+
+describe('feature catalog', () => {
+  it('every API feature has a name and explanation', () => {
+    for (const f of FEATURES) expect(featureInfo(f)?.label).toBeTruthy();
+  });
+
+  it('every giro only brings features its engine supports', () => {
+    for (const v of VERTICALS) for (const f of verticalMap(v).features) expect(featureSupports(f, kindFor(v))).toBe(true);
+  });
+
+  it('engine rules', () => {
+    expect(featureSupports('inventory', 'service')).toBe(false);
+    expect(featureSupports('staff', 'service')).toBe(true);
+    expect(featureSupports('customerDocuments', 'service')).toBe(true);
   });
 });

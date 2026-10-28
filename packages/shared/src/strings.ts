@@ -280,6 +280,19 @@ export const strings = {
     nothing: 'Nada pendiente para hoy.',
   },
   nav: { menu: 'Menú', businesses: 'Cambiar de negocio' },
+  platform: {
+    title: 'Superadministrador',
+    entry: 'Superadministrador',
+    entryHint: 'Negocios de la plataforma y sus funciones',
+    hint: 'Todos los negocios registrados. Entra a uno para darle o quitarle funciones.',
+    empty: 'Todavía no hay negocios.',
+    businesses: (n: number) => `${n} negocio${n === 1 ? '' : 's'}`,
+    noFeatures: 'sin funciones extra',
+    featuresHint: '«Como el giro» sigue lo que trae su tipo de negocio. «Dar» y «Quitar» aplican solo a este negocio. Después, el dueño enciende o apaga en Ajustes las que tenga disponibles.',
+    choice: { giroOn: 'Giro (sí)', giroOff: 'Giro (no)', give: 'Dar', remove: 'Quitar' },
+    state: { on: 'Activa', ownerOff: 'Apagada por el dueño', off: 'No disponible' },
+    saved: 'Función actualizada.',
+  },
   files: {
     openPdf: 'abrir PDF',
     addPhotos: 'Fotos',
@@ -344,6 +357,11 @@ export const strings = {
   },
   settings: {
     title: 'Ajustes',
+    features: {
+      title: 'Funciones',
+      hint: 'Partes de la app que tu negocio puede usar. Apágalas si no las necesitas; puedes volver a encenderlas cuando quieras.',
+      saved: 'Función actualizada.',
+    },
     general: {
       title: 'Anticipo y apartados',
       deposit: 'Anticipo (% del total)',

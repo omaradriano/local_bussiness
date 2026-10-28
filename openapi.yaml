@@ -40,13 +40,56 @@ paths:
             application/json:
               schema:
                 type: object
-                required: [user_id, businesses]
+                required: [user_id, businesses, platform_admin]
                 properties:
                   user_id: { type: string, format: uuid }
+                  platform_admin: { type: boolean, description: "Administra la plataforma (no un negocio)" }
                   businesses:
                     type: array
                     items: { $ref: "#/components/schemas/Membership" }
         "401": { $ref: "#/components/responses/Error" }
+
+  /v1/admin/businesses:
+    get:
+      operationId: adminListBusinesses
+      summary: Todos los negocios con su giro y sus funciones (solo administrador de la plataforma)
+      responses:
+        "200":
+          description: OK
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [businesses]
+                properties:
+                  businesses: { type: array, items: { $ref: "#/components/schemas/AdminBusiness" } }
+        "403": { $ref: "#/components/responses/Error" }
+
+  /v1/admin/businesses/{businessId}/features/{feature}:
+    parameters:
+      - $ref: "#/components/parameters/BusinessId"
+      - { name: feature, in: path, required: true, schema: { $ref: "#/components/schemas/Feature" } }
+    put:
+      operationId: adminSetFeature
+      summary: Da (true) o quita (false) una función a un negocio; null = como su giro
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [grant]
+              properties:
+                grant: { type: [boolean, "null"] }
+      responses:
+        "200":
+          description: OK
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/AdminBusiness" }
+        "403": { $ref: "#/components/responses/Error" }
+        "404": { $ref: "#/components/responses/Error" }
+        "422": { $ref: "#/components/responses/Error" }
 
   /v1/businesses:
     post:
@@ -534,6 +577,10 @@ paths:
             schema:
               type: object
               properties:
+                features:
+                  type: object
+                  description: "Función -> encendida o apagada (solo las disponibles)"
+                  additionalProperties: { type: boolean }
                 general:
                   type: object
                   properties:
@@ -1171,7 +1218,7 @@ components:
 
     Vertical:
       type: string
-      enum: [nails, flowers, tool_rental]
+      enum: [nails, flowers, tool_rental, barbershop]
 
     ItemKind:
       type: string
@@ -1320,6 +1367,32 @@ components:
               key: { type: string }
               created_at: { type: string, format: date-time }
 
+    Feature:
+      type: string
+      enum: [staff, inventory, guarantor, customerAddress, customerDocuments, trustedCustomers]
+
+    FeatureState:
+      type: object
+      required: [key, from_giro, grant, available, enabled, active]
+      properties:
+        key: { $ref: "#/components/schemas/Feature" }
+        from_giro: { type: boolean, description: "La trae su giro" }
+        grant: { type: [boolean, "null"], description: "Excepción del administrador: true = dada, false = quitada, null = como el giro" }
+        available: { type: boolean, description: "El dueño la puede usar" }
+        enabled: { type: boolean, description: "El dueño la tiene encendida" }
+        active: { type: boolean }
+
+    AdminBusiness:
+      type: object
+      required: [business_id, slug, name, vertical, created_at, features]
+      properties:
+        business_id: { type: string, format: uuid }
+        slug: { type: string }
+        name: { type: string }
+        vertical: { $ref: "#/components/schemas/Vertical" }
+        created_at: { type: string, format: date-time }
+        features: { type: array, items: { $ref: "#/components/schemas/FeatureState" } }
+
     DeliveryZone:
       type: object
       required: [name, fee]
@@ -1329,9 +1402,10 @@ components:
 
     Settings:
       type: object
-      required: [general, rentals, delivery]
+      required: [general, rentals, delivery, features]
       description: "Todas las secciones; la app muestra las que le tocan al giro del negocio"
       properties:
+        features: { type: array, items: { $ref: "#/components/schemas/FeatureState" }, description: "Funciones que admite su giro; el dueño solo cambia enabled" }
         general:
           type: object
           required: [deposit_percent, hold_hours]
@@ -1623,10 +1697,11 @@ components:
 
     Membership:
       type: object
-      required: [business_id, slug, name, vertical, role]
+      required: [business_id, slug, name, vertical, role, features]
       properties:
         business_id: { type: string, format: uuid }
         slug: { type: string }
         name: { type: string }
         vertical: { $ref: "#/components/schemas/Vertical" }
         role: { $ref: "#/components/schemas/Role" }
+        features: { type: array, items: { $ref: "#/components/schemas/Feature" }, description: "Funciones activas (disponibles y encendidas)" }

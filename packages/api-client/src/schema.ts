@@ -37,6 +37,43 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/v1/admin/businesses": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Todos los negocios con su giro y sus funciones (solo administrador de la plataforma) */
+        get: operations["adminListBusinesses"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/admin/businesses/{businessId}/features/{feature}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                businessId: components["parameters"]["BusinessId"];
+                feature: components["schemas"]["Feature"];
+            };
+            cookie?: never;
+        };
+        get?: never;
+        /** Da (true) o quita (false) una función a un negocio; null = como su giro */
+        put: operations["adminSetFeature"];
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/v1/businesses": {
         parameters: {
             query?: never;
@@ -852,7 +889,7 @@ export interface components {
         /** @enum {string} */
         Role: "owner" | "staff";
         /** @enum {string} */
-        Vertical: "nails" | "flowers" | "tool_rental";
+        Vertical: "nails" | "flowers" | "tool_rental" | "barbershop";
         /** @enum {string} */
         ItemKind: "service" | "product" | "rental";
         /** @enum {string} */
@@ -994,6 +1031,30 @@ export interface components {
                 created_at: string;
             }[];
         };
+        /** @enum {string} */
+        Feature: "staff" | "inventory" | "guarantor" | "customerAddress" | "customerDocuments" | "trustedCustomers";
+        FeatureState: {
+            key: components["schemas"]["Feature"];
+            /** @description La trae su giro */
+            from_giro: boolean;
+            /** @description Excepción del administrador: true = dada, false = quitada, null = como el giro */
+            grant: boolean | null;
+            /** @description El dueño la puede usar */
+            available: boolean;
+            /** @description El dueño la tiene encendida */
+            enabled: boolean;
+            active: boolean;
+        };
+        AdminBusiness: {
+            /** Format: uuid */
+            business_id: string;
+            slug: string;
+            name: string;
+            vertical: components["schemas"]["Vertical"];
+            /** Format: date-time */
+            created_at: string;
+            features: components["schemas"]["FeatureState"][];
+        };
         DeliveryZone: {
             name: string;
             /** @description centavos */
@@ -1001,6 +1062,8 @@ export interface components {
         };
         /** @description Todas las secciones; la app muestra las que le tocan al giro del negocio */
         Settings: {
+            /** @description Funciones que admite su giro; el dueño solo cambia enabled */
+            features: components["schemas"]["FeatureState"][];
             general: {
                 /** @description Anticipo al apartar, % del total (0 = sin anticipo) */
                 deposit_percent: number;
@@ -1284,6 +1347,8 @@ export interface components {
             name: string;
             vertical: components["schemas"]["Vertical"];
             role: components["schemas"]["Role"];
+            /** @description Funciones activas (disponibles y encendidas) */
+            features: components["schemas"]["Feature"][];
         };
     };
     responses: {
@@ -1351,11 +1416,68 @@ export interface operations {
                     "application/json": {
                         /** Format: uuid */
                         user_id: string;
+                        /** @description Administra la plataforma (no un negocio) */
+                        platform_admin: boolean;
                         businesses: components["schemas"]["Membership"][];
                     };
                 };
             };
             401: components["responses"]["Error"];
+        };
+    };
+    adminListBusinesses: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        businesses: components["schemas"]["AdminBusiness"][];
+                    };
+                };
+            };
+            403: components["responses"]["Error"];
+        };
+    };
+    adminSetFeature: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                businessId: components["parameters"]["BusinessId"];
+                feature: components["schemas"]["Feature"];
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": {
+                    grant: boolean | null;
+                };
+            };
+        };
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["AdminBusiness"];
+                };
+            };
+            403: components["responses"]["Error"];
+            404: components["responses"]["Error"];
+            422: components["responses"]["Error"];
         };
     };
     createBusiness: {
@@ -2052,6 +2174,10 @@ export interface operations {
         requestBody: {
             content: {
                 "application/json": {
+                    /** @description Función -> encendida o apagada (solo las disponibles) */
+                    features?: {
+                        [key: string]: boolean;
+                    };
                     general?: {
                         deposit_percent?: number;
                         hold_hours?: number;

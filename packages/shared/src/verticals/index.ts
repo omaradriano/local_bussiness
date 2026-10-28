@@ -1,13 +1,15 @@
+import { barbershop } from './barbershop';
 import { flowers } from './flowers';
 import { nails } from './nails';
 import { tool_rental } from './tool_rental';
 import type { Feature, ItemKind, SettingsSection, Terms, VerticalMap, VerticalTexts } from './types';
 
 export * from './types';
+export * from './features';
 
 // Every giro, in sign-up order. Adding a giro: a file like ./tool_rental.ts, its entry here, its API
 // template (services/api/internal/businesses/templates/<giro>.json) and the vertical in the database check.
-const MAPS = { nails, flowers, tool_rental } satisfies Record<string, VerticalMap>;
+const MAPS = { barbershop, nails, flowers, tool_rental } satisfies Record<string, VerticalMap>;
 
 export type Vertical = keyof typeof MAPS;
 export const VERTICALS = Object.keys(MAPS) as Vertical[];

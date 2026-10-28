@@ -637,8 +637,8 @@ La plataforma debe adaptarse a muchos giros (renta de herramienta, uñas, florer
 
 - [x] Textos y secciones de Ajustes por giro (`verticalTexts.ts`, 2026-10-28).
 - [x] Fuente única por giro en código: un archivo con todo su mapa; las pantallas preguntan por funciones, no por giro (2026-10-28).
-- [ ] Funciones encendibles por negocio (`settings.features`) por encima de lo que trae su giro.
-- [ ] Panel de superadministrador: negocios, su giro, plan, funciones y ajustes; entrar como el negocio con bitácora de auditoría.
+- [x] Funciones por negocio (2026-10-28): el giro trae unas, el superadministrador da o quita por negocio (`businesses.feature_grants`) y el dueño enciende o apaga las disponibles en Ajustes (`settings.features`).
+- [ ] Panel de superadministrador: negocios, su giro, plan, funciones y ajustes; entrar como el negocio con bitácora de auditoría. *Primera parte hecha (2026-10-28): rol `platform_admins`, lista de negocios y funciones por negocio.*
 - [ ] Giros en la base (`business_types`), editables desde el panel de superadministrador y validados contra los motores.
 - [ ] Motores nuevos según los giros que entren: servicio a domicilio (dirección, zona y traslado) y venta sin fecha (existencias).
 

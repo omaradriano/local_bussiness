@@ -1,4 +1,4 @@
-import { centavosToInput, parsePesos, settingsSectionsFor, strings, type SettingsSection } from '@lb/shared';
+import { centavosToInput, featureInfo, parsePesos, settingsSectionsFor, strings, type SettingsSection } from '@lb/shared';
 import { Ionicons } from '@expo/vector-icons';
 import { Stack, useLocalSearchParams } from 'expo-router';
 import { useEffect, useState, type ReactNode } from 'react';
@@ -151,6 +151,7 @@ export default function SettingsScreen() {
       {!isOwner && <View style={{ marginBottom: 16 }}><Notice>{t.onlyOwner}</Notice></View>}
       {sections.map((s) => render[s]())}
       {isOwner && <Button variant="primary" busy={busy} onPress={save} style={{ marginBottom: 28 }}>{t.save}</Button>}
+      <FeatureToggles businessId={businessId} isOwner={isOwner} features={settings!.features} onSaved={setSettings} />
       {has('documents') && (
         <>
           <Text variant="footnote" color="labelSecondary" style={{ marginHorizontal: 16, marginBottom: 6 }}>{t.documents.title.toUpperCase()}</Text>
@@ -159,5 +160,34 @@ export default function SettingsScreen() {
         </>
       )}
     </Screen>
+  );
+}
+
+/**
+ * Parts of the app this business may use (its giro's, plus what the platform admin gave it), each
+ * with an on/off switch for the owner. Saved at once.
+ */
+function FeatureToggles({ businessId, isOwner, features, onSaved }: {
+  businessId: string; isOwner: boolean; features: Settings['features']; onSaved: (s: Settings) => void;
+}) {
+  const toast = useToast();
+  const available = features.filter((f) => f.available);
+  if (!available.length) return null;
+
+  async function toggle(key: string, on: boolean) {
+    const { data, error, response } = await api.PATCH('/v1/b/{businessId}/settings', {
+      params: { path: { businessId } }, body: { features: { [key]: on } },
+    });
+    if (data) { onSaved(data); return toast(t.features.saved); }
+    toast(errorText(error, response.status), 'error');
+  }
+
+  return (
+    <Group label={t.features.title} footer={t.features.hint}>
+      {available.map((f) => (
+        <Cell key={f.key} label={featureInfo(f.key).label} sublabel={featureInfo(f.key).hint} accessory={
+          <Switch accessibilityLabel={featureInfo(f.key).label} value={f.enabled} disabled={!isOwner} onValueChange={(on) => toggle(f.key, on)} />} />
+      ))}
+    </Group>
   );
 }
