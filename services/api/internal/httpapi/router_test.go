@@ -599,6 +599,13 @@ func (fakeBookings) Extend(_ context.Context, _, id string, newEnd time.Time, _ 
 	return bookings.Booking{ID: id, Status: "checked_out", EndsAt: &newEnd}, nil
 }
 
+func (fakeBookings) RemoveStepFile(_ context.Context, _, id, _, key string) (bookings.Booking, error) {
+	if key == "" {
+		return bookings.Booking{}, bookings.ErrNotFound
+	}
+	return bookings.Booking{ID: id, Status: "confirmed"}, nil
+}
+
 func (fakeBookings) Inventory(context.Context, string) ([]bookings.InventoryRow, error) {
 	return []bookings.InventoryRow{{State: "available", UnitCode: "RM-01"}}, nil
 }
@@ -796,6 +803,8 @@ func TestRentalFlowRoutes(t *testing.T) {
 		{"salida con pasos pendientes", http.MethodPost, one + "/checkout", `{"condition":"sin ine"}`, true, http.StatusUnprocessableEntity, `"steps_pending"`},
 		{"salida", http.MethodPost, one + "/checkout", `{"condition":"ok"}`, true, http.StatusOK, `"status":"checked_out"`},
 		{"devolución con recargo sugerido", http.MethodPost, one + "/return", `{}`, true, http.StatusOK, `"late_fee_suggested":60000`},
+		{"quitar foto de un paso", http.MethodDelete, one + "/steps/" + stepID + "/files?key=" + prefix + "a.jpg", "", true, http.StatusOK, `"status":"confirmed"`},
+		{"quitar foto inexistente", http.MethodDelete, one + "/steps/" + stepID + "/files", "", true, http.StatusNotFound, `"not_found"`},
 		{"subir comprobante de pago", http.MethodPost, one + "/uploads", `{"purpose":"payment","content_type":"image/jpeg","size":1000}`, true, http.StatusCreated, `"key":"` + prefix + `payments/`},
 		{"extender", http.MethodPost, one + "/extend", `{"ends_at":"2026-11-10T16:00:00Z"}`, true, http.StatusOK, `"ends_at":"2026-11-10T16:00:00Z"`},
 		{"extender sin fecha", http.MethodPost, one + "/extend", `{}`, true, http.StatusUnprocessableEntity, `"ends_at"`},

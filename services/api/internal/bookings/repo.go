@@ -62,3 +62,7 @@ func (r Repo) Quote(ctx context.Context, businessID string, in QuoteRequest) (Qu
 func (r Repo) History(ctx context.Context, businessID string, f HistoryFilter) ([]Summary, error) {
 	return History(ctx, r.DB, businessID, f)
 }
+
+func (r Repo) RemoveStepFile(ctx context.Context, businessID, bookingID, stepID, key string) (Booking, error) {
+	return RemoveStepFile(ctx, r.DB, businessID, bookingID, stepID, key)
+}

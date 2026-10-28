@@ -67,6 +67,7 @@ type BookingsRepo interface {
 	Inventory(ctx context.Context, businessID string) ([]bookings.InventoryRow, error)
 	Quote(ctx context.Context, businessID string, in bookings.QuoteRequest) (bookings.QuoteResult, error)
 	History(ctx context.Context, businessID string, f bookings.HistoryFilter) ([]bookings.Summary, error)
+	RemoveStepFile(ctx context.Context, businessID, bookingID, stepID, key string) (bookings.Booking, error)
 }
 
 // writeBooking maps the bookings errors to HTTP and writes the booking on success.
@@ -587,6 +588,19 @@ func NewRouter(d Deps) http.Handler {
 						return
 					}
 					apierr.JSON(w, http.StatusOK, map[string]string{"url": url})
+				})
+
+				// Remove one photo from a step (while the step can still change); the object goes too.
+				r.With(requireUUIDParam("stepId", "El paso no existe.")).Delete("/steps/{stepId}/files", func(w http.ResponseWriter, r *http.Request) {
+					m, _ := auth.MemberFrom(r.Context())
+					key := r.URL.Query().Get("key")
+					b, err := d.Bookings.RemoveStepFile(r.Context(), m.BusinessID, chi.URLParam(r, "bookingId"), chi.URLParam(r, "stepId"), key)
+					if err == nil && d.Photos != nil && d.Photos.Files != nil {
+						// best effort: the reference is gone either way; the step's bucket is one of the two private ones
+						_ = d.Photos.Files.Delete(r.Context(), files.PrivateDocs, key)
+						_ = d.Photos.Files.Delete(r.Context(), files.RentalEvidence, key)
+					}
+					writeBooking(w, r, b, err)
 				})
 
 				r.Post("/checkout", func(w http.ResponseWriter, r *http.Request) {

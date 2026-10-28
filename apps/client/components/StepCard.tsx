@@ -17,16 +17,16 @@ const t = strings.bookings;
  * One configured step of a booking (e.g. "Foto del INE"). How it's completed depends on its type;
  * unknown types are shown read-only (the API validates every submission with the type registry).
  */
-export function StepCard({ businessId, bookingId, step, editable, canAddMore, onDone }: {
+export function StepCard({ businessId, bookingId, step, editable, canChange, onDone }: {
   businessId: string; bookingId: string; step: Step; editable: boolean;
-  /** A done photo step can take more photos while its moment hasn't passed (the API checks it too). */
-  canAddMore?: boolean; onDone: (b: Booking) => void;
+  /** While its moment hasn't passed a photo step can take more photos or drop one (the API checks it too). */
+  canChange?: boolean; onDone: (b: Booking) => void;
 }) {
   const ui = useUI();
   const toast = useToast();
   const [text, setText] = useState('');
   const [checked, setChecked] = useState<Record<string, boolean>>({});
-  const [urls, setUrls] = useState<string[] | null>(null);
+  const [urls, setUrls] = useState<Record<string, string>>({}); // key -> signed URL
   const [busy, setBusy] = useState(false);
   const [message, setMessage] = useState<string | null>(null);
   const items = ((step.config as { items?: string[] }).items ?? []);
@@ -60,14 +60,23 @@ export function StepCard({ businessId, bookingId, step, editable, canAddMore, on
   }
 
   async function showFiles() {
-    const out: string[] = [];
     for (const key of step.files) {
+      if (urls[key]) continue;
       const { data } = await api.GET('/v1/b/{businessId}/bookings/{bookingId}/files', {
         params: { path: { businessId, bookingId }, query: { bucket: step.bucket as 'private-docs' | 'rental-evidence', key } },
       });
-      if (data) out.push(data.url);
+      if (data) setUrls((u) => ({ ...u, [key]: data.url }));
     }
-    setUrls(out);
+  }
+
+  async function removeFile(key: string) {
+    setBusy(true);
+    const { data, error, response } = await api.DELETE('/v1/b/{businessId}/bookings/{bookingId}/steps/{stepId}/files', {
+      params: { path: { businessId, bookingId, stepId: step.id }, query: { key } },
+    });
+    setBusy(false);
+    if (data) { toast(strings.photos.removed); return onDone(data); }
+    toast(errorText(error, response.status), 'error');
   }
 
   const done = step.status === 'done';
@@ -93,13 +102,25 @@ export function StepCard({ businessId, bookingId, step, editable, canAddMore, on
         </View>
       </View>
 
-      {done && urls && urls.length > 0 && (
-        <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: 8 }}>
-          {urls.map((u) => <ZoomableImage key={u} source={u} style={{ width: 80, height: 80, borderRadius: 10 }} contentFit="cover" accessibilityLabel={step.label} />)}
+      {done && step.files.length > 0 && (
+        <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: 10 }}>
+          {step.files.map((key) => (
+            <View key={key}>
+              {urls[key]
+                ? <ZoomableImage source={urls[key]} style={{ width: 80, height: 80, borderRadius: 10 }} contentFit="cover" accessibilityLabel={step.label} />
+                : <View style={{ width: 80, height: 80, borderRadius: 10, backgroundColor: ui.surface }} />}
+              {editable && canChange && !step.on_file && (
+                <Pressable accessibilityRole="button" accessibilityLabel={strings.photos.remove} hitSlop={12} disabled={busy} onPress={() => removeFile(key)}
+                  style={{ position: 'absolute', top: -6, right: -6, width: 24, height: 24, borderRadius: 12, backgroundColor: ui.label, alignItems: 'center', justifyContent: 'center' }}>
+                  <Ionicons name="close" size={14} color={ui.bg} />
+                </Pressable>
+              )}
+            </View>
+          ))}
         </View>
       )}
 
-      {done && editable && canAddMore && step.files.length < maxFiles && step.bucket !== '' && step.customer_doc === '' && (step.step_type === 'photo' || step.step_type === 'file_upload') && (
+      {done && editable && canChange && step.files.length < maxFiles && step.bucket !== '' && step.customer_doc === '' && (step.step_type === 'photo' || step.step_type === 'file_upload') && (
         <Button size="sm" icon="add" busy={busy} onPress={addPhotos}>{t.addMorePhotos}</Button>
       )}
 

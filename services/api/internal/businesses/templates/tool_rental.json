@@ -73,6 +73,19 @@
       "moment": "before_status",
       "to_status": "checked_out",
       "step_type": "photo",
+      "label": "Pagaré",
+      "required": true,
+      "config": {
+        "bucket": "private-docs",
+        "max_files": 4,
+        "section": "additional"
+      }
+    },
+    {
+      "applies_to_kind": "rental",
+      "moment": "before_status",
+      "to_status": "checked_out",
+      "step_type": "photo",
       "label": "Fotos de la herramienta al salir",
       "required": true,
       "config": {

@@ -7,6 +7,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"slices"
 	"strings"
 	"time"
 
@@ -142,6 +143,52 @@ func CompleteStep(ctx context.Context, db store.DB, businessID, bookingID, stepI
 		from public.booking_steps bs join public.bookings b on b.id = bs.booking_id, unnest($4::text[]) k
 		where bs.booking_id = $1 and bs.id = $2 and bs.step_snapshot->'config'->>'customer_doc' is not null
 		on conflict (s3_key) do nothing`, bookingID, stepID, actor, newFiles); err != nil {
+		return Booking{}, err
+	}
+	if err := tx.Commit(ctx); err != nil {
+		return Booking{}, err
+	}
+	return Get(ctx, db, businessID, bookingID)
+}
+
+// RemoveStepFile takes one photo out of a step while its moment hasn't passed (a wrong ID photo,
+// a blurry picture). With no photos left the step is pending again. A customer document goes
+// out of the customer's profile too. Returns the removed key so the caller can delete the object.
+func RemoveStepFile(ctx context.Context, db store.DB, businessID, bookingID, stepID, key string) (Booking, error) {
+	tx, err := db.Begin(ctx)
+	if err != nil {
+		return Booking{}, err
+	}
+	defer tx.Rollback(ctx)
+	bk, err := lockBooking(ctx, tx, businessID, bookingID)
+	if err != nil {
+		return Booking{}, err
+	}
+	var toStatus string
+	var files []string
+	err = tx.QueryRow(ctx, `select coalesce(step_snapshot->>'to_status', ''), s3_keys from public.booking_steps
+		where booking_id = $1 and id = $2 for update`, bookingID, stepID).Scan(&toStatus, &files)
+	if errors.Is(err, pgx.ErrNoRows) {
+		return Booking{}, ErrNotFound
+	}
+	if err != nil {
+		return Booking{}, err
+	}
+	if !slices.Contains(files, key) {
+		return Booking{}, ErrNotFound
+	}
+	if toStatus == "" || !StillAhead(bk.kind, bk.status, toStatus) {
+		return Booking{}, Invalid{"step", "Este paso ya no se puede cambiar."}
+	}
+	rest := slices.DeleteFunc(slices.Clone(files), func(k string) bool { return k == key })
+	if _, err := tx.Exec(ctx, `update public.booking_steps set s3_keys = $3,
+		status = case when cardinality($3::text[]) = 0 then 'pending' else status end,
+		completed_at = case when cardinality($3::text[]) = 0 then null else completed_at end,
+		completed_by = case when cardinality($3::text[]) = 0 then null else completed_by end
+		where booking_id = $1 and id = $2`, bookingID, stepID, rest); err != nil {
+		return Booking{}, err
+	}
+	if _, err := tx.Exec(ctx, `delete from public.customer_documents where business_id = $1 and s3_key = $2`, businessID, key); err != nil {
 		return Booking{}, err
 	}
 	if err := tx.Commit(ctx); err != nil {

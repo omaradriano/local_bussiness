@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { bookingDays, hhmm, localToISO, monthWindow, todayISO } from './datetime';
+import { bookingDays, futureTime, hhmm, localToISO, monthWindow, nextHour, todayISO } from './datetime';
 
 describe('localToISO', () => {
   it('builds a local instant and round-trips the clock time', () => {
@@ -38,4 +38,16 @@ describe('monthWindow', () => {
     expect(new Date(w.from).getDate()).toBe(1);
     expect(new Date(w.to).getMonth()).toBe(11); // December
   });
+});
+
+describe('futureTime', () => {
+  const now = new Date(2026, 9, 28, 15, 2); // 28 oct 2026, 15:02 local
+  it('defaults to the next full hour', () => expect(nextHour(now)).toBe('16:00'));
+  it('moves a past time today to the next hour', () => {
+    expect(futureTime('2026-10-28', '12:00', now)).toBe('16:00');
+    expect(futureTime('2026-10-28', '15:02', now)).toBe('16:00');
+  });
+  it('keeps a later time today, normalized', () => expect(futureTime('2026-10-28', '17:30', now)).toBe('17:30'));
+  it('leaves other days alone', () => expect(futureTime('2026-10-29', '08:00', now)).toBe('08:00'));
+  it('caps late at night', () => expect(nextHour(new Date(2026, 9, 28, 23, 40))).toBe('23:00'));
 });

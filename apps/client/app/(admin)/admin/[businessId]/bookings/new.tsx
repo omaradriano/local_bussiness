@@ -1,5 +1,5 @@
 import type { components } from '@lb/api-client';
-import { addDays, firstOfMonth, parsePesos, formatMXN, hhmm, lastOfMonth, localToISO, strings, term, todayISO } from '@lb/shared';
+import { addDays, firstOfMonth, futureTime, nextHour, parsePesos, formatMXN, hhmm, lastOfMonth, localToISO, strings, term, todayISO } from '@lb/shared';
 import { router, Stack, useLocalSearchParams } from 'expo-router';
 import { useEffect, useMemo, useState } from 'react';
 import { ActivityIndicator, View } from 'react-native';
@@ -18,10 +18,10 @@ type Slot = NonNullable<Availability['slots']>[number];
 type Day = NonNullable<Availability['days']>[number];
 const t = strings.bookings;
 
-function Field({ label, value, onChange, error, keyboard, hint }: {
-  label: string; value: string; onChange: (v: string) => void; error?: string; keyboard?: 'phone-pad' | 'numeric'; hint?: string;
+function Field({ label, value, onChange, error, keyboard, hint, onBlur }: {
+  label: string; value: string; onChange: (v: string) => void; error?: string; keyboard?: 'phone-pad' | 'numeric'; hint?: string; onBlur?: () => void;
 }) {
-  return <UIField label={label} value={value} onChangeText={onChange} keyboardType={keyboard} error={error} hint={hint} />;
+  return <UIField label={label} value={value} onChangeText={onChange} keyboardType={keyboard} error={error} hint={hint} onBlur={onBlur} />;
 }
 
 type Quote = { total: number; security_deposit: number; periods: number };
@@ -41,8 +41,9 @@ export default function NewBooking() {
   const [month, setMonth] = useState(firstOfMonth(today));
   const [from, setFrom] = useState<string | null>(null); // day (service/product) or pick-up day (rental)
   const [to, setTo] = useState<string | null>(null); // return day (rental)
-  const [time, setTime] = useState('10:00');
-  const [backTime, setBackTime] = useState('10:00');
+  // By default an hour from now: a start time in the past would read as "no units free".
+  const [time, setTime] = useState(() => nextHour());
+  const [backTime, setBackTime] = useState(() => nextHour());
   const [quantity, setQuantity] = useState('1');
   const [slot, setSlot] = useState<Slot | null>(null);
   const [staffId, setStaffId] = useState<string | null>(null);
@@ -74,6 +75,9 @@ export default function NewBooking() {
       setStaffNames(Object.fromEntries((data?.staff ?? []).map((s) => [s.id, s.name]))));
   }, [businessId]);
 
+  // Picking today with a time already past: show the corrected time right away.
+  useEffect(() => { if (from) setTime((tm) => futureTime(from, tm)); }, [from]);
+
   // New item: start over.
   useEffect(() => { setFrom(null); setTo(null); setSlot(null); setStaffId(null); setMessage(null); }, [itemId]);
 
@@ -103,7 +107,8 @@ export default function NewBooking() {
   }, [businessId, item, from, refresh]);
 
   // Rentals: check the exact range (days + times) as soon as it is complete.
-  const outISO = from ? localToISO(from, time) : null;
+  // A past time today counts as the next full hour (the field shows it on blur).
+  const outISO = from ? localToISO(from, futureTime(from, time)) : null;
   const backISO = to ? localToISO(to, backTime) : null;
   useEffect(() => {
     setExact(null);
@@ -258,7 +263,7 @@ export default function NewBooking() {
 
           {item?.kind === 'product' && from && (
             <>
-              <Field label={t.deliveryTime} value={time} onChange={setTime} error={errors.starts_at} />
+              <Field label={t.deliveryTime} value={time} onChange={setTime} error={errors.starts_at} onBlur={() => from && setTime(futureTime(from, time))} />
               <Segmented options={[{ value: 'pickup', label: t.pickup }, { value: 'delivery', label: t.delivery }]} value={fulfillment} onChange={setFulfillment} />
               {fulfillment === 'delivery' && (
                 <>
@@ -271,7 +276,7 @@ export default function NewBooking() {
 
           {item?.kind === 'rental' && from && (
             <View style={{ flexDirection: 'row', gap: 12 }}>
-              <View style={{ flex: 1 }}><Field label={t.outTime} value={time} onChange={setTime} hint={s.dates.timeHint} /></View>
+              <View style={{ flex: 1 }}><Field label={t.outTime} value={time} onChange={setTime} hint={s.dates.timeHint} onBlur={() => from && setTime(futureTime(from, time))} /></View>
               {to && <View style={{ flex: 1 }}><Field label={t.backTime} value={backTime} onChange={setBackTime} error={errors.ends_at} /></View>}
             </View>
           )}

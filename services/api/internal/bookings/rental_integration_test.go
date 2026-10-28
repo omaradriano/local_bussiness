@@ -336,6 +336,21 @@ func TestIntegrationMorePhotosAndPaymentEvidence(t *testing.T) {
 	if err != nil || len(b.Steps[0].Files) != 2 || b.Steps[0].Status != "done" {
 		t.Fatalf("append: %+v %v", b.Steps[0], err)
 	}
+	// Removing a photo while the step can change: 2 → 1, then 1 → 0 makes it pending again; then put one back.
+	b, err = RemoveStepFile(ctx, p, f.business, b.ID, step, b.Steps[0].Files[0])
+	if err != nil || len(b.Steps[0].Files) != 1 || b.Steps[0].Status != "done" {
+		t.Fatalf("remove one: %+v %v", b.Steps[0], err)
+	}
+	b, err = RemoveStepFile(ctx, p, f.business, b.ID, step, b.Steps[0].Files[0])
+	if err != nil || len(b.Steps[0].Files) != 0 || b.Steps[0].Status != "pending" {
+		t.Fatalf("remove last: %+v %v", b.Steps[0], err)
+	}
+	if _, err := RemoveStepFile(ctx, p, f.business, b.ID, step, "otra/llave.jpg"); !errors.Is(err, ErrNotFound) {
+		t.Fatalf("unknown key: %v", err)
+	}
+	if b, err = CompleteStep(ctx, p, f.business, b.ID, step, steps.Submission{Files: []string{key()}}, "", now, ok); err != nil {
+		t.Fatal(err)
+	}
 	// Late fee before the tool comes back: refused.
 	var bad Invalid
 	if _, err := AddPayment(ctx, p, f.business, b.ID, Payment{Type: "late_fee", Method: "cash", Amount: 100}, "", now, ok); !errors.As(err, &bad) || bad.Field != "type" {
@@ -356,6 +371,10 @@ func TestIntegrationMorePhotosAndPaymentEvidence(t *testing.T) {
 	}
 	if _, err := CompleteStep(ctx, p, f.business, b.ID, step, steps.Submission{Files: []string{key()}}, "", now, ok); !errors.As(err, &bad) || bad.Field != "step" {
 		t.Fatalf("append after check-out: %v", err)
+	}
+	out, _ := Get(ctx, p, f.business, b.ID)
+	if _, err := RemoveStepFile(ctx, p, f.business, b.ID, step, out.Steps[0].Files[0]); !errors.As(err, &bad) || bad.Field != "step" {
+		t.Fatalf("remove after check-out: %v", err)
 	}
 }
 
