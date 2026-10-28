@@ -23,8 +23,8 @@ export function CustomerForm({ businessId, customer, isOwner, onSaved, onExistin
   businessId: string; customer?: Customer; isOwner: boolean;
   onSaved: (c: Customer) => void; onExisting?: (customerId: string) => void;
 }) {
-  // Guarantor, documents and "trusted" are rental things (the API requires them only there).
-  const { isRental } = useTexts();
+  // Guarantor, documents and "trusted" come with the giro (the API requires the guarantor only there).
+  const { has } = useTexts();
   const p = splitE164(customer?.phone);
   const g = splitE164(customer?.guarantor_phone);
   const [f, setF] = useState({
@@ -49,7 +49,7 @@ export function CustomerForm({ businessId, customer, isOwner, onSaved, onExistin
     setExisting(null);
     const body = {
       name: f.name, phone: phone!, email: f.email, address: f.address, guarantor_name: f.guarantorName, guarantor_phone: gPhone ?? '', notes: f.notes,
-      ...(isOwner && isRental ? { trusted: f.trusted } : {}),
+      ...(isOwner && has('trustedCustomers') ? { trusted: f.trusted } : {}),
     };
     const res = customer
       ? await api.PATCH('/v1/b/{businessId}/customers/{customerId}/', { params: { path: { businessId, customerId: customer.id } }, body })
@@ -70,14 +70,14 @@ export function CustomerForm({ businessId, customer, isOwner, onSaved, onExistin
         <Field label={t.address} value={f.address} onChangeText={(address) => set({ address })} error={errors.address} multiline />
         <Field label={t.email} value={f.email} onChangeText={(email) => set({ email })} error={errors.email} autoCapitalize="none" keyboardType="email-address" />
       </Group>
-      {isRental && <Group label={t.guarantor} padded footer={t.guarantorHint}>
+      {has('guarantor') && <Group label={t.guarantor} padded footer={t.guarantorHint}>
         <Field label={t.guarantorName} value={f.guarantorName} onChangeText={(guarantorName) => set({ guarantorName })} error={errors.guarantor_name} />
         <PhoneInput label={t.guarantorPhone} code={f.gCode} national={f.gNational} onChange={(gCode: CountryCode, gNational) => set({ gCode, gNational })} error={errors.guarantor_phone} />
       </Group>}
       <Group padded>
         <Field label={t.notes} value={f.notes} onChangeText={(notes) => set({ notes })} multiline />
       </Group>
-      {isOwner && isRental && (
+      {isOwner && has('trustedCustomers') && (
         <Group footer={t.trustedHint}>
           <Cell label={t.trustedShort} accessory={<Switch accessibilityLabel={t.trusted} value={f.trusted} onValueChange={(trusted) => set({ trusted })} />} />
         </Group>

@@ -7,6 +7,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"maps"
 	"regexp"
 	"slices"
 	"strings"
@@ -19,18 +20,41 @@ import (
 	"github.com/omaradriano/local_bussiness/services/api/internal/catalog"
 )
 
-var Verticals = []string{"nails", "flowers", "tool_rental"}
+// Giros: each one has a template in templates/<giro>.json with its engine (kind), the features the
+// API enforces and its starting catalog, hours, steps and settings. It's the API side of the giro map
+// in packages/shared/src/verticals (a TS test checks both say the same). Adding a giro = a template here.
+var (
+	templates = loadTemplates()
+	Verticals = slices.Sorted(maps.Keys(templates))
+)
 
-// KindFor is the catalog item kind each vertical sells.
-func KindFor(vertical string) string {
-	switch vertical {
-	case "nails":
-		return "service"
-	case "flowers":
-		return "product"
-	default:
-		return "rental"
+func loadTemplates() map[string]Template {
+	entries, err := templateFS.ReadDir("templates")
+	if err != nil {
+		panic(err)
 	}
+	out := map[string]Template{}
+	for _, e := range entries {
+		name := strings.TrimSuffix(e.Name(), ".json")
+		raw, err := templateFS.ReadFile("templates/" + e.Name())
+		if err != nil {
+			panic(err)
+		}
+		var t Template
+		if err := json.Unmarshal(raw, &t); err != nil {
+			panic(fmt.Sprintf("template %s: %v", name, err))
+		}
+		out[name] = t
+	}
+	return out
+}
+
+// KindFor is the engine (catalog item kind) a giro books with; "" for an unknown giro.
+func KindFor(vertical string) string { return templates[vertical].Kind }
+
+// HasFeature reports whether a giro turns on a feature the API enforces (e.g. "guarantor").
+func HasFeature(vertical, feature string) bool {
+	return slices.Contains(templates[vertical].Features, feature)
 }
 
 // Slugs that would collide with app routes, since the public catalog lives at /<slug>.
@@ -83,6 +107,8 @@ func (in Input) Validate() map[string]string {
 var templateFS embed.FS
 
 type Template struct {
+	Kind     string         `json:"kind"`     // engine: service | product | rental
+	Features []string       `json:"features"` // see Feature in packages/shared/src/verticals/types.ts
 	Settings map[string]any `json:"settings"`
 	Hours    []struct {
 		Weekdays []int  `json:"weekdays"`
@@ -125,12 +151,11 @@ type TemplateStep struct {
 }
 
 func TemplateFor(vertical string) (Template, error) {
-	var t Template
-	raw, err := templateFS.ReadFile("templates/" + vertical + ".json")
-	if err != nil {
-		return t, fmt.Errorf("template %s: %w", vertical, err)
+	t, ok := templates[vertical]
+	if !ok {
+		return t, fmt.Errorf("template %s: unknown giro", vertical)
 	}
-	return t, json.Unmarshal(raw, &t)
+	return t, nil
 }
 
 type Business struct {

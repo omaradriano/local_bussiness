@@ -114,8 +114,14 @@ func (c Customer) Apply(in Input) Customer {
 	return c
 }
 
-// Validate returns field -> message (es-MX). Rental businesses also require address and guarantor.
-func (c Customer) Validate(vertical string) map[string]string {
+// Rules: what the business's giro asks of a customer (from its features).
+type Rules struct {
+	RequireAddress   bool // feature customerAddress
+	RequireGuarantor bool // feature guarantor
+}
+
+// Validate returns field -> message (es-MX); the giro's rules add required fields.
+func (c Customer) Validate(rules Rules) map[string]string {
 	errs := map[string]string{}
 	if n := utf8.RuneCountInString(c.Name); n == 0 || n > 80 {
 		errs["name"] = "Escribe el nombre del cliente."
@@ -129,10 +135,10 @@ func (c Customer) Validate(vertical string) map[string]string {
 	if c.GuarantorPhone != nil && *c.GuarantorPhone == "" {
 		errs["guarantor_phone"] = "El teléfono del aval no es válido."
 	}
-	if vertical == "tool_rental" {
-		if c.Address == nil {
-			errs["address"] = "Escribe la dirección del cliente."
-		}
+	if rules.RequireAddress && c.Address == nil {
+		errs["address"] = "Escribe la dirección del cliente."
+	}
+	if rules.RequireGuarantor {
 		if c.GuarantorName == nil {
 			errs["guarantor_name"] = "Escribe el nombre del aval."
 		}
@@ -290,7 +296,7 @@ func (r Repo) DeleteDocument(ctx context.Context, businessID, customerID, docID 
 	return key, err
 }
 
-// Vertical of the business (rental businesses require address and guarantor).
+// Vertical of the business (its giro decides which customer fields are required).
 func (r Repo) Vertical(ctx context.Context, businessID string) (string, error) {
 	var v string
 	err := r.DB.QueryRow(ctx, `select vertical from public.businesses where id = $1`, businessID).Scan(&v)

@@ -1,4 +1,4 @@
-import { slugify, strings, VERTICALS, type Vertical } from '@lb/shared';
+import { slugify, strings, verticalMap, VERTICALS, type Vertical } from '@lb/shared';
 import { Ionicons } from '@expo/vector-icons';
 import { router, Stack } from 'expo-router';
 import { useState } from 'react';
@@ -43,7 +43,7 @@ export default function Onboarding() {
       </Group>
       <Group label={t.vertical} footer={errors.vertical ?? t.templateNote}>
         {VERTICALS.map((v) => (
-          <Cell key={v} label={t.verticals[v]} onPress={() => setVertical(v)}
+          <Cell key={v} label={verticalMap(v).label} onPress={() => setVertical(v)}
             accessory={vertical === v ? <Ionicons name="checkmark" size={20} color={ui.accent} /> : undefined} />
         ))}
       </Group>

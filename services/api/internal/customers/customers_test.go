@@ -12,10 +12,12 @@ import (
 
 func s(v string) *string { return &v }
 
+var rental = Rules{RequireAddress: true, RequireGuarantor: true}
+
 func TestValidateRentalCustomer(t *testing.T) {
 	full := Customer{}.Apply(Input{Name: s(" Ana López "), Phone: s("614 123 4567"), Address: s("Calle 1 #2, Chihuahua"),
 		GuarantorName: s("Pedro López"), GuarantorPhone: s("614 765 4321")})
-	if errs := full.Validate("tool_rental"); len(errs) != 0 {
+	if errs := full.Validate(rental); len(errs) != 0 {
 		t.Fatalf("complete rental customer: %v", errs)
 	}
 	if full.Name != "Ana López" || full.Phone != "+526141234567" || *full.GuarantorPhone != "+526147654321" {
@@ -36,13 +38,13 @@ func TestValidateRentalCustomer(t *testing.T) {
 	}
 	for _, tc := range cases {
 		t.Run(tc.name, func(t *testing.T) {
-			if errs := full.Apply(tc.in).Validate("tool_rental"); errs[tc.field] == "" {
+			if errs := full.Apply(tc.in).Validate(rental); errs[tc.field] == "" {
 				t.Fatalf("want error on %s, got %v", tc.field, errs)
 			}
 		})
 	}
 	// Other verticals only need name and phone.
-	if errs := (Customer{}.Apply(Input{Name: s("Ana"), Phone: s("6141234567")})).Validate("nails"); len(errs) != 0 {
+	if errs := (Customer{}.Apply(Input{Name: s("Ana"), Phone: s("6141234567")})).Validate(Rules{}); len(errs) != 0 {
 		t.Fatalf("nails customer: %v", errs)
 	}
 }

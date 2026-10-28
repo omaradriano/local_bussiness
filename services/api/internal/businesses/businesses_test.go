@@ -1,6 +1,7 @@
 package businesses
 
 import (
+	"slices"
 	"strings"
 	"testing"
 )
@@ -90,5 +91,25 @@ func TestRentalTemplateComesWithUnits(t *testing.T) {
 		if it.Units < 1 {
 			t.Errorf("%s has no units: nothing could be rented", it.Name)
 		}
+	}
+}
+
+func TestEveryGiroHasAKnownEngineAndFeatures(t *testing.T) {
+	known := []string{"staff", "inventory", "guarantor", "customerAddress", "customerDocuments", "trustedCustomers"}
+	if len(Verticals) < 3 {
+		t.Fatalf("giros: %v", Verticals)
+	}
+	for _, v := range Verticals {
+		if !slices.Contains([]string{"service", "product", "rental"}, KindFor(v)) {
+			t.Errorf("%s: engine %q", v, KindFor(v))
+		}
+		for _, f := range templates[v].Features {
+			if !slices.Contains(known, f) {
+				t.Errorf("%s: unknown feature %q", v, f)
+			}
+		}
+	}
+	if !HasFeature("tool_rental", "guarantor") || HasFeature("nails", "guarantor") || KindFor("lavado") != "" {
+		t.Fatal("feature lookup")
 	}
 }

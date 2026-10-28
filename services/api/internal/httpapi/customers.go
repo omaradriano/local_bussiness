@@ -12,6 +12,7 @@ import (
 
 	"github.com/omaradriano/local_bussiness/services/api/internal/apierr"
 	"github.com/omaradriano/local_bussiness/services/api/internal/auth"
+	"github.com/omaradriano/local_bussiness/services/api/internal/businesses"
 	"github.com/omaradriano/local_bussiness/services/api/internal/customers"
 	"github.com/omaradriano/local_bussiness/services/api/internal/files"
 	"github.com/omaradriano/local_bussiness/services/api/internal/media"
@@ -71,7 +72,8 @@ func mountCustomers(r chi.Router, d Deps) {
 			internalError(w, r, "vertical", err)
 			return
 		}
-		if errs := c.Validate(vertical); len(errs) > 0 {
+		rules := customers.Rules{RequireAddress: businesses.HasFeature(vertical, "customerAddress"), RequireGuarantor: businesses.HasFeature(vertical, "guarantor")}
+		if errs := c.Validate(rules); len(errs) > 0 {
 			invalid(w, "Revisa los datos del cliente.", errs)
 			return
 		}

@@ -1,4 +1,4 @@
-import { kindFor, strings, term } from '@lb/shared';
+import { strings, term } from '@lb/shared';
 import { router, Stack, useLocalSearchParams, type Href } from 'expo-router';
 import { ActivityIndicator } from 'react-native';
 import { useBusiness } from '../../../../lib/useMe';
@@ -11,7 +11,7 @@ export default function BusinessHome() {
   const { businessId } = useLocalSearchParams<{ businessId: string }>();
   const { business, businesses, error } = useBusiness(businessId);
   const ui = useUI();
-  const { texts } = useTexts();
+  const { texts, has } = useTexts();
 
   if (error) return <Text style={{ padding: 16 }}>{error}</Text>;
   if (!businesses) return <ActivityIndicator style={{ marginTop: 24 }} accessibilityLabel={strings.common.loading} />;
@@ -35,7 +35,7 @@ export default function BusinessHome() {
 
       <Group label={s.groups.business} separatorInset={58}>
         <Cell icon="construct" tint={ui.purple} label={term(business.vertical, 'catalog') ?? ''} sublabel={texts.home.catalog} onPress={go('/admin/[businessId]/catalog')} />
-        {kindFor(business.vertical) === 'service' && (
+        {has('staff') && (
           <Cell icon="person" tint={ui.success} label={s.sections.staff} onPress={go('/admin/[businessId]/staff')} />
         )}
         <Cell icon="time" tint={ui.gray} label={s.sections.hours} sublabel={s.hints.hours} onPress={go('/admin/[businessId]/hours')} />

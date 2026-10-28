@@ -1,4 +1,4 @@
-export * from './terminology';
+export * from './verticals';
 export * from './strings';
 export * from './auth';
 export * from './slug';
@@ -10,4 +10,3 @@ export * from './datetime';
 export * from './calendar';
 export * from './agenda';
 export * from './phone';
-export * from './verticalTexts';

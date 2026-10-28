@@ -49,6 +49,16 @@ Plataforma multi-negocio de reservas, pedidos y rentas (uñas, florería, renta 
 
 `.claude/settings.json` hace cumplir lo bloqueado (`deny`) y lo que pide confirmación (`ask`).
 
+## Receta: giro nuevo (mapa por giro)
+
+Un giro es un tipo de negocio montado sobre un motor (`service`, `product` o `rental`). Diseño completo en `docs/mapa-giros.md`. Se agregan uno a uno, con los requerimientos de un negocio real.
+
+1. **Mapa (TS):** `packages/shared/src/verticals/<giro>.ts` con `label`, `kind` (motor), `terms`, `texts` (palabras y concordancia de cada estado), `settings` (secciones de Ajustes; la primera es `general`) y `features`. Registrarlo en `verticals/index.ts`; TypeScript exige que esté completo.
+2. **Plantilla (Go):** `services/api/internal/businesses/templates/<giro>.json` con el mismo `kind` y `features`, más los datos de alta (ajustes, horario, catálogo y pasos de ejemplo). El test `maps match the API templates` verifica que coincidan.
+3. **Base:** migración que agregue el giro al `check` de `businesses.vertical` (y de `notification_templates`), hasta que los giros vivan en `business_types`.
+4. **Funciones:** las pantallas preguntan `has('<función>')` (hook `useTexts()`) o `hasFeature(giro, f)`, nunca por el giro. Una función nueva se agrega a `Feature` en `verticals/types.ts` (y a la lista conocida del test de Go si la API la aplica).
+5. **Motor nuevo** (otra forma de apartar) sí es código: disponibilidad, estados en `machine.go`, precio y su flujo de detalle, empezando por sus tests.
+
 ## Receta: tipo de paso nuevo (workflow steps)
 
 1. **Go:** implementar la interfaz `StepType` (`Key`, `ValidateConfig`, `ValidateData`, `OnComplete`) en `internal/steps/` y registrarla en `registry.go`.

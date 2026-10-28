@@ -21,7 +21,7 @@ const when = (iso: string) => new Date(iso).toLocaleString('es-MX', { day: 'nume
 export default function BookingCalendar() {
   const { businessId } = useLocalSearchParams<{ businessId: string }>();
   const { business } = useBusiness(businessId);
-  const { texts } = useTexts();
+  const { texts, has } = useTexts();
   const [month, setMonth] = useState(firstOfMonth(todayISO()));
   const [day, setDay] = useState(todayISO());
   const [list, setList] = useState<Summary[] | null>(null);
@@ -49,7 +49,7 @@ export default function BookingCalendar() {
   if (!business) return <ActivityIndicator style={{ marginTop: 24 }} />;
   const selected = byDay[day] ?? [];
 
-  const rental = business.vertical === 'tool_rental';
+  const rental = has('inventory'); // the Inventario tab
   return (
     <Screen>
       <Stack.Screen options={{ title: strings.business.sections.calendar }} />
