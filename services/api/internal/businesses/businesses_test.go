@@ -94,19 +94,14 @@ func TestRentalTemplateComesWithUnits(t *testing.T) {
 	}
 }
 
-func TestEveryGiroHasAKnownEngineAndFeatures(t *testing.T) {
-	known := []string{"staff", "inventory", "guarantor", "customerAddress", "customerDocuments", "trustedCustomers"}
+// (Features are checked against the catalog in package features.)
+func TestEveryGiroHasAKnownEngine(t *testing.T) {
 	if len(Verticals) < 3 {
 		t.Fatalf("giros: %v", Verticals)
 	}
 	for _, v := range Verticals {
 		if !slices.Contains([]string{"service", "product", "rental"}, KindFor(v)) {
 			t.Errorf("%s: engine %q", v, KindFor(v))
-		}
-		for _, f := range templates[v].Features {
-			if !slices.Contains(known, f) {
-				t.Errorf("%s: unknown feature %q", v, f)
-			}
 		}
 	}
 	if !HasFeature("tool_rental", "guarantor") || HasFeature("nails", "guarantor") || KindFor("lavado") != "" {

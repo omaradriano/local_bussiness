@@ -6,7 +6,9 @@ import (
 	"context"
 	"crypto/rand"
 	"encoding/hex"
+	"encoding/json"
 	"errors"
+	"slices"
 	"strings"
 	"time"
 	"unicode/utf8"
@@ -14,6 +16,7 @@ import (
 	"github.com/jackc/pgx/v5"
 	"github.com/jackc/pgx/v5/pgconn"
 
+	"github.com/omaradriano/local_bussiness/services/api/internal/features"
 	"github.com/omaradriano/local_bussiness/services/api/internal/phone"
 	"github.com/omaradriano/local_bussiness/services/api/internal/store"
 )
@@ -296,9 +299,19 @@ func (r Repo) DeleteDocument(ctx context.Context, businessID, customerID, docID 
 	return key, err
 }
 
-// Vertical of the business (its giro decides which customer fields are required).
-func (r Repo) Vertical(ctx context.Context, businessID string) (string, error) {
-	var v string
-	err := r.DB.QueryRow(ctx, `select vertical from public.businesses where id = $1`, businessID).Scan(&v)
-	return v, err
+// Rules of the business: which customer fields are required, from its active features.
+func (r Repo) Rules(ctx context.Context, businessID string) (Rules, error) {
+	var vertical string
+	var settings, grants []byte
+	err := r.DB.QueryRow(ctx, `select vertical, settings, feature_grants from public.businesses where id = $1`, businessID).
+		Scan(&vertical, &settings, &grants)
+	if err != nil {
+		return Rules{}, err
+	}
+	var s struct {
+		Features map[string]bool `json:"features"`
+	}
+	_ = json.Unmarshal(settings, &s)
+	active := features.Active(vertical, features.Parse(grants), s.Features)
+	return Rules{RequireAddress: slices.Contains(active, "customerAddress"), RequireGuarantor: slices.Contains(active, "guarantor")}, nil
 }

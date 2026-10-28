@@ -17,8 +17,10 @@ import (
 	"github.com/omaradriano/local_bussiness/services/api/internal/businesses"
 	"github.com/omaradriano/local_bussiness/services/api/internal/catalog"
 	"github.com/omaradriano/local_bussiness/services/api/internal/customers"
+	"github.com/omaradriano/local_bussiness/services/api/internal/features"
 	"github.com/omaradriano/local_bussiness/services/api/internal/files"
 	"github.com/omaradriano/local_bussiness/services/api/internal/media"
+	"github.com/omaradriano/local_bussiness/services/api/internal/platform"
 	"github.com/omaradriano/local_bussiness/services/api/internal/settings"
 	"github.com/omaradriano/local_bussiness/services/api/internal/staff"
 	"github.com/omaradriano/local_bussiness/services/api/internal/steps"
@@ -49,7 +51,13 @@ func (fakeStore) Memberships(_ context.Context, userID string) ([]store.Membersh
 	if userID != user {
 		return nil, nil
 	}
-	return []store.Membership{{BusinessID: bizA, Slug: "demo-unas", Name: "Uñas", Vertical: "nails", Role: "owner"}}, nil
+	return []store.Membership{{BusinessID: bizA, Slug: "demo-unas", Name: "Uñas", Vertical: "nails", Role: "owner",
+		Grants: []byte(`{"customerDocuments": true}`), Settings: []byte(`{}`)}}, nil
+}
+
+// The owner ("Bearer ok") also administers the platform.
+func (fakeStore) IsPlatformAdmin(_ context.Context, userID string) (bool, error) {
+	return userID == user, nil
 }
 
 // fakeAuth: "Bearer ok" is the owner of bizA, "Bearer staff" its employee; anything else is 401.
@@ -151,6 +159,7 @@ func doBody(method, path, token string, body io.Reader, headers ...string) *http
 		Bookings:       fakeBookings{},
 		Settings:       &fakeSettings{s: settings.From([]byte(`{}`))},
 		Customers:      &fakeCustomers{},
+		Platform:       fakePlatform{},
 		Now:            func() time.Time { return fixedNow },
 		Photos:         &Photos{Media: fakeMedia{}, Files: fakeFiles{}, EnqueueImage: fakeEnqueue, CDNBase: "https://cdn.test"},
 		AllowedOrigins: []string{"http://localhost:8082", "https://local-bussiness-staging-*.vercel.app"},
@@ -183,8 +192,11 @@ func TestMeRequiresSession(t *testing.T) {
 
 func TestMeListsBusinesses(t *testing.T) {
 	rec := do(http.MethodGet, "/v1/me", "ok")
-	if rec.Code != http.StatusOK || !strings.Contains(rec.Body.String(), `"slug":"demo-unas"`) || !strings.Contains(rec.Body.String(), `"role":"owner"`) {
-		t.Fatalf("got %d %s", rec.Code, rec.Body)
+	body := rec.Body.String()
+	// Active features: the giro's (staff) plus the one granted to this business.
+	if rec.Code != http.StatusOK || !strings.Contains(body, `"slug":"demo-unas"`) || !strings.Contains(body, `"role":"owner"`) ||
+		!strings.Contains(body, `"features":["customerDocuments","staff"]`) || !strings.Contains(body, `"platform_admin":true`) {
+		t.Fatalf("got %d %s", rec.Code, body)
 	}
 }
 
@@ -919,7 +931,9 @@ const customerID = "c0c0c0c0-c0c0-c0c0-c0c0-c0c0c0c0c0c0"
 
 type fakeCustomers struct{ saved customers.Customer }
 
-func (*fakeCustomers) Vertical(context.Context, string) (string, error) { return "tool_rental", nil }
+func (*fakeCustomers) Rules(context.Context, string) (customers.Rules, error) {
+	return customers.Rules{RequireAddress: true, RequireGuarantor: true}, nil
+}
 func (*fakeCustomers) Search(_ context.Context, _, q string, _ int) ([]customers.Customer, error) {
 	return []customers.Customer{{ID: customerID, Name: "Ana " + q}}, nil
 }
@@ -982,6 +996,48 @@ func TestCustomerRoutes(t *testing.T) {
 			uploaded = true
 			rec := doBody(tc.method, tc.path, tc.token, strings.NewReader(tc.body))
 			if rec.Code != tc.wantCode || !strings.Contains(rec.Body.String(), tc.wantIn) {
+				t.Fatalf("got %d %s", rec.Code, rec.Body)
+			}
+		})
+	}
+}
+
+type fakePlatform struct{}
+
+func (fakePlatform) Businesses(context.Context) ([]platform.Business, error) {
+	return []platform.Business{{ID: bizA, Name: "Uñas", Vertical: "nails"}}, nil
+}
+func (fakePlatform) SetGrant(_ context.Context, id, feature string, grant *bool) (platform.Business, error) {
+	if id != bizA {
+		return platform.Business{}, platform.ErrNotFound
+	}
+	if feature == "inventory" {
+		return platform.Business{}, platform.ErrNotForBusiness
+	}
+	return platform.Business{ID: id, Features: []features.State{{Key: feature, Grant: grant}}}, nil
+}
+
+func TestPlatformAdminRoutes(t *testing.T) {
+	if rec := do(http.MethodGet, "/v1/admin/businesses", "staff"); rec.Code != http.StatusForbidden {
+		t.Fatalf("not an admin: %d", rec.Code)
+	}
+	if rec := do(http.MethodGet, "/v1/admin/businesses", "ok"); rec.Code != http.StatusOK || !strings.Contains(rec.Body.String(), `"vertical":"nails"`) {
+		t.Fatalf("list: %d %s", rec.Code, rec.Body)
+	}
+	base := "/v1/admin/businesses/" + bizA + "/features/"
+	cases := []struct {
+		name, path, body string
+		code             int
+		want             string
+	}{
+		{"dar", base + "guarantor", `{"grant":true}`, http.StatusOK, `"grant":true`},
+		{"volver al giro", base + "guarantor", `{"grant":null}`, http.StatusOK, `"grant":null`},
+		{"no aplica al motor", base + "inventory", `{"grant":true}`, http.StatusUnprocessableEntity, `"feature"`},
+		{"negocio inexistente", "/v1/admin/businesses/" + bizB + "/features/guarantor", `{"grant":true}`, http.StatusNotFound, `"not_found"`},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			if rec := doBody(http.MethodPut, tc.path, "ok", strings.NewReader(tc.body)); rec.Code != tc.code || !strings.Contains(rec.Body.String(), tc.want) {
 				t.Fatalf("got %d %s", rec.Code, rec.Body)
 			}
 		})

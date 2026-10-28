@@ -56,7 +56,7 @@ Un giro es un tipo de negocio montado sobre un motor (`service`, `product` o `re
 1. **Mapa (TS):** `packages/shared/src/verticals/<giro>.ts` con `label`, `kind` (motor), `terms`, `texts` (palabras y concordancia de cada estado), `settings` (secciones de Ajustes; la primera es `general`) y `features`. Registrarlo en `verticals/index.ts`; TypeScript exige que esté completo.
 2. **Plantilla (Go):** `services/api/internal/businesses/templates/<giro>.json` con el mismo `kind` y `features`, más los datos de alta (ajustes, horario, catálogo y pasos de ejemplo). El test `maps match the API templates` verifica que coincidan.
 3. **Base:** migración que agregue el giro al `check` de `businesses.vertical` (y de `notification_templates`), hasta que los giros vivan en `business_types`.
-4. **Funciones:** las pantallas preguntan `has('<función>')` (hook `useTexts()`) o `hasFeature(giro, f)`, nunca por el giro. Una función nueva se agrega a `Feature` en `verticals/types.ts` (y a la lista conocida del test de Go si la API la aplica).
+4. **Funciones:** las pantallas preguntan `has('<función>')` (hook `useTexts()`, funciones activas del negocio), nunca por el giro. Una función nueva: agregarla a `services/api/internal/features/features.json` (con los motores que la admiten), a `Feature` en `verticals/types.ts` y su nombre en `verticals/features.ts`. El superadministrador la da o quita por negocio y el dueño la enciende en Ajustes.
 5. **Motor nuevo** (otra forma de apartar) sí es código: disponibilidad, estados en `machine.go`, precio y su flujo de detalle, empezando por sus tests.
 
 ## Receta: tipo de paso nuevo (workflow steps)

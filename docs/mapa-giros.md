@@ -50,16 +50,37 @@ La máquina de estados ya es por motor (`internal/bookings/machine.go`): un giro
 | Flujo del detalle | 1 Confirmación · 2 Salida (documentos, adicionales, fotos, cobro, entregar) · 3 En renta y devolución (extender, fotos, recibir) · 4 Cierre (cobros finales y depósito, completar) |
 | Vista pública | Pendiente (fase 6) |
 
+## Mapa de barbería (`barbershop`) — mapa base
+
+| Parte | Definición |
+| --- | --- |
+| Motor | `service` (agenda por barbero: duración y margen por servicio) |
+| Terminología | Cita · Servicio · Servicios · Hora de la cita · Hora de término |
+| Estados | Apartada · falta anticipo → Confirmada · por atender → En la silla → Atendida; Cancelada, Expirada, No llegó |
+| Ajustes | Anticipo y apartados |
+| Valores por defecto | Sin anticipo, apartado de 2 h, lunes a sábado 10:00–20:00 |
+| Funciones | Equipo (barberos con sus servicios y horario) |
+| Catálogo de ejemplo | Corte de cabello, Corte y barba, Arreglo de barba, Corte infantil |
+| Pendiente | Requerimientos del cliente: flujo del detalle, lista de espera o turnos sin cita, propinas, etc. |
+
 Los mapas de uñas (`nails`, motor `service`) y florería (`flowers`, motor `product`) ya tienen terminología, textos y secciones de Ajustes; les falta su flujo del detalle y sus funciones propias (equipo y servicios por persona en uñas; armador y zonas de entrega en flores).
 
 ## Dónde vive hoy cada giro
 
 Desde 2026-10-28 cada giro es **un archivo de mapa** (`packages/shared/src/verticals/<giro>.ts`) y **una plantilla de la API** (`services/api/internal/businesses/templates/<giro>.json`) que repite su motor y sus funciones; un test verifica que coincidan. De ahí salen la lista de giros, el motor, la terminología, los textos, las secciones de Ajustes y las funciones; las pantallas y la API preguntan por funciones (`guarantor`, `inventory`, `staff`…), no por el giro. Lo único fijo que queda es el `check` de `businesses.vertical` en la base. Receta en `CLAUDE.md`.
 
+## Funciones por negocio
+
+- El **giro** trae funciones por defecto (`features` en su mapa y su plantilla).
+- El **superadministrador** puede **dar** o **quitar** una función a un negocio concreto (`businesses.feature_grants`, que el dueño no puede cambiar), siempre que el motor la admita: por ejemplo, documentos del cliente para una barbería, pero nunca inventario, porque es solo de renta.
+- El **dueño** enciende o apaga en Ajustes → Funciones las que tenga disponibles (`settings.features`).
+- **Activa** = disponible y encendida. La API (por ejemplo, los campos obligatorios del cliente) y las pantallas (`has()`) usan solo las activas, que llegan en `/v1/me`.
+- El catálogo de funciones y los motores que admite cada una está en `services/api/internal/features/features.json`, que también lee la app.
+
 ## Camino propuesto
 
 1. **Fuente única en código (hecho, 2026-10-28).** Un archivo por giro con todo su mapa (identidad, motor, terminología, textos, secciones, valores por defecto, funciones, plantilla), del que salen la lista de giros, `kindFor`, los textos y la plantilla de alta. El cliente y la API dejan de preguntar «¿es `tool_rental`?» y preguntan «¿tiene la función `guarantor`?». Agregar un giro sobre un motor existente = agregar un archivo y sus tests.
-2. **Funciones por negocio.** `settings.features` permite que el superadministrador encienda o apague una función para un negocio concreto, por encima de lo que trae su giro (por ejemplo, documentos del cliente en un lavado de salas).
+2. **Funciones por negocio (hecho, 2026-10-28).** `settings.features` permite que el superadministrador encienda o apague una función para un negocio concreto, por encima de lo que trae su giro (por ejemplo, documentos del cliente en un lavado de salas).
 3. **Panel de superadministrador** (ver plan): lista de negocios, su giro, plan, funciones y ajustes; entrar como el negocio con bitácora de auditoría.
 4. **Giros en la base (`business_types`).** Cuando haya varios giros y el panel de superadministrador, los mapas pasan a una tabla editable desde ese panel, validada contra los motores; `businesses.vertical` apunta a esa tabla en lugar del `check`. Los motores, los tipos de paso y los tipos de sección de Ajustes siguen en código.
 5. **Motores nuevos** según los giros que entren: modalidad a domicilio sobre `service` (lavado de salas, autos a domicilio) y `sale` sin fecha (tienda).

@@ -12,12 +12,15 @@ export function useCurrentBusinessId(): { businessId: string | null; rest: strin
 
 /**
  * The current business's giro map: its texts ("Rentas" / "Citas" / "Pedidos"), engine and features.
- * Screens ask `has('guarantor')` instead of "is it a rental?". Until the business loads it uses the
- * rental map (the first giro).
+ * Screens ask `has('guarantor')` instead of "is it a rental?" (active features of this business).
+ * Until the business loads it uses the rental map (the first giro).
  */
 export function useTexts(): { vertical: Vertical; kind: ItemKind; texts: VerticalTexts; has: (f: Feature) => boolean } {
   const { businessId } = useCurrentBusinessId();
   const { business } = useBusiness(businessId ?? '');
   const vertical: Vertical = business?.vertical ?? 'tool_rental';
-  return { vertical, kind: kindFor(vertical), texts: textsFor(vertical), has: (f) => hasFeature(vertical, f) };
+  // Active features come from the API (giro + platform admin's grants + the owner's choice);
+  // until the business loads, the giro's defaults.
+  const has = (f: Feature) => (business ? business.features.includes(f) : hasFeature(vertical, f));
+  return { vertical, kind: kindFor(vertical), texts: textsFor(vertical), has };
 }

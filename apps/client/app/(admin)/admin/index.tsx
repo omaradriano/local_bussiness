@@ -7,7 +7,7 @@ import { Button, Cell, EmptyState, Group, Notice, Screen, Text, useUI } from '..
 const t = strings.admin;
 
 export default function AdminHome() {
-  const { businesses, error, reload } = useMe();
+  const { businesses, platformAdmin, error, reload } = useMe();
   const ui = useUI();
 
   return (
@@ -36,6 +36,11 @@ export default function AdminHome() {
       {businesses && businesses.length > 0 && (
         <Group>
           <Cell icon="add-circle" tint={ui.success} label={t.createAnother} onPress={() => router.push('/onboarding')} />
+        </Group>
+      )}
+      {platformAdmin && (
+        <Group>
+          <Cell icon="shield" tint={ui.purple} label={strings.platform.entry} sublabel={strings.platform.entryHint} onPress={() => router.push('/admin/platform')} />
         </Group>
       )}
       <Group>

@@ -1,0 +1,8 @@
+{
+  "staff": { "engines": ["service"] },
+  "inventory": { "engines": ["rental"] },
+  "guarantor": { "engines": ["service", "product", "rental"] },
+  "customerAddress": { "engines": ["service", "product", "rental"] },
+  "customerDocuments": { "engines": ["service", "product", "rental"] },
+  "trustedCustomers": { "engines": ["service", "product", "rental"] }
+}

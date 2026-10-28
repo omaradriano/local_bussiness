@@ -1,6 +1,10 @@
 package settings
 
-import "testing"
+import (
+	"testing"
+
+	"github.com/omaradriano/local_bussiness/services/api/internal/features"
+)
 
 func ptr[T any](v T) *T { return &v }
 
@@ -90,5 +94,34 @@ func TestSettingsSectionsDefaultsAndPatch(t *testing.T) {
 				t.Fatalf("want error on %s, got %v", tc.field, errs)
 			}
 		})
+	}
+}
+
+func TestOwnerFeatureChoices(t *testing.T) {
+	s := From([]byte(`{"features": {"trustedCustomers": false}}`)).WithBusiness("tool_rental", map[string]bool{"guarantor": false})
+	state := func(st Settings, key string) features.State {
+		for _, f := range st.Features {
+			if f.Key == key {
+				return f
+			}
+		}
+		t.Fatalf("%s not listed", key)
+		return features.State{}
+	}
+	if f := state(s, "trustedCustomers"); !f.Available || f.Enabled || f.Active {
+		t.Fatalf("owner turned trusted off: %+v", f)
+	}
+	if f := state(s, "guarantor"); f.Available {
+		t.Fatalf("admin removed guarantor: %+v", f)
+	}
+	next, errs := s.Apply(Patch{Features: map[string]bool{"trustedCustomers": true, "inventory": false}})
+	if len(errs) != 0 || !state(next, "trustedCustomers").Active || state(next, "inventory").Active {
+		t.Fatalf("toggle: %v %+v", errs, next.Features)
+	}
+	if _, errs := s.Apply(Patch{Features: map[string]bool{"guarantor": true}}); errs["features"] == "" {
+		t.Fatal("owner turned on a removed feature")
+	}
+	if _, errs := s.Apply(Patch{Features: map[string]bool{"staff": true}}); errs["features"] == "" {
+		t.Fatal("owner turned on a feature its engine doesn't support")
 	}
 }

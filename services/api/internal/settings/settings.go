@@ -8,11 +8,13 @@ import (
 	"errors"
 	"maps"
 	"math"
+	"slices"
 	"strings"
 	"unicode/utf8"
 
 	"github.com/jackc/pgx/v5"
 
+	"github.com/omaradriano/local_bussiness/services/api/internal/features"
 	"github.com/omaradriano/local_bussiness/services/api/internal/store"
 )
 
@@ -165,22 +167,42 @@ type Settings struct {
 	General  General  `json:"general"`
 	Rentals  Rentals  `json:"rentals"`
 	Delivery Delivery `json:"delivery"`
+	// Features the giro supports, with what's available and what the owner has on. The owner only
+	// changes "enabled" (stored in settings.features); availability is the platform admin's.
+	Features []features.State `json:"features"`
+
+	vertical string
+	grants   map[string]bool
+	enabled  map[string]bool
 }
 
 type Patch struct {
-	General  *GeneralPatch  `json:"general"`
-	Rentals  *RentalsPatch  `json:"rentals"`
-	Delivery *DeliveryPatch `json:"delivery"`
+	General  *GeneralPatch   `json:"general"`
+	Rentals  *RentalsPatch   `json:"rentals"`
+	Delivery *DeliveryPatch  `json:"delivery"`
+	Features map[string]bool `json:"features"` // feature -> on/off (only available ones)
 }
 
 // From reads every section from the settings jsonb, with defaults for missing keys.
 func From(raw []byte) Settings {
-	s := Settings{General: DefaultGeneral(), Rentals: RentalsFrom(raw)}
+	s := Settings{General: DefaultGeneral(), Rentals: RentalsFrom(raw), Features: []features.State{}}
 	_ = json.Unmarshal(raw, &s.General)
 	_ = json.Unmarshal(raw, &s.Delivery)
 	if s.Delivery.Zones == nil {
 		s.Delivery.Zones = []Zone{}
 	}
+	var f struct {
+		Features map[string]bool `json:"features"`
+	}
+	_ = json.Unmarshal(raw, &f)
+	s.enabled = f.Features
+	return s
+}
+
+// WithBusiness adds the business's giro and the platform admin's grants, so Features can be listed.
+func (s Settings) WithBusiness(vertical string, grants map[string]bool) Settings {
+	s.vertical, s.grants = vertical, grants
+	s.Features = features.States(vertical, grants, s.enabled)
 	return s
 }
 
@@ -199,6 +221,22 @@ func (s Settings) Apply(p Patch) (Settings, map[string]string) {
 		s.Delivery = s.Delivery.Apply(*p.Delivery)
 		maps.Copy(errs, s.Delivery.Validate())
 	}
+	if p.Features != nil {
+		enabled := maps.Clone(s.enabled)
+		if enabled == nil {
+			enabled = map[string]bool{}
+		}
+		for key, on := range p.Features {
+			i := slices.IndexFunc(s.Features, func(st features.State) bool { return st.Key == key })
+			if i < 0 || !s.Features[i].Available {
+				errs["features"] = "Esa función no está disponible para tu negocio."
+				continue
+			}
+			enabled[key] = on
+		}
+		s.enabled = enabled
+		s.Features = features.States(s.vertical, s.grants, enabled)
+	}
 	return s, errs
 }
 
@@ -207,12 +245,14 @@ var ErrNotFound = errors.New("business not found")
 type Repo struct{ DB store.DB }
 
 func (s Repo) Get(ctx context.Context, businessID string) (Settings, error) {
-	var raw []byte
-	err := s.DB.QueryRow(ctx, `select settings from public.businesses where id = $1`, businessID).Scan(&raw)
+	var raw, grants []byte
+	var vertical string
+	err := s.DB.QueryRow(ctx, `select settings, vertical, feature_grants from public.businesses where id = $1`, businessID).
+		Scan(&raw, &vertical, &grants)
 	if errors.Is(err, pgx.ErrNoRows) {
 		return Settings{}, ErrNotFound
 	}
-	return From(raw), err
+	return From(raw).WithBusiness(vertical, features.Parse(grants)), err
 }
 
 // Save merges every section's keys into settings (keys of other features are left as they are).
@@ -221,6 +261,9 @@ func (s Repo) Save(ctx context.Context, businessID string, st Settings) error {
 	for _, part := range []any{st.General, st.Rentals, st.Delivery} {
 		raw, _ := json.Marshal(part)
 		_ = json.Unmarshal(raw, &merged)
+	}
+	if st.enabled != nil {
+		merged["features"] = st.enabled
 	}
 	raw, _ := json.Marshal(merged)
 	_, err := s.DB.Exec(ctx, `update public.businesses set settings = settings || $2::jsonb where id = $1`, businessID, raw)
