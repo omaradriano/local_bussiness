@@ -414,6 +414,23 @@ paths:
         "204": { description: Borrada }
         "404": { $ref: "#/components/responses/Error" }
 
+  /v1/b/{businessId}/inventory:
+    parameters:
+      - $ref: "#/components/parameters/BusinessId"
+    get:
+      operationId: getInventory
+      summary: Unidades de renta con sus rentas activas o por venir, ordenadas por fecha
+      responses:
+        "200":
+          description: OK
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [rows]
+                properties:
+                  rows: { type: array, items: { $ref: "#/components/schemas/InventoryRow" } }
+
   /v1/b/{businessId}/settings:
     parameters:
       - $ref: "#/components/parameters/BusinessId"
@@ -1047,6 +1064,23 @@ components:
           type: [object, "null"]
           description: "Variante (thumb 160 px, card 480 px, detail 1080 px) -> URL del CDN"
           additionalProperties: { type: string }
+
+    InventoryRow:
+      type: object
+      required: [state, date, unit_id, unit_code, unit_status, item_id, item_name, booking_id, booking_status, customer_name, starts_at, ends_at]
+      properties:
+        state: { type: string, enum: [available, rented, scheduled, inactive] }
+        date: { type: [string, "null"], format: date-time, description: "rentada: regreso; agendada: salida" }
+        unit_id: { type: string, format: uuid }
+        unit_code: { type: string }
+        unit_status: { $ref: "#/components/schemas/UnitStatus" }
+        item_id: { type: string, format: uuid }
+        item_name: { type: string }
+        booking_id: { type: [string, "null"], format: uuid }
+        booking_status: { type: [string, "null"] }
+        customer_name: { type: [string, "null"] }
+        starts_at: { type: [string, "null"], format: date-time }
+        ends_at: { type: [string, "null"], format: date-time }
 
     DocType:
       type: string

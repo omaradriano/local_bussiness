@@ -599,6 +599,16 @@ func (fakeBookings) Extend(_ context.Context, _, id string, newEnd time.Time, _ 
 	return bookings.Booking{ID: id, Status: "checked_out", EndsAt: &newEnd}, nil
 }
 
+func (fakeBookings) Inventory(context.Context, string) ([]bookings.InventoryRow, error) {
+	return []bookings.InventoryRow{{State: "available", UnitCode: "RM-01"}}, nil
+}
+
+func TestInventoryRoute(t *testing.T) {
+	if rec := do(http.MethodGet, "/v1/b/"+bizA+"/inventory", "staff"); rec.Code != http.StatusOK || !strings.Contains(rec.Body.String(), `"unit_code":"RM-01"`) {
+		t.Fatalf("got %d %s", rec.Code, rec.Body)
+	}
+}
+
 func (fakeBookings) Get(_ context.Context, _, id string) (bookings.Booking, error) {
 	if id != bookingID {
 		return bookings.Booking{}, bookings.ErrNotFound

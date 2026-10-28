@@ -2,8 +2,9 @@ import type { components } from '@lb/api-client';
 import { bookingDays, firstOfMonth, formatMXN, monthWindow, strings, term, todayISO } from '@lb/shared';
 import { Link, Stack, useFocusEffect, useLocalSearchParams } from 'expo-router';
 import { useCallback, useMemo, useState } from 'react';
-import { ActivityIndicator, ScrollView, Text, View } from 'react-native';
+import { ActivityIndicator, Pressable, ScrollView, Text, View } from 'react-native';
 import { Calendar } from '../../../../components/Calendar';
+import { InventoryList } from '../../../../components/InventoryList';
 import { api } from '../../../../lib/api';
 import { errorText } from '../../../../lib/errors';
 import { useBusiness } from '../../../../lib/useMe';
@@ -21,6 +22,7 @@ export default function BookingCalendar() {
   const [day, setDay] = useState(todayISO());
   const [list, setList] = useState<Summary[] | null>(null);
   const [error, setError] = useState<string | null>(null);
+  const [view, setView] = useState<'inventory' | 'month'>('inventory');
 
   const load = useCallback(async () => {
     setList(null);
@@ -46,6 +48,17 @@ export default function BookingCalendar() {
   return (
     <ScrollView contentContainerStyle={{ padding: 16, gap: 12, maxWidth: 560, width: '100%', alignSelf: 'center' }}>
       <Stack.Screen options={{ title: strings.business.sections.calendar }} />
+      {business.vertical === 'tool_rental' && (
+        <View accessibilityRole="tablist" style={{ flexDirection: 'row', gap: 8 }}>
+          {(['inventory', 'month'] as const).map((v) => (
+            <Pressable key={v} accessibilityRole="tab" accessibilityState={{ selected: view === v }} onPress={() => setView(v)}
+              style={{ borderBottomWidth: view === v ? 2 : 0, paddingVertical: 6, paddingHorizontal: 10 }}>
+              <Text style={{ fontWeight: view === v ? '600' : '400' }}>{v === 'inventory' ? strings.inventory.title : strings.inventory.month}</Text>
+            </Pressable>
+          ))}
+        </View>
+      )}
+      {business.vertical === 'tool_rental' && view === 'inventory' ? <InventoryList businessId={businessId} /> : (<>
       <Calendar
         month={month}
         onMonthChange={setMonth}
@@ -70,6 +83,7 @@ export default function BookingCalendar() {
           </View>
         </Link>
       ))}
+      </>)}
     </ScrollView>
   );
 }

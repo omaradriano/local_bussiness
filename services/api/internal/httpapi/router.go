@@ -64,6 +64,7 @@ type BookingsRepo interface {
 	Checkout(ctx context.Context, businessID, id, condition, actor string, now time.Time) (bookings.Booking, error)
 	Return(ctx context.Context, businessID, id, condition, actor string, now time.Time) (bookings.Booking, error)
 	Extend(ctx context.Context, businessID, id string, newEnd time.Time, actor string, now time.Time) (bookings.Booking, error)
+	Inventory(ctx context.Context, businessID string) ([]bookings.InventoryRow, error)
 }
 
 // writeBooking maps the bookings errors to HTTP and writes the booking on success.
@@ -361,6 +362,17 @@ func NewRouter(d Deps) http.Handler {
 				default:
 					apierr.JSON(w, http.StatusCreated, b)
 				}
+			})
+
+			// Rental inventory: every unit with its rentals out or to come, sorted by date.
+			r.Get("/inventory", func(w http.ResponseWriter, r *http.Request) {
+				m, _ := auth.MemberFrom(r.Context())
+				rows, err := d.Bookings.Inventory(r.Context(), m.BusinessID)
+				if err != nil {
+					internalError(w, r, "inventory", err)
+					return
+				}
+				apierr.JSON(w, http.StatusOK, map[string]any{"rows": rows})
 			})
 
 			// Calendar / agenda: bookings overlapping [from, to), active ones by default.
