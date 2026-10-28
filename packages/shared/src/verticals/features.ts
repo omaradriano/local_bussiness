@@ -10,6 +10,10 @@ const INFO: Record<Feature, { label: string; hint: string }> = {
   customerAddress: { label: 'Dirección obligatoria', hint: 'No se registra un cliente sin su dirección.' },
   customerDocuments: { label: 'Documentos del cliente', hint: 'INE y comprobante de domicilio en su ficha; se reutilizan en cada reserva.' },
   trustedCustomers: { label: 'Clientes de confianza', hint: 'El dueño puede marcar a un cliente para no pedirle documentos.' },
+  walkIn: { label: 'Clientes casuales', hint: 'Agendar sin registrar al cliente, como «Cliente casual».' },
+  homeService: { label: 'Servicio a domicilio', hint: 'Una cita puede ser en la dirección del cliente.' },
+  startService: { label: 'Iniciar servicio', hint: 'Marcar cuándo empieza la atención antes de terminarla. Sin esto, la cita se da por terminada directamente.' },
+  bookingDocuments: { label: 'Documentos adicionales', hint: 'Adjuntar archivos con nombre a una reserva (contratos, pagarés…).' },
 };
 
 /** Name and explanation of a feature for Ajustes and the platform admin. */

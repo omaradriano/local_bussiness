@@ -16,9 +16,10 @@ import (
 var ErrNotFound = errors.New("booking not found")
 
 type Customer struct {
-	ID    string `json:"id"`
-	Name  string `json:"name"`
-	Phone string `json:"phone"`
+	ID     string `json:"id"`
+	Name   string `json:"name"`
+	Phone  string `json:"phone"`
+	WalkIn bool   `json:"walk_in"` // the business's «Cliente casual» (no profile, no WhatsApp)
 }
 
 type Line struct {
@@ -103,7 +104,7 @@ func Get(ctx context.Context, db store.DB, businessID, id string) (Booking, erro
 	var items, staff, units []byte
 	err := db.QueryRow(ctx, `
 		select b.id::text, b.kind, b.status, b.starts_at, b.ends_at,
-		       c.id::text, c.name, c.phone,
+		       c.id::text, c.name, c.phone, c.walk_in,
 		       b.fulfillment, b.delivery_address, b.subtotal, b.deposit_required, b.total, b.notes, b.source,
 		       b.hold_expires_at, b.public_token, b.created_at,
 		       coalesce((select jsonb_agg(jsonb_build_object('item_id', bi.item_id, 'name', i.name, 'quantity', bi.quantity,
@@ -115,7 +116,7 @@ func Get(ctx context.Context, db store.DB, businessID, id string) (Booking, erro
 		                 from public.booking_resources r join public.item_units u on u.id = r.item_unit_id where r.booking_id = b.id), '[]')
 		from public.bookings b join public.customers c on c.id = b.customer_id
 		where b.business_id = $1 and b.id = $2`, businessID, id).Scan(
-		&b.ID, &b.Kind, &b.Status, &b.StartsAt, &b.EndsAt, &b.Customer.ID, &b.Customer.Name, &b.Customer.Phone,
+		&b.ID, &b.Kind, &b.Status, &b.StartsAt, &b.EndsAt, &b.Customer.ID, &b.Customer.Name, &b.Customer.Phone, &b.Customer.WalkIn,
 		&b.Fulfillment, &b.DeliveryAddress, &b.Subtotal, &b.DepositRequired, &b.Total, &b.Notes, &b.Source,
 		&b.HoldExpiresAt, &b.PublicToken, &b.CreatedAt, &items, &staff, &units)
 	if errors.Is(err, pgx.ErrNoRows) {

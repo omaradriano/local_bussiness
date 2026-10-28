@@ -22,16 +22,16 @@ const t = strings.catalog;
 // Form keeps what the person typed; it becomes numbers (centavos) only on save.
 type Form = {
   name: string; description: string; price: string;
-  duration: string; buffer: string; prepHours: string; dailyCapacity: string;
+  duration: string; prepHours: string; dailyCapacity: string;
   priceUnit: PriceUnit; deposit: string; lateFee: string;
 };
 
-const empty: Form = { name: '', description: '', price: '', duration: '60', buffer: '0', prepHours: '24', dailyCapacity: '', priceUnit: 'day', deposit: '', lateFee: '' };
+const empty: Form = { name: '', description: '', price: '', duration: '60', prepHours: '24', dailyCapacity: '', priceUnit: 'day', deposit: '', lateFee: '' };
 
 function fromItem(it: Item): Form {
   return {
     name: it.name, description: it.description, price: centavosToInput(it.price),
-    duration: String(it.duration_minutes ?? ''), buffer: String(it.buffer_minutes ?? 0),
+    duration: String(it.duration_minutes ?? ''),
     prepHours: String(it.prep_hours ?? ''), dailyCapacity: it.daily_capacity ? String(it.daily_capacity) : '',
     priceUnit: it.price_unit ?? 'day',
     deposit: it.security_deposit != null ? centavosToInput(it.security_deposit) : '',
@@ -48,7 +48,6 @@ function toFields(f: Form, kind: ItemKind, depositEnabled: boolean): { fields?: 
   const fields: Fields = { name: f.name, description: f.description, price: money('price', f.price) };
   if (kind === 'service') {
     fields.duration_minutes = int('duration_minutes', f.duration);
-    fields.buffer_minutes = int('buffer_minutes', f.buffer || '0');
   } else if (kind === 'product') {
     fields.prep_hours = int('prep_hours', f.prepHours);
     fields.daily_capacity = f.dailyCapacity.trim() ? int('daily_capacity', f.dailyCapacity) : null;
@@ -148,7 +147,7 @@ export default function CatalogItemForm() {
         {field('name', 'name', t.name)}
         {field('description', 'description', t.description)}
         {field('price', 'price', kind === 'rental' ? t.pricePerDay : t.price, true, kind === 'rental' ? t.perDayNote(settings?.rentals.late_fee_multiplier ?? 1) : undefined)}
-        {kind === 'service' && (<>{field('duration', 'duration_minutes', t.duration, true)}{field('buffer', 'buffer_minutes', t.buffer, true)}</>)}
+        {kind === 'service' && field('duration', 'duration_minutes', t.duration, true, t.bufferInSettings)}
         {kind === 'product' && (<>{field('prepHours', 'prep_hours', t.prepHours, true)}{field('dailyCapacity', 'daily_capacity', t.dailyCapacity, true)}</>)}
         {kind === 'rental' && depositEnabled && field('deposit', 'security_deposit', t.deposit, true, t.depositHint)}
         {kind === 'rental' && isNew && (

@@ -1,12 +1,15 @@
 import type { VerticalMap } from './types';
 
-// Barbería: agenda by barber (the service engine). Base map (2026-10-28); refine with the client's requirements.
+// Barbería: agenda by barber (the service engine). Client requirements (2026-10-28): walk-ins without
+// registering, address optional, home service only if the barber gives it, no advance at the counter
+// (paid at the end; advance only for online bookings), no "Iniciar" step, no documents, business-wide gap.
 export const barbershop = {
   label: 'Barbería',
   kind: 'service',
   terms: { booking: 'Cita', catalog_item: 'Servicio', catalog: 'Servicios', starts_at: 'Hora de la cita', ends_at: 'Hora de término' },
-  settings: ['general'],
-  features: ['staff'],
+  settings: ['general', 'agenda'],
+  features: ['staff', 'walkIn'],
+  optionalFeatures: ['homeService'],
   texts: {
     bookings: {
       plural: 'Citas',
@@ -36,7 +39,7 @@ export const barbershop = {
       customers: 'Clientes y teléfonos',
       history: 'Todas las citas, con búsqueda y filtros',
       catalog: 'Servicios, precios y duración',
-      settings: 'Anticipo, apartados y funciones',
+      settings: 'Anticipo, margen entre citas y funciones',
     },
     newBooking: {
       itemHint: 'Elige el servicio.',

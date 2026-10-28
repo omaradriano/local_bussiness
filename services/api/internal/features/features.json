@@ -1,8 +1,63 @@
 {
-  "staff": { "engines": ["service"] },
-  "inventory": { "engines": ["rental"] },
-  "guarantor": { "engines": ["service", "product", "rental"] },
-  "customerAddress": { "engines": ["service", "product", "rental"] },
-  "customerDocuments": { "engines": ["service", "product", "rental"] },
-  "trustedCustomers": { "engines": ["service", "product", "rental"] }
+  "staff": {
+    "engines": [
+      "service"
+    ]
+  },
+  "inventory": {
+    "engines": [
+      "rental"
+    ]
+  },
+  "guarantor": {
+    "engines": [
+      "service",
+      "product",
+      "rental"
+    ]
+  },
+  "customerAddress": {
+    "engines": [
+      "service",
+      "product",
+      "rental"
+    ]
+  },
+  "customerDocuments": {
+    "engines": [
+      "service",
+      "product",
+      "rental"
+    ]
+  },
+  "trustedCustomers": {
+    "engines": [
+      "service",
+      "product",
+      "rental"
+    ]
+  },
+  "walkIn": {
+    "engines": [
+      "service",
+      "product"
+    ]
+  },
+  "homeService": {
+    "engines": [
+      "service"
+    ]
+  },
+  "startService": {
+    "engines": [
+      "service"
+    ]
+  },
+  "bookingDocuments": {
+    "engines": [
+      "service",
+      "product",
+      "rental"
+    ]
+  }
 }

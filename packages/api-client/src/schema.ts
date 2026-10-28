@@ -1032,7 +1032,7 @@ export interface components {
             }[];
         };
         /** @enum {string} */
-        Feature: "staff" | "inventory" | "guarantor" | "customerAddress" | "customerDocuments" | "trustedCustomers";
+        Feature: "staff" | "inventory" | "guarantor" | "customerAddress" | "customerDocuments" | "trustedCustomers" | "walkIn" | "homeService" | "startService" | "bookingDocuments";
         FeatureState: {
             key: components["schemas"]["Feature"];
             /** @description La trae su giro */
@@ -1069,6 +1069,12 @@ export interface components {
                 deposit_percent: number;
                 /** @description Horas que espera un apartado sin anticipo */
                 hold_hours: number;
+                /** @description El anticipo solo se pide en reservas por internet; las del mostrador quedan confirmadas */
+                advance_only_online: boolean;
+            };
+            agenda: {
+                /** @description Margen después de cada cita, para todo el negocio */
+                buffer_minutes: number;
             };
             delivery: {
                 delivery_zones: components["schemas"]["DeliveryZone"][];
@@ -1112,8 +1118,9 @@ export interface components {
         /** @enum {string} */
         BookingStatus: "pending_deposit" | "confirmed" | "in_progress" | "ready" | "out_for_delivery" | "checked_out" | "overdue" | "returned" | "completed" | "cancelled" | "expired" | "no_show";
         BookingInput: {
-            /** @description `id` de un cliente existente, o `name` + `phone` (10 dígitos de México o E.164) */
+            /** @description `id` de un cliente existente, `name` + `phone` (10 dígitos de México o E.164), o `walk_in` (cliente casual, si el negocio tiene esa función) */
             customer: {
+                walk_in?: boolean;
                 /** Format: uuid */
                 id?: string;
                 name?: string;
@@ -1169,6 +1176,8 @@ export interface components {
                 id: string;
                 name: string;
                 phone: string;
+                /** @description Cliente casual del negocio (sin ficha ni WhatsApp) */
+                walk_in: boolean;
             };
             items: {
                 /** Format: uuid */
@@ -2181,6 +2190,10 @@ export interface operations {
                     general?: {
                         deposit_percent?: number;
                         hold_hours?: number;
+                        advance_only_online?: boolean;
+                    };
+                    agenda?: {
+                        buffer_minutes?: number;
                     };
                     delivery?: {
                         delivery_zones?: components["schemas"]["DeliveryZone"][];

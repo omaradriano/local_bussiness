@@ -27,6 +27,9 @@ func TestAvailabilityAndOwnerChoice(t *testing.T) {
 		{"owner can't turn on what isn't available", "nails", nil, map[string]bool{"guarantor": true}, "guarantor", false},
 		{"engine doesn't support it", "nails", map[string]bool{"inventory": true}, nil, "inventory", false},
 		{"unknown feature", "tool_rental", map[string]bool{"magic": true}, nil, "magic", false},
+		{"offered by the giro, off until the owner turns it on", "barbershop", nil, nil, "homeService", false},
+		{"owner turns on an offered one", "barbershop", nil, map[string]bool{"homeService": true}, "homeService", true},
+		{"barbershop takes walk-ins without starting the service", "barbershop", nil, nil, "walkIn", true},
 	}
 	for _, tc := range cases {
 		t.Run(tc.name, func(t *testing.T) {
@@ -55,7 +58,7 @@ func TestStatesOnlyListSupportedFeatures(t *testing.T) {
 func TestGiroFeaturesAreSupported(t *testing.T) {
 	for _, v := range businesses.Verticals {
 		tpl, _ := businesses.TemplateFor(v)
-		for _, f := range tpl.Features {
+		for _, f := range append(tpl.Features, tpl.OptionalFeatures...) {
 			if !Supports(v, f) {
 				t.Errorf("%s brings %q, unknown or not for its engine", v, f)
 			}

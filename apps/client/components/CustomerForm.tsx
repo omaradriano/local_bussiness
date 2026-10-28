@@ -67,7 +67,7 @@ export function CustomerForm({ businessId, customer, isOwner, onSaved, onExistin
       <Group label={t.contact} padded>
         <Field label={t.name} value={f.name} onChangeText={(name) => set({ name })} error={errors.name} autoComplete="name" />
         <PhoneInput label={t.phone} code={f.code} national={f.national} onChange={(code, national) => set({ code, national })} error={errors.phone} />
-        <Field label={t.address} value={f.address} onChangeText={(address) => set({ address })} error={errors.address} multiline />
+        <Field label={has('customerAddress') ? t.address : t.addressOptional} value={f.address} onChangeText={(address) => set({ address })} error={errors.address} multiline />
         <Field label={t.email} value={f.email} onChangeText={(email) => set({ email })} error={errors.email} autoCapitalize="none" keyboardType="email-address" />
       </Group>
       {has('guarantor') && <Group label={t.guarantor} padded footer={t.guarantorHint}>

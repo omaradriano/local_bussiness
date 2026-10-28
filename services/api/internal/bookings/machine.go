@@ -5,13 +5,13 @@ import "slices"
 // The state machine lives only here: one transition table per item kind. Every status change
 // goes through CanTransition; nothing else in the code decides which moves are valid.
 //
-//	service: pending_deposit → confirmed → in_progress → completed   (+ no_show, cancelled)
+//	service: pending_deposit → confirmed → [in_progress →] completed   (+ no_show, cancelled)
 //	product: pending_deposit → confirmed → in_progress → ready → [out_for_delivery →] completed
 //	rental:  pending_deposit → confirmed → checked_out → [overdue →] returned → completed
 var transitions = map[string]map[string][]string{
 	"service": {
 		"pending_deposit": {"confirmed", "cancelled", "expired"},
-		"confirmed":       {"in_progress", "cancelled", "no_show"},
+		"confirmed":       {"in_progress", "completed", "cancelled", "no_show"}, // completed: finished without "starting" it
 		"in_progress":     {"completed"},
 	},
 	"product": {

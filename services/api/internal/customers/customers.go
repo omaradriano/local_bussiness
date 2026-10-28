@@ -192,7 +192,7 @@ func (r Repo) Search(ctx context.Context, businessID, q string, limit int) ([]Cu
 		return -1
 	}, q)
 	rows, err := r.DB.Query(ctx, `select `+cols+` from public.customers
-		where business_id = $1
+		where business_id = $1 and not walk_in
 		  and ($2 = '' or name ilike '%' || $2 || '%' or ($3 <> '' and phone like '%' || $3 || '%'))
 		order by (case when $2 = '' then created_at end) desc nulls last, name
 		limit $4`, businessID, q, digits, limit)

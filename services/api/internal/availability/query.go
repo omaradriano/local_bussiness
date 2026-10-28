@@ -75,7 +75,7 @@ func (l Loader) service(ctx context.Context, businessID string, biz Business, it
 	}
 	slots := ServiceSlots(ServiceQuery{
 		Loc: biz.Loc, Date: req.Date, Now: now,
-		Duration: time.Duration(item.DurationMinutes) * time.Minute, Buffer: time.Duration(item.BufferMinutes) * time.Minute,
+		Duration: time.Duration(item.DurationMinutes) * time.Minute, Buffer: time.Duration(biz.BufferMinutes) * time.Minute,
 		Step: time.Duration(biz.SlotMinutes) * time.Minute, BusinessHours: hours, Staff: staff, Blackouts: blackouts,
 	})
 	return Response{Kind: "service", Slots: slots, Available: len(slots) > 0}, nil

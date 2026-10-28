@@ -57,10 +57,13 @@ func setup(t *testing.T, p *pgxpool.Pool, vertical string, settingsJSON string) 
 
 	switch vertical {
 	case "nails":
-		must(p.QueryRow(ctx, `insert into public.catalog_items (business_id, kind, name, price, duration_minutes, buffer_minutes)
-			values ($1, 'service', 'Gelish', 25000, 60, 15) returning id::text`, f.business).Scan(&f.item))
+		must(p.QueryRow(ctx, `insert into public.catalog_items (business_id, kind, name, price, duration_minutes)
+			values ($1, 'service', 'Gelish', 25000, 60) returning id::text`, f.business).Scan(&f.item))
+		// The gap between appointments is the business's (15 min), unless the test sets another.
+		_, err := p.Exec(ctx, `update public.businesses set settings = '{"buffer_minutes": 15}'::jsonb || settings where id = $1`, f.business)
+		must(err)
 		must(p.QueryRow(ctx, `insert into public.staff (business_id, name) values ($1, 'Karla') returning id::text`, f.business).Scan(&f.staff))
-		_, err := p.Exec(ctx, `insert into public.staff_services (business_id, staff_id, item_id) values ($1, $2, $3)`, f.business, f.staff, f.item)
+		_, err = p.Exec(ctx, `insert into public.staff_services (business_id, staff_id, item_id) values ($1, $2, $3)`, f.business, f.staff, f.item)
 		must(err)
 		_, err = p.Exec(ctx, `insert into public.business_hours (business_id, staff_id, weekday, opens_at, closes_at) values ($1, $2, 1, '10:00', '18:00')`, f.business, f.staff)
 		must(err)
@@ -360,4 +363,63 @@ func TestIntegrationRentalSettings(t *testing.T) {
 			t.Fatalf("late fee ×2: %+v %v", b.Rental, err)
 		}
 	})
+}
+
+func TestIntegrationBarbershopRequirements(t *testing.T) {
+	p := pool(t)
+	ctx := context.Background()
+	f := setup(t, p, "nails", `{"deposit_percent": 50}`)
+	// Same agenda fixture, as a barbershop that only asks the advance online.
+	if _, err := p.Exec(ctx, `update public.businesses set vertical = 'barbershop',
+		settings = settings || '{"advance_only_online": true}' where id = $1`, f.business); err != nil {
+		t.Fatal(err)
+	}
+	walkIn := func(start string, extra func(*CreateInput)) (Booking, error) {
+		in := CreateInput{Customer: CustomerInput{WalkIn: true}, ItemID: f.item, StartsAt: at(start), Source: "admin"}
+		if extra != nil {
+			extra(&in)
+		}
+		b, _, err := Create(ctx, p, f.business, in, now)
+		return b, err
+	}
+
+	// Counter walk-in: confirmed right away, no advance, the business's «Cliente casual».
+	a, err := walkIn("2026-11-02T17:00:00Z", nil)
+	if err != nil || a.Status != "confirmed" || a.DepositRequired != 0 || !a.Customer.WalkIn || a.Customer.Name != "Cliente casual" {
+		t.Fatalf("walk-in: %+v %v", a, err)
+	}
+	b, err := walkIn("2026-11-02T19:00:00Z", nil)
+	if err != nil || b.Customer.ID != a.Customer.ID {
+		t.Fatalf("second walk-in reuses the casual customer: %v %v", b.Customer, err)
+	}
+	// Paid at the end, then finished without "starting" it.
+	if _, err := AddPayment(ctx, p, f.business, a.ID, Payment{Type: "balance", Method: "cash", Amount: a.Total}, "", now, noFiles); err != nil {
+		t.Fatal(err)
+	}
+	if done, err := Transition(ctx, p, f.business, a.ID, "completed", "", ""); err != nil || done.Status != "completed" {
+		t.Fatalf("complete from confirmed: %v %v", done.Status, err)
+	}
+	// Home service is offered but off until the owner turns it on.
+	var bad Invalid
+	home := func(in *CreateInput) { in.Fulfillment, in.DeliveryAddress = "delivery", "Calle 5 #10" }
+	if _, err := walkIn("2026-11-02T21:00:00Z", home); !errors.As(err, &bad) || bad.Field != "fulfillment" {
+		t.Fatalf("home service while off: %v", err)
+	}
+	if _, err := p.Exec(ctx, `update public.businesses set settings = settings || '{"features": {"homeService": true}}' where id = $1`, f.business); err != nil {
+		t.Fatal(err)
+	}
+	if c, err := walkIn("2026-11-02T21:00:00Z", home); err != nil || c.Fulfillment == nil || *c.Fulfillment != "delivery" || c.DeliveryAddress == nil {
+		t.Fatalf("home service: %+v %v", c, err)
+	}
+	// The casual customer never shows up in the customer list.
+	var listed int
+	if err := p.QueryRow(ctx, `select count(*) from public.customers where business_id = $1 and not walk_in`, f.business).Scan(&listed); err != nil || listed != 0 {
+		t.Fatalf("listed customers: %d %v", listed, err)
+	}
+
+	// A nails business doesn't take walk-ins unless the owner turns it on.
+	n := setup(t, p, "nails", `{}`)
+	if _, _, err := Create(ctx, p, n.business, CreateInput{Customer: CustomerInput{WalkIn: true}, ItemID: n.item, StartsAt: at("2026-11-02T17:00:00Z"), Source: "admin"}, now); !errors.As(err, &bad) || bad.Field != "customer.walk_in" {
+		t.Fatalf("walk-in at nails: %v", err)
+	}
 }

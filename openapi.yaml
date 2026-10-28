@@ -586,6 +586,11 @@ paths:
                   properties:
                     deposit_percent: { type: integer, minimum: 0, maximum: 100 }
                     hold_hours: { type: integer, minimum: 1, maximum: 168 }
+                    advance_only_online: { type: boolean }
+                agenda:
+                  type: object
+                  properties:
+                    buffer_minutes: { type: integer, minimum: 0, maximum: 240 }
                 delivery:
                   type: object
                   properties:
@@ -1369,7 +1374,7 @@ components:
 
     Feature:
       type: string
-      enum: [staff, inventory, guarantor, customerAddress, customerDocuments, trustedCustomers]
+      enum: [staff, inventory, guarantor, customerAddress, customerDocuments, trustedCustomers, walkIn, homeService, startService, bookingDocuments]
 
     FeatureState:
       type: object
@@ -1402,16 +1407,22 @@ components:
 
     Settings:
       type: object
-      required: [general, rentals, delivery, features]
+      required: [general, agenda, rentals, delivery, features]
       description: "Todas las secciones; la app muestra las que le tocan al giro del negocio"
       properties:
         features: { type: array, items: { $ref: "#/components/schemas/FeatureState" }, description: "Funciones que admite su giro; el dueño solo cambia enabled" }
         general:
           type: object
-          required: [deposit_percent, hold_hours]
+          required: [deposit_percent, hold_hours, advance_only_online]
           properties:
             deposit_percent: { type: integer, description: "Anticipo al apartar, % del total (0 = sin anticipo)" }
             hold_hours: { type: integer, description: "Horas que espera un apartado sin anticipo" }
+            advance_only_online: { type: boolean, description: "El anticipo solo se pide en reservas por internet; las del mostrador quedan confirmadas" }
+        agenda:
+          type: object
+          required: [buffer_minutes]
+          properties:
+            buffer_minutes: { type: integer, description: "Margen después de cada cita, para todo el negocio" }
         delivery:
           type: object
           required: [delivery_zones]
@@ -1468,8 +1479,9 @@ components:
       properties:
         customer:
           type: object
-          description: "`id` de un cliente existente, o `name` + `phone` (10 dígitos de México o E.164)"
+          description: "`id` de un cliente existente, `name` + `phone` (10 dígitos de México o E.164), o `walk_in` (cliente casual, si el negocio tiene esa función)"
           properties:
+            walk_in: { type: boolean }
             id: { type: string, format: uuid }
             name: { type: string }
             phone: { type: string }
@@ -1503,11 +1515,12 @@ components:
         ends_at: { type: [string, "null"], format: date-time }
         customer:
           type: object
-          required: [id, name, phone]
+          required: [id, name, phone, walk_in]
           properties:
             id: { type: string, format: uuid }
             name: { type: string }
             phone: { type: string }
+            walk_in: { type: boolean, description: "Cliente casual del negocio (sin ficha ni WhatsApp)" }
         items:
           type: array
           items:

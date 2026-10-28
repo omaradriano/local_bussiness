@@ -14,6 +14,7 @@ import (
 	"github.com/jackc/pgx/v5/pgconn"
 
 	"github.com/omaradriano/local_bussiness/services/api/internal/availability"
+	"github.com/omaradriano/local_bussiness/services/api/internal/features"
 	"github.com/omaradriano/local_bussiness/services/api/internal/settings"
 	"github.com/omaradriano/local_bussiness/services/api/internal/store"
 )
@@ -31,6 +32,8 @@ type CustomerInput struct {
 	Name  string `json:"name"`
 	Phone string `json:"phone"`
 	Email string `json:"email"`
+	// A walk-in nobody registers (barbershops): the booking goes to the business's «Cliente casual».
+	WalkIn bool `json:"walk_in"`
 }
 
 type CreateInput struct {
@@ -59,9 +62,11 @@ type zone struct {
 }
 
 type bizSettings struct {
-	DepositPercent int64  `json:"deposit_percent"`
-	HoldHours      int    `json:"hold_hours"`
-	DeliveryZones  []zone `json:"delivery_zones"`
+	DepositPercent    int64  `json:"deposit_percent"`
+	HoldHours         int    `json:"hold_hours"`
+	DeliveryZones     []zone `json:"delivery_zones"`
+	BufferMinutes     int    `json:"buffer_minutes"`      // gap after each appointment (whole business)
+	AdvanceOnlyOnline bool   `json:"advance_only_online"` // counter bookings don't ask the advance
 }
 
 type itemRow struct {
@@ -90,7 +95,7 @@ func (in *CreateInput) Validate() error {
 	if in.Quantity < 1 || in.Quantity > 100 {
 		return Invalid{"quantity", "La cantidad debe ser de 1 a 100."}
 	}
-	if in.Customer.ID == "" {
+	if in.Customer.ID == "" && !in.Customer.WalkIn {
 		in.Customer.Name = strings.TrimSpace(in.Customer.Name)
 		if n := utf8.RuneCountInString(in.Customer.Name); n == 0 || n > 80 {
 			return Invalid{"customer.name", "Escribe el nombre del cliente."}
@@ -130,10 +135,19 @@ func Create(ctx context.Context, db store.DB, businessID string, in CreateInput,
 	}
 	defer tx.Rollback(ctx)
 
-	var tz string
-	var rawSettings []byte
-	if err := tx.QueryRow(ctx, `select timezone, settings from public.businesses where id = $1`, businessID).Scan(&tz, &rawSettings); err != nil {
+	var tz, vertical string
+	var rawSettings, grants []byte
+	if err := tx.QueryRow(ctx, `select timezone, settings, vertical, feature_grants from public.businesses where id = $1`, businessID).
+		Scan(&tz, &rawSettings, &vertical, &grants); err != nil {
 		return Booking{}, false, err
+	}
+	var owner struct {
+		Features map[string]bool `json:"features"`
+	}
+	_ = json.Unmarshal(rawSettings, &owner)
+	active := features.Active(vertical, features.Parse(grants), owner.Features)
+	if in.Customer.WalkIn && in.Customer.ID == "" && !slices.Contains(active, "walkIn") {
+		return Booking{}, false, Invalid{"customer.walk_in", "Este negocio no registra clientes casuales; elige o registra al cliente."}
 	}
 	loc, err := time.LoadLocation(tz)
 	if err != nil {
@@ -162,7 +176,17 @@ func Create(ctx context.Context, db store.DB, businessID string, in CreateInput,
 	case "service":
 		e := start.Add(time.Duration(it.DurationMinutes) * time.Minute)
 		end = &e
-		in.Fulfillment, in.DeliveryAddress = "", ""
+		// At the customer's place only if the business gives home service.
+		if in.Fulfillment == "delivery" {
+			if !slices.Contains(active, "homeService") {
+				return Booking{}, false, Invalid{"fulfillment", "Este negocio no tiene servicio a domicilio."}
+			}
+			if in.DeliveryAddress = strings.TrimSpace(in.DeliveryAddress); in.DeliveryAddress == "" {
+				return Booking{}, false, Invalid{"delivery_address", "Escribe la dirección del servicio."}
+			}
+		} else {
+			in.Fulfillment, in.DeliveryAddress = "", ""
+		}
 	case "product":
 		if in.Fulfillment == "" {
 			in.Fulfillment = "pickup"
@@ -254,6 +278,9 @@ func Create(ctx context.Context, db store.DB, businessID string, in CreateInput,
 	if !rentals.SecurityDepositEnabled {
 		securityDeposit = 0 // the business doesn't ask for one
 	}
+	if set.AdvanceOnlyOnline && in.Source == "admin" {
+		set.DepositPercent = 0 // booked at the counter: paid at the end, confirmed right away
+	}
 	q := Compute(QuoteInput{UnitPrice: it.Price, OptionsExtra: optsExtra, Quantity: int64(in.Quantity), Periods: periods,
 		DeliveryFee: deliveryFee, DepositPercent: set.DepositPercent, SecurityDeposit: securityDeposit})
 	status, hold := InitialStatus(q.Advance, set.HoldHours, now)
@@ -304,7 +331,7 @@ func Create(ctx context.Context, db store.DB, businessID string, in CreateInput,
 
 	switch it.Kind {
 	case "service":
-		occupied := end.Add(time.Duration(it.BufferMinutes) * time.Minute)
+		occupied := end.Add(time.Duration(set.BufferMinutes) * time.Minute)
 		if !claim(ctx, tx, `insert into public.booking_resources (business_id, booking_id, staff_id, during) values ($1, $2, $3, tstzrange($4, $5))`,
 			businessID, bookingID, candidates, 1, start, occupied) {
 			return Booking{}, false, ErrSlotTaken
@@ -410,6 +437,14 @@ func upsertCustomer(ctx context.Context, tx pgx.Tx, businessID string, c Custome
 		if errors.Is(err, pgx.ErrNoRows) {
 			return "", Invalid{"customer.id", "El cliente no existe."}
 		}
+		return id, err
+	}
+	if c.WalkIn {
+		// One «Cliente casual» per business (placeholder phone; hidden from customer lists).
+		err := tx.QueryRow(ctx, `
+			insert into public.customers (business_id, name, phone, walk_in) values ($1, 'Cliente casual', '+10000000000', true)
+			on conflict (business_id, phone) do update set walk_in = true
+			returning id::text`, businessID).Scan(&id)
 		return id, err
 	}
 	// Same phone in the same business = same customer; keep the name they already had.

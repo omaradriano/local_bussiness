@@ -11,8 +11,9 @@ func TestF3_6_MachineAllowsOnlyItsTransitions(t *testing.T) {
 		{"service", "pending_deposit", "confirmed", true},
 		{"service", "confirmed", "in_progress", true},
 		{"service", "in_progress", "completed", true},
+		{"service", "confirmed", "completed", true}, // a barbershop finishes it without starting it
 		{"service", "confirmed", "no_show", true},
-		{"service", "pending_deposit", "completed", false}, // can't skip
+		{"service", "pending_deposit", "completed", false}, // can't skip the advance
 		{"service", "confirmed", "checked_out", false},     // rental-only state
 		{"service", "completed", "cancelled", false},       // final
 		// products

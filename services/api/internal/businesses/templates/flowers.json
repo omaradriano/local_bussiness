@@ -1,6 +1,9 @@
 {
   "kind": "product",
   "features": [],
+  "optional_features": [
+    "walkIn"
+  ],
   "settings": {
     "deposit_percent": 50,
     "cancel_hours": 48,
