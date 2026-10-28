@@ -8,7 +8,7 @@ import { errorText, fieldErrors } from '../../../../../lib/errors';
 import { ExtendRental } from '../../../../../components/ExtendRental';
 import { StepCard } from '../../../../../components/StepCard';
 import { useBusiness } from '../../../../../lib/useMe';
-import { Button, Cell, Field, Group, Notice, Row, Screen, Segmented, Step, Text, useUI, type StepState } from '../../../../../ui';
+import { Button, Cell, Field, Group, Notice, Row, Screen, Segmented, Step, Text, useToast, useUI, type StepState } from '../../../../../ui';
 
 type Booking = components['schemas']['Booking'];
 type PaymentType = components['schemas']['PaymentType'];
@@ -33,6 +33,7 @@ export default function BookingDetail() {
   const [condition, setCondition] = useState('');
   const path = { businessId, bookingId };
   const ui = useUI();
+  const toast = useToast();
 
   const show = useCallback((data: Booking) => {
     setB(data);
@@ -58,24 +59,22 @@ export default function BookingDetail() {
 
   async function move(to: Booking['status']) {
     setBusy(true);
-    setMessage(null);
     const { data, error, response } = await api.POST('/v1/b/{businessId}/bookings/{bookingId}/transition', { params: { path }, body: { to, note } });
     setBusy(false);
     setConfirmCancel(false);
-    if (data) { show(data); setNote(''); return; }
+    if (data) { show(data); setNote(''); toast(t.statusChanged(t.status[data.status])); return; }
     const pending = (error?.details as { steps?: string[] } | undefined)?.steps;
-    setMessage(pending ? error!.message : errorText(error, response.status));
+    toast(pending ? error!.message : errorText(error, response.status), 'error');
   }
 
   async function rentalMove(kind: 'checkout' | 'return') {
     setBusy(true);
-    setMessage(null);
     const res = kind === 'checkout'
       ? await api.POST('/v1/b/{businessId}/bookings/{bookingId}/checkout', { params: { path }, body: { condition } })
       : await api.POST('/v1/b/{businessId}/bookings/{bookingId}/return', { params: { path }, body: { condition } });
     setBusy(false);
-    if (res.data) { setCondition(''); return show(res.data); }
-    setMessage(errorText(res.error, res.response.status));
+    if (res.data) { setCondition(''); toast(kind === 'checkout' ? t.checkedOutToast : t.returnedToast); return show(res.data); }
+    toast(errorText(res.error, res.response.status), 'error');
   }
 
   async function pay() {
@@ -83,14 +82,13 @@ export default function BookingDetail() {
     if (cents === null || cents <= 0) return setPayErrors({ amount: strings.catalog.invalidMoney });
     setBusy(true);
     setPayErrors({});
-    setMessage(null);
     const { data, error, response } = await api.POST('/v1/b/{businessId}/bookings/{bookingId}/payments', {
       params: { path }, body: { type: payType, method, amount: cents },
     });
     setBusy(false);
-    if (data) return show(data);
+    if (data) { toast(t.paymentSaved); return show(data); }
     setPayErrors(fieldErrors(error));
-    setMessage(errorText(error, response.status));
+    toast(errorText(error, response.status), 'error');
   }
 
   if (!b || !business) return message ? <Text style={{ padding: 16 }}>{message}</Text> : <ActivityIndicator style={{ marginTop: 24 }} />;
@@ -171,7 +169,6 @@ export default function BookingDetail() {
           <Text variant="largeTitle" accessibilityRole="header">{t.status[b.status]}</Text>
           {b.status === 'overdue' && <Notice tone="warning">{f.overdue}</Notice>}
           {closedNote && <Notice tone="warning">{f.closed}</Notice>}
-          {message && <Notice>{message}</Notice>}
         </View>
 
         <Group separatorInset={58}>
@@ -218,7 +215,7 @@ export default function BookingDetail() {
                 </>
               )}
               {rentalStep <= 2 && b.ends_at && (
-                <ExtendRental businessId={businessId} booking={b} onDone={(nb) => { show(nb); setMessage(t.extended(when(nb.ends_at!), formatMXN(nb.total))); }} />
+                <ExtendRental businessId={businessId} booking={b} onDone={(nb) => { show(nb); toast(t.extended(when(nb.ends_at!), formatMXN(nb.total))); }} />
               )}
               {rentalStep > 2 && b.rental?.returned_at && (
                 <Text variant="subhead" color="labelSecondary">{t.backAt}: {when(b.rental.returned_at)}{b.rental.return_condition ? ` — ${b.rental.return_condition}` : ''}</Text>

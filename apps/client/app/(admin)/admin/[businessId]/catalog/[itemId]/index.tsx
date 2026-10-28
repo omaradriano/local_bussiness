@@ -5,7 +5,7 @@ import { useCallback, useEffect, useState } from 'react';
 import { ActivityIndicator, Switch, View } from 'react-native';
 import { ItemPhotos } from '../../../../../../components/ItemPhotos';
 import { UnitsSection } from '../../../../../../components/UnitsSection';
-import { Button, Cell, Field, Group, Notice, Screen, Text } from '../../../../../../ui';
+import { Button, Cell, Field, Group, Notice, Screen, Text, useToast } from '../../../../../../ui';
 import { api } from '../../../../../../lib/api';
 import { goBack } from '../../../../../../lib/nav';
 import { uploadPhotos, type PickedPhoto } from '../../../../../../lib/photos';
@@ -64,6 +64,7 @@ export default function CatalogItemForm() {
   const pathname = usePathname();
   const { businessId, itemId, error: carriedError } = useLocalSearchParams<{ businessId: string; itemId: string; error?: string }>();
   const { business } = useBusiness(businessId);
+  const toast = useToast();
   const { settings } = useSettings(businessId);
   const depositEnabled = settings?.rentals.security_deposit_enabled ?? true;
   const isNew = itemId === 'new';
@@ -109,7 +110,7 @@ export default function CatalogItemForm() {
     if (!res.data) {
       setBusy(false);
       setErrors(fieldErrors(res.error));
-      return setMessage(errorText(res.error, res.response.status));
+      return toast(errorText(res.error, res.response.status), 'error');
     }
     if (isNew && pending.length) {
       setMessage(strings.photos.uploading);
@@ -133,7 +134,7 @@ export default function CatalogItemForm() {
   async function toggleActive(active: boolean) {
     const { data, error, response } = await api.PATCH('/v1/b/{businessId}/catalog/{itemId}', { params: { path: { businessId, itemId } }, body: { active } });
     if (data) setItem(data);
-    else setMessage(errorText(error, response.status));
+    else toast(errorText(error, response.status), 'error');
   }
 
   const title = isNew ? `${t.add} ${term(business.vertical, 'catalog_item')?.toLowerCase()}` : form.name;
@@ -164,7 +165,7 @@ export default function CatalogItemForm() {
           <Cell label={t.activeLabel} accessory={<Switch accessibilityLabel={t.activeLabel} value={item.active} onValueChange={toggleActive} />} />
         </Group>
       )}
-      {message && <View style={{ marginBottom: 12 }}><Notice tone="warning">{message}</Notice></View>}
+      {message && form && item && <View style={{ marginBottom: 12 }}><Notice tone="warning">{message}</Notice></View>}
       {isOwner && <Button variant="primary" busy={busy} onPress={save} style={{ marginBottom: 28 }}>{t.save}</Button>}
       {item && kind === 'rental' && <UnitsSection businessId={businessId} itemId={item.id} isOwner={isOwner} />}
     </Screen>

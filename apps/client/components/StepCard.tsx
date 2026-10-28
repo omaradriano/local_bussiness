@@ -4,7 +4,7 @@ import { strings } from '@lb/shared';
 import { ZoomableImage } from './ZoomableImage';
 import { useEffect, useState } from 'react';
 import { Pressable, TextInput, View } from 'react-native';
-import { Button, Text, radius, useUI } from '../ui';
+import { Button, Text, radius, useToast, useUI } from '../ui';
 import { api } from '../lib/api';
 import { errorText, fieldErrors } from '../lib/errors';
 import { pickPhotos, uploadStepPhoto } from '../lib/photos';
@@ -21,6 +21,7 @@ export function StepCard({ businessId, bookingId, step, editable, onDone }: {
   businessId: string; bookingId: string; step: Step; editable: boolean; onDone: (b: Booking) => void;
 }) {
   const ui = useUI();
+  const toast = useToast();
   const [text, setText] = useState('');
   const [checked, setChecked] = useState<Record<string, boolean>>({});
   const [urls, setUrls] = useState<string[] | null>(null);
@@ -35,7 +36,8 @@ export function StepCard({ businessId, bookingId, step, editable, onDone }: {
     setBusy(false);
     if (data) return onDone(data);
     const f = fieldErrors(error);
-    setMessage(f.data ?? f.files ?? errorText(error, response.status));
+    setMessage(null);
+    toast(f.data ?? f.files ?? errorText(error, response.status), 'error');
   }
 
   async function addPhotos() {
@@ -43,12 +45,12 @@ export function StepCard({ businessId, bookingId, step, editable, onDone }: {
     setMessage(null);
     const picked = await pickPhotos(maxFiles);
     if (picked === 'cancelled') return setBusy(false);
-    if (typeof picked === 'string') { setBusy(false); return setMessage(picked); }
+    if (typeof picked === 'string') { setBusy(false); return toast(picked, 'error'); }
     const keys: string[] = [];
     for (const [i, photo] of picked.photos.entries()) {
       setMessage(strings.photos.progress(i + 1, picked.photos.length));
       const up = await uploadStepPhoto(businessId, bookingId, step.id, photo);
-      if ('error' in up) { setBusy(false); return setMessage(up.error); }
+      if ('error' in up) { setBusy(false); setMessage(null); return toast(up.error, 'error'); }
       keys.push(up.key);
     }
     setMessage(null);
@@ -125,7 +127,7 @@ export function StepCard({ businessId, bookingId, step, editable, onDone }: {
           )}
         </>
       )}
-      {message && <Text variant="footnote" accessibilityRole="alert" style={{ color: ui.danger }}>{message}</Text>}
+      {message && <Text variant="footnote" color="labelSecondary">{message}</Text>}
     </View>
   );
 }

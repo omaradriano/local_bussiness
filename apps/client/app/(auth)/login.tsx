@@ -4,7 +4,7 @@ import { useState } from 'react';
 import { View } from 'react-native';
 import { useSession } from '../../lib/session';
 import { supabase } from '../../lib/supabase';
-import { Button, Field, Notice, Screen, Text, useUI } from '../../ui';
+import { Button, Field, Screen, Text, useToast, useUI } from '../../ui';
 
 const t = strings.auth;
 
@@ -14,24 +14,23 @@ export default function Login() {
   const [mode, setMode] = useState<'login' | 'signup'>('login');
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
-  const [message, setMessage] = useState<string | null>(null);
+  const toast = useToast();
   const [busy, setBusy] = useState(false);
 
   if (session) return <Redirect href="/admin" />;
 
   async function submit() {
     const invalid = validateCredentials(email, password);
-    if (invalid) return setMessage(invalid);
+    if (invalid) return toast(invalid, 'error');
     setBusy(true);
-    setMessage(null);
     const creds = { email: email.trim(), password };
     if (mode === 'login') {
       const { error } = await supabase.auth.signInWithPassword(creds);
-      if (error) setMessage(authErrorMessage(error.code));
+      if (error) toast(authErrorMessage(error.code), 'error');
     } else {
       const { data, error } = await supabase.auth.signUp(creds);
-      if (error) setMessage(authErrorMessage(error.code));
-      else if (!data.session) setMessage(t.checkEmail); // confirmación por correo activa
+      if (error) toast(authErrorMessage(error.code), 'error');
+      else if (!data.session) toast(t.checkEmail, 'info'); // confirmación por correo activa
     }
     setBusy(false);
   }
@@ -45,9 +44,8 @@ export default function Login() {
         <Field label={t.email} autoCapitalize="none" autoComplete="email" keyboardType="email-address" value={email} onChangeText={setEmail} />
         <Field label={t.password} secureTextEntry autoComplete={mode === 'login' ? 'current-password' : 'new-password'}
           value={password} onChangeText={setPassword} onSubmitEditing={submit} />
-        {message && <View style={{ marginBottom: 16 }}><Notice tone="warning">{message}</Notice></View>}
         <Button variant="primary" busy={busy} onPress={submit}>{mode === 'login' ? t.submitLogin : t.submitSignUp}</Button>
-        <Button variant="plain" onPress={() => { setMode(mode === 'login' ? 'signup' : 'login'); setMessage(null); }} style={{ marginTop: 8 }}>
+        <Button variant="plain" onPress={() => { setMode(mode === 'login' ? 'signup' : 'login'); }} style={{ marginTop: 8 }}>
           {mode === 'login' ? t.toSignUp : t.toLogin}
         </Button>
       </View>

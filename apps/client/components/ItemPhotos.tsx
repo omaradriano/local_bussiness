@@ -4,7 +4,7 @@ import { ZoomableImage } from './ZoomableImage';
 import { useEffect, useState } from 'react';
 import { Ionicons } from '@expo/vector-icons';
 import { Pressable, View } from 'react-native';
-import { Button, Text, useUI } from '../ui';
+import { Button, Text, useToast, useUI } from '../ui';
 import { api } from '../lib/api';
 import { errorText } from '../lib/errors';
 import { pickPhotos, uploadPhoto, type PickedPhoto } from '../lib/photos';
@@ -26,6 +26,7 @@ const box = { width: 88, height: 88, borderRadius: 10 } as const;
 export function ItemPhotos(props: Props) {
   const { businessId, editable } = props;
   const ui = useUI();
+  const toast = useToast();
   const [busy, setBusy] = useState(false);
   const [message, setMessage] = useState<string | null>(null);
   const images = props.images ?? [];
@@ -47,13 +48,13 @@ export function ItemPhotos(props: Props) {
     setMessage(null);
     const picked = await pickPhotos(MAX_PHOTOS - count);
     if (picked === 'cancelled') return setBusy(false);
-    if (typeof picked === 'string') { setBusy(false); return setMessage(picked); }
+    if (typeof picked === 'string') { setBusy(false); return toast(picked, 'error'); }
     const note = picked.dropped ? t.tooMany(MAX_PHOTOS) : null;
     if (props.itemId) {
       for (const [i, photo] of picked.photos.entries()) {
         setMessage(t.progress(i + 1, picked.photos.length));
         const err = await uploadPhoto(businessId, props.itemId, photo);
-        if (err) { setBusy(false); props.reload(); return setMessage(err); }
+        if (err) { setBusy(false); setMessage(null); props.reload(); return toast(err, 'error'); }
       }
       props.reload();
     } else {
@@ -67,7 +68,7 @@ export function ItemPhotos(props: Props) {
     const { error, response } = await api.DELETE('/v1/b/{businessId}/catalog/{itemId}/images/{imageId}', {
       params: { path: { businessId, itemId: props.itemId!, imageId: img.id } },
     });
-    if (!response.ok) setMessage(errorText(error, response.status));
+    if (!response.ok) toast(errorText(error, response.status), 'error');
     props.reload?.();
   }
 

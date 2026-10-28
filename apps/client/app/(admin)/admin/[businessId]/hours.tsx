@@ -1,18 +1,19 @@
 import { shiftsToWeek, strings, weekToShifts, type DayRow } from '@lb/shared';
 import { Stack, useLocalSearchParams } from 'expo-router';
 import { useEffect, useState } from 'react';
-import { ActivityIndicator, View } from 'react-native';
+import { ActivityIndicator } from 'react-native';
 import { HoursEditor } from '../../../../components/HoursEditor';
 import { api } from '../../../../lib/api';
 import { errorText } from '../../../../lib/errors';
 import { useBusiness } from '../../../../lib/useMe';
-import { Button, Notice, Screen, Text } from '../../../../ui';
+import { Button, Notice, Screen, Text, useToast } from '../../../../ui';
 
 const t = strings.hours;
 
 export default function BusinessHours() {
   const { businessId } = useLocalSearchParams<{ businessId: string }>();
   const { business } = useBusiness(businessId);
+  const toast = useToast();
   const [week, setWeek] = useState<DayRow[] | null>(null);
   const [message, setMessage] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
@@ -28,7 +29,8 @@ export default function BusinessHours() {
     setBusy(true);
     const { error, response } = await api.PUT('/v1/b/{businessId}/hours', { params: { path: { businessId } }, body: { hours: weekToShifts(week!) } });
     setBusy(false);
-    setMessage(response.ok ? t.saved : errorText(error, response.status));
+    if (response.ok) toast(t.saved);
+    else toast(errorText(error, response.status), 'error');
   }
 
   const isOwner = business?.role === 'owner';
@@ -40,7 +42,6 @@ export default function BusinessHours() {
       {!week ? (message ? <Notice tone="warning">{message}</Notice> : <ActivityIndicator />) : (
         <>
           <HoursEditor week={week} onChange={setWeek} editable={isOwner} />
-          {message && <View style={{ marginBottom: 12 }}><Notice tone={message === t.saved ? 'success' : 'warning'}>{message}</Notice></View>}
           {isOwner && <Button variant="primary" busy={busy} onPress={save}>{t.save}</Button>}
         </>
       )}
