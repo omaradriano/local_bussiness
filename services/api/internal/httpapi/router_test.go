@@ -528,6 +528,30 @@ func (fakeBookings) List(_ context.Context, _ string, f bookings.ListFilter) ([]
 	return []bookings.Summary{{ID: bookingID, Kind: f.Kind, Status: map[bool]string{true: "active", false: "all"}[f.OnlyActive]}}, nil
 }
 
+func (fakeBookings) Transition(_ context.Context, _, id, to, actor, _ string) (bookings.Booking, error) {
+	switch {
+	case id != bookingID:
+		return bookings.Booking{}, bookings.ErrNotFound
+	case to == "completed":
+		return bookings.Booking{}, bookings.StepsPending{Labels: []string{"Foto del INE"}}
+	case to == "ready":
+		return bookings.Booking{}, bookings.Invalid{Field: "status", Message: "No se puede."}
+	case actor == "":
+		return bookings.Booking{}, errors.New("actor not passed")
+	}
+	return bookings.Booking{ID: id, Status: to}, nil
+}
+
+func (fakeBookings) AddPayment(_ context.Context, _, id string, p bookings.Payment, actor string, now time.Time) (bookings.Booking, error) {
+	if err := bookings.ValidatePayment(p, bookings.Balance{Due: 10000}); err != nil {
+		return bookings.Booking{}, err
+	}
+	if actor == "" || !now.Equal(fixedNow) {
+		return bookings.Booking{}, errors.New("actor or clock not passed")
+	}
+	return bookings.Booking{ID: id, Status: "confirmed", Balance: bookings.Balance{Paid: p.Amount, Due: 10000 - p.Amount}}, nil
+}
+
 func (fakeBookings) Get(_ context.Context, _, id string) (bookings.Booking, error) {
 	if id != bookingID {
 		return bookings.Booking{}, bookings.ErrNotFound
@@ -551,8 +575,8 @@ func TestBookingRoutes(t *testing.T) {
 		{"artículo inválido", http.MethodPost, base, "ok", `{"item_id":"x"}`, "", http.StatusUnprocessableEntity, `"item_id"`},
 		{"choque", http.MethodPost, base, "ok", ok + `,"notes":"ocupado"}`, "", http.StatusConflict, `"slot_taken"`},
 		{"negocio ajeno", http.MethodPost, "/v1/b/" + bizB + "/bookings", "ok", ok + `}`, "", http.StatusForbidden, `"forbidden"`},
-		{"detalle", http.MethodGet, base + "/" + bookingID, "staff", "", "", http.StatusOK, bookingID},
-		{"detalle inexistente", http.MethodGet, base + "/eeeeeeee-0000-0000-0000-000000000000", "ok", "", "", http.StatusNotFound, `"not_found"`},
+		{"detalle", http.MethodGet, base + "/" + bookingID + "/", "staff", "", "", http.StatusOK, bookingID},
+		{"detalle inexistente", http.MethodGet, base + "/eeeeeeee-0000-0000-0000-000000000000/", "ok", "", "", http.StatusNotFound, `"not_found"`},
 	}
 	for _, tc := range cases {
 		t.Run(tc.name, func(t *testing.T) {
@@ -606,5 +630,38 @@ func TestCreateRentalWithUnits(t *testing.T) {
 	}
 	if rec := doBody(http.MethodPost, "/v1/b/"+bizA+"/catalog", "ok", strings.NewReader(`{"kind":"rental","name":"X","price":1,"units":99}`)); rec.Code != http.StatusUnprocessableEntity {
 		t.Fatalf("99 units: %d", rec.Code)
+	}
+}
+
+func TestBookingOperationRoutes(t *testing.T) {
+	one := "/v1/b/" + bizA + "/bookings/" + bookingID
+	cases := []struct {
+		name, path, token, body string
+		wantCode                int
+		wantIn                  string
+	}{
+		{"empleada cambia estado", one + "/transition", "staff", `{"to":"in_progress"}`, http.StatusOK, `"status":"in_progress"`},
+		{"transición inválida", one + "/transition", "ok", `{"to":"ready"}`, http.StatusUnprocessableEntity, `"status"`},
+		{"pasos pendientes", one + "/transition", "ok", `{"to":"completed"}`, http.StatusUnprocessableEntity, `"steps_pending"`},
+		{"reserva inexistente", "/v1/b/" + bizA + "/bookings/eeeeeeee-0000-0000-0000-000000000000/transition", "ok", `{"to":"cancelled"}`, http.StatusNotFound, `"not_found"`},
+		{"id que no es uuid", "/v1/b/" + bizA + "/bookings/abc/transition", "ok", `{"to":"cancelled"}`, http.StatusNotFound, `"not_found"`},
+		{"pago", one + "/payments", "staff", `{"type":"advance","method":"cash","amount":3000}`, http.StatusOK, `"due":7000`},
+		{"pago mayor al saldo", one + "/payments", "ok", `{"type":"balance","method":"cash","amount":20000}`, http.StatusUnprocessableEntity, `"amount"`},
+		{"método inválido", one + "/payments", "ok", `{"type":"balance","method":"cheque","amount":100}`, http.StatusUnprocessableEntity, `"method"`},
+		{"negocio ajeno", "/v1/b/" + bizB + "/bookings/" + bookingID + "/payments", "ok", `{}`, http.StatusForbidden, `"forbidden"`},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			rec := doBody(http.MethodPost, tc.path, tc.token, strings.NewReader(tc.body))
+			if rec.Code != tc.wantCode || !strings.Contains(rec.Body.String(), tc.wantIn) {
+				t.Fatalf("got %d %s", rec.Code, rec.Body)
+			}
+		})
+	}
+}
+
+func TestBookingDetailWithoutTrailingSlash(t *testing.T) {
+	if rec := do(http.MethodGet, "/v1/b/"+bizA+"/bookings/"+bookingID, "ok"); rec.Code != http.StatusOK {
+		t.Fatalf("got %d %s", rec.Code, rec.Body)
 	}
 }
