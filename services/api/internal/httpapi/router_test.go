@@ -100,7 +100,10 @@ func (fakeCatalog) GetUnit(_ context.Context, _, item, unit string) (catalog.Uni
 	return catalog.Unit{ID: unitID, ItemID: itemID, Code: "RM-01", Status: "available"}, nil
 }
 
+var createdUnits []string
+
 func (fakeCatalog) CreateUnit(_ context.Context, _ string, u catalog.Unit) (catalog.Unit, error) {
+	createdUnits = append(createdUnits, u.Code)
 	if u.ItemID != itemID {
 		return catalog.Unit{}, catalog.ErrNotFound
 	}
@@ -586,5 +589,22 @@ func TestListBookingsRoute(t *testing.T) {
 				t.Fatalf("got %d %s", rec.Code, rec.Body)
 			}
 		})
+	}
+}
+
+func TestCreateRentalWithUnits(t *testing.T) {
+	createdUnits = nil
+	body := `{"kind":"rental","name":"Generador","price":40000,"price_unit":"day","security_deposit":0,"late_fee_per_day":0,"units":3}`
+	rec := doBody(http.MethodPost, "/v1/b/"+bizA+"/catalog", "ok", strings.NewReader(body))
+	if rec.Code != http.StatusCreated || strings.Join(createdUnits, ",") != "GEN-01,GEN-02,GEN-03" {
+		t.Fatalf("got %d %s units=%v", rec.Code, rec.Body, createdUnits)
+	}
+	createdUnits = nil
+	rec = doBody(http.MethodPost, "/v1/b/"+bizA+"/catalog", "ok", strings.NewReader(`{"kind":"service","name":"X","price":1,"duration_minutes":30,"units":3}`))
+	if rec.Code != http.StatusCreated || len(createdUnits) != 0 {
+		t.Fatalf("units for a service: %d %v", rec.Code, createdUnits)
+	}
+	if rec := doBody(http.MethodPost, "/v1/b/"+bizA+"/catalog", "ok", strings.NewReader(`{"kind":"rental","name":"X","price":1,"units":99}`)); rec.Code != http.StatusUnprocessableEntity {
+		t.Fatalf("99 units: %d", rec.Code)
 	}
 }

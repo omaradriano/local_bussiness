@@ -67,6 +67,7 @@ export default function CatalogItemForm() {
   const [message, setMessage] = useState<string | null>(carriedError ?? null);
   const [busy, setBusy] = useState(false);
   const [pending, setPending] = useState<PickedPhoto[]>([]); // photos chosen before the item exists
+  const [units, setUnits] = useState('1'); // new rental: pieces to create
 
   useEffect(() => {
     if (isNew) return;
@@ -97,7 +98,7 @@ export default function CatalogItemForm() {
     setErrors({});
     setMessage(null);
     const res = isNew
-      ? await api.POST('/v1/b/{businessId}/catalog', { params: { path: { businessId } }, body: { ...fields, kind, name: fields.name!, price: fields.price! } })
+      ? await api.POST('/v1/b/{businessId}/catalog', { params: { path: { businessId } }, body: { ...fields, kind, name: fields.name!, price: fields.price!, ...(kind === 'rental' ? { units: Number(units) || 0 } : {}) } })
       : await api.PATCH('/v1/b/{businessId}/catalog/{itemId}', { params: { path: { businessId, itemId } }, body: fields });
     if (!res.data) {
       setBusy(false);
@@ -153,6 +154,14 @@ export default function CatalogItemForm() {
           </View>
           {field('deposit', 'security_deposit', t.deposit, true)}
           {field('lateFee', 'late_fee_per_day', t.lateFee, true)}
+          {isNew && (
+            <View style={{ gap: 4 }}>
+              <Text>{t.unitsToCreate}</Text>
+              <TextInput accessibilityLabel={t.unitsToCreate} value={units} onChangeText={setUnits} keyboardType="numeric"
+                style={{ borderWidth: 1, borderRadius: 6, padding: 10 }} />
+              {errors.units && <Text accessibilityRole="alert">{errors.units}</Text>}
+            </View>
+          )}
         </>
       )}
       {item ? (

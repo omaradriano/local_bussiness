@@ -596,6 +596,7 @@ components:
           required: [kind, name, price]
           properties:
             kind: { $ref: "#/components/schemas/ItemKind" }
+            units: { type: integer, minimum: 0, maximum: 50, description: "Renta: piezas a crear de inmediato (claves tipo ROT-01)" }
 
     CatalogItemPatch:
       allOf:

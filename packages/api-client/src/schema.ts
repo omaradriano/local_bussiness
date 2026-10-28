@@ -426,6 +426,8 @@ export interface components {
         };
         CatalogItemInput: components["schemas"]["CatalogItemFields"] & {
             kind: components["schemas"]["ItemKind"];
+            /** @description Renta: piezas a crear de inmediato (claves tipo ROT-01) */
+            units?: number;
         };
         CatalogItemPatch: components["schemas"]["CatalogItemFields"] & {
             active?: boolean;

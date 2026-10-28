@@ -64,6 +64,7 @@ export const strings = {
     invalidNumber: 'Escribe un número entero.',
     onlyOwner: 'Solo el dueño puede editar el catálogo.',
     units: 'Unidades',
+    unitsToCreate: '¿Cuántas piezas tienes?',
   },
   units: {
     title: 'Unidades',
@@ -101,6 +102,8 @@ export const strings = {
     rangeBlocked: 'Hay días sin unidades libres en ese rango; elige otras fechas.',
     sameInstant: 'El regreso debe ser después de la salida (mismo día: cambia la hora).',
     checking: 'Revisando disponibilidad…',
+    noUnits: 'Esta herramienta no tiene unidades libres este mes. Si aún no registras sus piezas, agrégalas aquí.',
+    availabilityError: 'No se pudo cargar la disponibilidad.',
     noneThatDay: 'Sin reservas activas ese día.',
     freeBadge: (n: number) => `${n} libre${n === 1 ? '' : 's'}`,
     countBadge: (n: number) => `${n}`,

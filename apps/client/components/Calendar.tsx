@@ -7,7 +7,7 @@ export type DayInfo = { disabled?: boolean; badge?: string };
  * Month grid (Monday first). Days come as "YYYY-MM-DD". The parent decides what each tap means
  * (single day, or start/end of a range) and which days are disabled or carry a badge.
  */
-export function Calendar({ month, onMonthChange, dayInfo, from, to, onSelect, label }: {
+export function Calendar({ month, onMonthChange, dayInfo, from, to, onSelect, label, minMonth }: {
   month: string; // first day of the visible month
   onMonthChange: (m: string) => void;
   dayInfo?: (date: string) => DayInfo;
@@ -15,12 +15,15 @@ export function Calendar({ month, onMonthChange, dayInfo, from, to, onSelect, la
   to?: string | null;
   onSelect: (date: string) => void;
   label?: string;
+  minMonth?: string; // can't go back past this month (e.g. the current one)
 }) {
+  const atMin = !!minMonth && month <= minMonth;
   return (
     <View accessibilityLabel={label} style={{ gap: 6, maxWidth: 420 }}>
       <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' }}>
-        <Pressable accessibilityRole="button" accessibilityLabel="Mes anterior" hitSlop={10} onPress={() => onMonthChange(addMonths(month, -1))}>
-          <Text style={{ fontSize: 20, paddingHorizontal: 8 }}>‹</Text>
+        <Pressable accessibilityRole="button" accessibilityLabel="Mes anterior" accessibilityState={{ disabled: atMin }} disabled={atMin}
+          hitSlop={10} onPress={() => onMonthChange(addMonths(month, -1))}>
+          <Text style={{ fontSize: 20, paddingHorizontal: 8, opacity: atMin ? 0.2 : 1 }}>‹</Text>
         </Pressable>
         <Text style={{ fontWeight: '600' }}>{monthLabel(month)}</Text>
         <Pressable accessibilityRole="button" accessibilityLabel="Mes siguiente" hitSlop={10} onPress={() => onMonthChange(addMonths(month, 1))}>
