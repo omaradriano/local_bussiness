@@ -50,18 +50,21 @@ La máquina de estados ya es por motor (`internal/bookings/machine.go`): un giro
 | Flujo del detalle | 1 Confirmación · 2 Salida (documentos, adicionales, fotos, cobro, entregar) · 3 En renta y devolución (extender, fotos, recibir) · 4 Cierre (cobros finales y depósito, completar) |
 | Vista pública | Pendiente (fase 6) |
 
-## Mapa de barbería (`barbershop`) — mapa base
+## Mapa de barbería (`barbershop`)
+
+Requerimientos del cliente (2026-10-28).
 
 | Parte | Definición |
 | --- | --- |
-| Motor | `service` (agenda por barbero: duración y margen por servicio) |
+| Motor | `service` (agenda por barbero; duración por servicio) |
 | Terminología | Cita · Servicio · Servicios · Hora de la cita · Hora de término |
-| Estados | Apartada · falta anticipo → Confirmada · por atender → En la silla → Atendida; Cancelada, Expirada, No llegó |
-| Ajustes | Anticipo y apartados |
-| Valores por defecto | Sin anticipo, apartado de 2 h, lunes a sábado 10:00–20:00 |
-| Funciones | Equipo (barberos con sus servicios y horario) |
+| Estados | Confirmada · por atender → Atendida (sin paso «Iniciar»); Cancelada, No llegó. «Falta anticipo» solo en citas agendadas por internet |
+| Ajustes | Anticipo y apartados (anticipo **solo en reservas por internet**) · Agenda: **margen entre citas para todo el negocio** |
+| Valores por defecto | Sin anticipo en mostrador, apartado de 2 h, margen de 5 min, lunes a sábado 10:00–20:00 |
+| Funciones encendidas | Equipo · Clientes casuales (agendar sin registrar) |
+| Funciones ofrecidas, apagadas | Servicio a domicilio (el barbero la enciende en Ajustes si la da) |
+| Sin | Aval, documentos del cliente, documentos adicionales, dirección obligatoria |
 | Catálogo de ejemplo | Corte de cabello, Corte y barba, Arreglo de barba, Corte infantil |
-| Pendiente | Requerimientos del cliente: flujo del detalle, lista de espera o turnos sin cita, propinas, etc. |
 
 Los mapas de uñas (`nails`, motor `service`) y florería (`flowers`, motor `product`) ya tienen terminología, textos y secciones de Ajustes; les falta su flujo del detalle y sus funciones propias (equipo y servicios por persona en uñas; armador y zonas de entrega en flores).
 

@@ -5,8 +5,9 @@ export const nails = {
   label: 'Uñas y belleza',
   kind: 'service',
   terms: { booking: 'Cita', catalog_item: 'Servicio', catalog: 'Servicios', starts_at: 'Hora de la cita', ends_at: 'Hora de término' },
-  settings: ['general'],
-  features: ['staff'],
+  settings: ['general', 'agenda'],
+  features: ['staff', 'startService'],
+  optionalFeatures: ['walkIn', 'homeService'],
   texts: {
     bookings: {
       plural: 'Citas',
@@ -36,7 +37,7 @@ export const nails = {
       customers: 'Fichas y teléfonos',
       history: 'Todas las citas, con búsqueda y filtros',
       catalog: 'Servicios, precios y duración',
-      settings: 'Anticipo y apartados',
+      settings: 'Anticipo, margen entre citas y funciones',
     },
     newBooking: {
       itemHint: 'Elige el servicio.',

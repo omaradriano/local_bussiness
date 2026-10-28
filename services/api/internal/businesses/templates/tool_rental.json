@@ -5,8 +5,10 @@
     "guarantor",
     "customerAddress",
     "customerDocuments",
-    "trustedCustomers"
+    "trustedCustomers",
+    "bookingDocuments"
   ],
+  "optional_features": [],
   "settings": {
     "deposit_percent": 0,
     "cancel_hours": 24,

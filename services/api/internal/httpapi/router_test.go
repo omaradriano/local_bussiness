@@ -195,7 +195,7 @@ func TestMeListsBusinesses(t *testing.T) {
 	body := rec.Body.String()
 	// Active features: the giro's (staff) plus the one granted to this business.
 	if rec.Code != http.StatusOK || !strings.Contains(body, `"slug":"demo-unas"`) || !strings.Contains(body, `"role":"owner"`) ||
-		!strings.Contains(body, `"features":["customerDocuments","staff"]`) || !strings.Contains(body, `"platform_admin":true`) {
+		!strings.Contains(body, `"features":["customerDocuments","staff","startService"]`) || !strings.Contains(body, `"platform_admin":true`) {
 		t.Fatalf("got %d %s", rec.Code, body)
 	}
 }

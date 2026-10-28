@@ -24,6 +24,8 @@ export default function SettingsScreen() {
   const [r, setR] = useState<Rentals | null>(null);
   const [deposit, setDeposit] = useState('0');
   const [hold, setHold] = useState('24');
+  const [onlineOnly, setOnlineOnly] = useState(false);
+  const [buffer, setBuffer] = useState('0');
   const [multiplier, setMultiplier] = useState('1');
   const [inspectionOn, setInspectionOn] = useState(false);
   const [hours, setHours] = useState('1');
@@ -36,6 +38,8 @@ export default function SettingsScreen() {
     setR(settings.rentals);
     setDeposit(String(settings.general.deposit_percent));
     setHold(String(settings.general.hold_hours));
+    setOnlineOnly(settings.general.advance_only_online);
+    setBuffer(String(settings.agenda.buffer_minutes));
     setMultiplier(String(settings.rentals.late_fee_multiplier));
     // Stored in minutes; captured in whole hours.
     setInspectionOn(settings.rentals.inspection_minutes > 0);
@@ -62,7 +66,8 @@ export default function SettingsScreen() {
     const { data, error, response } = await api.PATCH('/v1/b/{businessId}/settings', {
       params: { path: { businessId } },
       body: {
-        general: { deposit_percent: Number(deposit) || 0, hold_hours: Number(hold) || 0 },
+        general: { deposit_percent: Number(deposit) || 0, hold_hours: Number(hold) || 0, advance_only_online: onlineOnly },
+        ...(has('agenda') ? { agenda: { buffer_minutes: Number(buffer) || 0 } } : {}),
         ...(has('rentals') ? {
           rentals: { ...r!, late_fee_multiplier: Number(multiplier.replace(',', '.')), inspection_minutes: inspectionOn ? h * 60 : 0 },
         } : {}),
@@ -82,6 +87,18 @@ export default function SettingsScreen() {
           hint={t.general.depositHint} error={errors.deposit_percent} />
         <Field label={t.general.hold} value={hold} onChangeText={setHold} keyboardType="numeric" editable={isOwner}
           hint={t.general.holdHint} error={errors.hold_hours} />
+        <View style={{ flexDirection: 'row', alignItems: 'center', gap: 12 }}>
+          <View style={{ flex: 1 }}>
+            <Text>{t.general.onlineOnly}</Text>
+            <Text variant="footnote" color="labelSecondary">{t.general.onlineOnlyHint}</Text>
+          </View>
+          <Switch accessibilityLabel={t.general.onlineOnly} value={onlineOnly} disabled={!isOwner} onValueChange={setOnlineOnly} />
+        </View>
+      </Group>
+    ),
+    agenda: () => (
+      <Group key="agenda" label={t.agenda.title} padded footer={t.agenda.hint}>
+        <Field label={t.agenda.buffer} value={buffer} onChangeText={setBuffer} keyboardType="numeric" editable={isOwner} error={errors.buffer_minutes} />
       </Group>
     ),
     rentals: () => (

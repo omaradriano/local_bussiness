@@ -50,10 +50,11 @@ describe('Ajustes and features', () => {
 
 // The API reads its side of each map from its template; both must say the same.
 describe('maps match the API templates', () => {
-  const api: Record<Vertical, { kind: string; features: string[] }> = { barbershop: barbershopApi, nails: nailsApi, flowers: flowersApi, tool_rental: rentalApi };
+  const api: Record<Vertical, { kind: string; features: string[]; optional_features: string[] }> = { barbershop: barbershopApi, nails: nailsApi, flowers: flowersApi, tool_rental: rentalApi };
   it.each(VERTICALS)('%s: same engine and features', (v) => {
     expect(api[v].kind).toBe(kindFor(v));
     expect([...api[v].features].sort()).toEqual([...verticalMap(v).features].sort());
+    expect([...api[v].optional_features].sort()).toEqual([...verticalMap(v).optionalFeatures].sort());
   });
 });
 
@@ -63,7 +64,9 @@ describe('feature catalog', () => {
   });
 
   it('every giro only brings features its engine supports', () => {
-    for (const v of VERTICALS) for (const f of verticalMap(v).features) expect(featureSupports(f, kindFor(v))).toBe(true);
+    for (const v of VERTICALS) {
+      for (const f of [...verticalMap(v).features, ...verticalMap(v).optionalFeatures]) expect(featureSupports(f, kindFor(v))).toBe(true);
+    }
   });
 
   it('engine rules', () => {

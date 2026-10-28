@@ -2,10 +2,9 @@ import type { components } from '@lb/api-client';
 import { addDays, firstOfMonth, futureTime, nextHour, parsePesos, formatMXN, hhmm, lastOfMonth, localToISO, strings, term, todayISO } from '@lb/shared';
 import { router, Stack, useLocalSearchParams } from 'expo-router';
 import { useEffect, useMemo, useState } from 'react';
-import { ActivityIndicator, View } from 'react-native';
+import { ActivityIndicator, Switch, View } from 'react-native';
 import { Calendar, type DayInfo } from '../../../../../components/Calendar';
-import type { Customer } from '../../../../../components/CustomerForm';
-import { CustomerPicker } from '../../../../../components/CustomerPicker';
+import { CustomerPicker, type PickedCustomer } from '../../../../../components/CustomerPicker';
 import { api } from '../../../../../lib/api';
 import { errorText, fieldErrors } from '../../../../../lib/errors';
 import { useBusiness } from '../../../../../lib/useMe';
@@ -31,7 +30,7 @@ export default function NewBooking() {
   const { businessId } = useLocalSearchParams<{ businessId: string }>();
   const { business } = useBusiness(businessId);
   const { settings } = useSettings(businessId);
-  const { texts } = useTexts();
+  const { texts, has } = useTexts();
   const toast = useToast();
   const today = todayISO();
   const [items, setItems] = useState<Item[] | null>(null);
@@ -51,8 +50,9 @@ export default function NewBooking() {
   const [staffId, setStaffId] = useState<string | null>(null);
   const [fulfillment, setFulfillment] = useState<'pickup' | 'delivery'>('pickup');
   const [address, setAddress] = useState('');
+  const [atHome, setAtHome] = useState(false); // service at the customer's address (feature homeService)
   const [zone, setZone] = useState('');
-  const [customer, setCustomer] = useState<Customer | null>(null);
+  const [customer, setCustomer] = useState<PickedCustomer | null>(null);
   const [notes, setNotes] = useState('');
   const [payMode, setPayMode] = useState<'none' | 'total' | 'partial'>('none'); // the real payment is usually at check-out
   const [payMethod, setPayMethod] = useState<'cash' | 'transfer' | 'card'>('cash');
@@ -172,13 +172,14 @@ export default function NewBooking() {
     const res = await api.POST('/v1/b/{businessId}/bookings', {
       params: { path: { businessId }, header: { 'Idempotency-Key': idempotencyKey } },
       body: {
-        customer: { id: customer?.id },
+        customer: customer === 'walk-in' ? { walk_in: true } : { id: customer.id },
         item_id: item.id,
         quantity: qty,
         starts_at: startsAt,
         ...(item.kind === 'rental' && backISO ? { ends_at: backISO } : {}),
         ...(staffId ? { staff_id: staffId } : {}),
         ...(item.kind === 'product' ? { fulfillment, delivery_address: address, delivery_zone: zone } : {}),
+        ...(item.kind === 'service' && atHome ? { fulfillment: 'delivery' as const, delivery_address: address } : {}),
         notes,
         ...(payMode !== 'none' ? { initial_payment: { method: payMethod, ...(partial ? { amount: partial } : {}) } } : {}),
       },
@@ -240,6 +241,19 @@ export default function NewBooking() {
 
           {item?.kind === 'service' && from && (
             <>
+              {has('homeService') && (
+                <View style={{ gap: 8 }}>
+                  <View style={{ flexDirection: 'row', alignItems: 'center', gap: 12 }}>
+                    <Text style={{ flex: 1 }}>{t.homeService}</Text>
+                    <Switch accessibilityLabel={t.homeService} value={atHome} onValueChange={(on) => {
+                      setAtHome(on);
+                      // Start from the customer's address when there is one.
+                      if (on && !address && customer && customer !== 'walk-in' && customer.address) setAddress(customer.address);
+                    }} />
+                  </View>
+                  {atHome && <Field label={t.homeAddress} value={address} onChange={setAddress} error={errors.delivery_address} />}
+                </View>
+              )}
               {slots === null && <ActivityIndicator />}
               {slots?.length === 0 && <Text>{t.noSlots}</Text>}
               {!!slots?.length && (

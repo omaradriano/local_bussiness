@@ -32,6 +32,7 @@ type Business struct {
 	SlotMinutes       int // service slot granularity (settings.slot_minutes, default 30)
 	DailyCapacity     int // settings.daily_capacity, 0 = no limit
 	InspectionMinutes int // settings.inspection_minutes for rentals
+	BufferMinutes     int // settings.buffer_minutes: gap after each appointment (whole business)
 }
 
 type Loader struct{ DB store.DB }
@@ -50,12 +51,14 @@ func (l Loader) Business(ctx context.Context, businessID string) (Business, erro
 		SlotMinutes       int `json:"slot_minutes"`
 		DailyCapacity     int `json:"daily_capacity"`
 		InspectionMinutes int `json:"inspection_minutes"`
+		BufferMinutes     int `json:"buffer_minutes"`
 	}
 	_ = json.Unmarshal(raw, &s) // missing keys keep their defaults
 	if s.SlotMinutes <= 0 {
 		s.SlotMinutes = 30
 	}
-	return Business{Loc: loc, SlotMinutes: s.SlotMinutes, DailyCapacity: s.DailyCapacity, InspectionMinutes: s.InspectionMinutes}, nil
+	return Business{Loc: loc, SlotMinutes: s.SlotMinutes, DailyCapacity: s.DailyCapacity, InspectionMinutes: s.InspectionMinutes,
+		BufferMinutes: s.BufferMinutes}, nil
 }
 
 func (l Loader) Item(ctx context.Context, businessID, itemID string) (Item, error) {

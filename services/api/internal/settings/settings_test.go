@@ -87,6 +87,7 @@ func TestSettingsSectionsDefaultsAndPatch(t *testing.T) {
 		{"zonas repetidas", Patch{Delivery: &DeliveryPatch{Zones: &[]Zone{{Name: "Centro"}, {Name: "centro"}}}}, "delivery_zones"},
 		{"envío negativo", Patch{Delivery: &DeliveryPatch{Zones: &[]Zone{{Name: "Sur", Fee: -1}}}}, "delivery_zones"},
 		{"multiplicador 11", Patch{Rentals: &RentalsPatch{LateFeeMultiplier: ptr(11.0)}}, "late_fee_multiplier"},
+		{"margen de 300 min", Patch{Agenda: &AgendaPatch{BufferMinutes: ptr(300)}}, "buffer_minutes"},
 	}
 	for _, tc := range cases {
 		t.Run(tc.name, func(t *testing.T) {

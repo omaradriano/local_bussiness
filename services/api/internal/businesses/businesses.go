@@ -52,9 +52,14 @@ func loadTemplates() map[string]Template {
 // KindFor is the engine (catalog item kind) a giro books with; "" for an unknown giro.
 func KindFor(vertical string) string { return templates[vertical].Kind }
 
-// HasFeature reports whether a giro turns on a feature the API enforces (e.g. "guarantor").
+// HasFeature reports whether a giro brings a feature turned on (e.g. "guarantor").
 func HasFeature(vertical, feature string) bool {
 	return slices.Contains(templates[vertical].Features, feature)
+}
+
+// OffersFeature reports whether a giro offers a feature that starts off (the owner turns it on).
+func OffersFeature(vertical, feature string) bool {
+	return slices.Contains(templates[vertical].OptionalFeatures, feature)
 }
 
 // Slugs that would collide with app routes, since the public catalog lives at /<slug>.
@@ -107,10 +112,12 @@ func (in Input) Validate() map[string]string {
 var templateFS embed.FS
 
 type Template struct {
-	Kind     string         `json:"kind"`     // engine: service | product | rental
-	Features []string       `json:"features"` // see Feature in packages/shared/src/verticals/types.ts
-	Settings map[string]any `json:"settings"`
-	Hours    []struct {
+	Kind     string   `json:"kind"`     // engine: service | product | rental
+	Features []string `json:"features"` // on by default; see Feature in packages/shared/src/verticals/types.ts
+	// Offered by the giro but off until the owner turns them on (e.g. home service for a barbershop).
+	OptionalFeatures []string       `json:"optional_features"`
+	Settings         map[string]any `json:"settings"`
+	Hours            []struct {
 		Weekdays []int  `json:"weekdays"`
 		OpensAt  string `json:"opens_at"`
 		ClosesAt string `json:"closes_at"`

@@ -1,6 +1,7 @@
 // Package features decides which parts of the app a business has.
 //
-//   - Its giro brings some features (template "features").
+//   - Its giro brings some features on (template "features") and offers others off (template
+//     "optional_features": e.g. home service, which only some barbershops give).
 //   - The platform admin can grant or remove one for a business (businesses.feature_grants, not
 //     writable by the owner): available = giro's + granted − removed, only if the engine supports it.
 //   - The owner turns available ones on or off in Ajustes (settings.features; on by default).
@@ -45,7 +46,7 @@ func Supports(vertical, feature string) bool {
 // State of one feature for a business.
 type State struct {
 	Key       string `json:"key"`
-	FromGiro  bool   `json:"from_giro"` // the giro brings it
+	FromGiro  bool   `json:"from_giro"` // the giro brings or offers it
 	Grant     *bool  `json:"grant"`     // platform admin override: true = given, false = removed, null = as the giro
 	Available bool   `json:"available"` // the owner may use it
 	Enabled   bool   `json:"enabled"`   // the owner has it on (default on)
@@ -59,7 +60,8 @@ func States(vertical string, grants, enabled map[string]bool) []State {
 		if !Supports(vertical, key) {
 			continue
 		}
-		s := State{Key: key, FromGiro: businesses.HasFeature(vertical, key), Enabled: true}
+		offered := businesses.OffersFeature(vertical, key)
+		s := State{Key: key, FromGiro: businesses.HasFeature(vertical, key) || offered, Enabled: !offered}
 		s.Available = s.FromGiro
 		if g, ok := grants[key]; ok {
 			s.Grant = &g

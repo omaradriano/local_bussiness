@@ -15,9 +15,12 @@ export function missingDocs(c: Customer): string[] {
   return (['ine', 'proof_of_address'] as const).filter((d) => !c.documents.some((x) => x.doc_type === d)).map((d) => t.docTypes[d]);
 }
 
-/** Pick a saved customer by name/phone, or register a new one inline. */
+/** A saved customer, or a walk-in nobody registers (the business's «Cliente casual»). */
+export type PickedCustomer = Customer | 'walk-in';
+
+/** Pick a saved customer by name/phone, register a new one inline, or (if the business takes walk-ins) a casual one. */
 export function CustomerPicker({ businessId, isOwner, value, onChange, error }: {
-  businessId: string; isOwner: boolean; value: Customer | null; onChange: (c: Customer | null) => void; error?: string;
+  businessId: string; isOwner: boolean; value: PickedCustomer | null; onChange: (c: PickedCustomer | null) => void; error?: string;
 }) {
   const ui = useUI();
   const { has } = useTexts();
@@ -56,6 +59,19 @@ export function CustomerPicker({ businessId, isOwner, value, onChange, error }: 
     </View>
   );
 
+  if (value === 'walk-in') {
+    return (
+      <View style={{ backgroundColor: ui.fill, borderRadius: radius.sm, padding: 14, flexDirection: 'row', alignItems: 'center', gap: 8 }}>
+        <Ionicons name="walk" size={22} color={ui.accent} />
+        <View style={{ flex: 1 }}>
+          <Text variant="headline">{t.walkIn}</Text>
+          <Text variant="subhead" color="labelSecondary">{t.walkInHint}</Text>
+        </View>
+        <Button size="sm" variant="plain" onPress={() => onChange(null)}>{t.change}</Button>
+      </View>
+    );
+  }
+
   if (value) {
     const missing = has('customerDocuments') ? missingDocs(value) : [];
     const trusted = has('trustedCustomers') && value.trusted;
@@ -88,6 +104,7 @@ export function CustomerPicker({ businessId, isOwner, value, onChange, error }: 
 
   return (
     <View style={{ gap: 10 }}>
+      {has('walkIn') && <Button icon="walk" onPress={() => onChange('walk-in')}>{t.walkIn}</Button>}
       <Field label={t.search} placeholder={t.searchPlaceholder} value={q} onChangeText={setQ} autoCorrect={false} error={error} />
       {results.length > 0 && list(results)}
       <Button icon={listOpen ? 'chevron-up' : 'chevron-down'} onPress={toggleList}>{t.registered}</Button>

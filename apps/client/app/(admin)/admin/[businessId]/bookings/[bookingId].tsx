@@ -44,7 +44,7 @@ export default function BookingDetail() {
   const path = { businessId, bookingId };
   const ui = useUI();
   const toast = useToast();
-  const { texts } = useTexts();
+  const { texts, has } = useTexts();
 
   const show = useCallback((data: Booking) => { setB(data); setPayOpen(false); }, []);
 
@@ -83,7 +83,8 @@ export default function BookingDetail() {
   const security = Number(b.items[0]?.options?.security_deposit ?? 0);
   const bookingTerm = term(business.vertical, 'booking') ?? t.detail;
   // Rental check-out/return have their own flow; the rest are plain status moves.
-  const actions = b.next.filter((s) => !(b.kind === 'rental' && (s === 'checked_out' || s === 'returned')));
+  // "Iniciar" only where the business tracks the start (feature startService); otherwise it's finished directly.
+  const actions = b.next.filter((s) => !(b.kind === 'rental' && (s === 'checked_out' || s === 'returned')) && !(s === 'in_progress' && !has('startService')));
   const waText = t.whatsappText(b.customer.name, bookingTerm, when(b.starts_at), texts.bookings.status[b.status]);
   const editable = !['cancelled', 'expired', 'no_show', 'completed'].includes(b.status);
   const f = t.detailFlow;
@@ -136,14 +137,20 @@ export default function BookingDetail() {
         </View>
 
         <Group separatorInset={58}>
-          <Cell icon="person" tint={ui.indigo} label={b.customer.name} sublabel={formatPhone(b.customer.phone)}
-            onPress={() => router.push({ pathname: '/admin/[businessId]/customers/[customerId]', params: { businessId, customerId: b.customer.id } })} />
-          <Cell icon="logo-whatsapp" tint={ui.success} label={t.whatsapp}
-            onPress={() => Linking.openURL(`https://wa.me/${b.customer.phone.replace(/\D/g, '')}?text=${encodeURIComponent(waText)}`)} />
+          {b.customer.walk_in ? (
+            <Cell icon="walk" tint={ui.indigo} label={strings.customers.walkIn} sublabel={strings.customers.walkInHint} />
+          ) : (
+            <Cell icon="person" tint={ui.indigo} label={b.customer.name} sublabel={formatPhone(b.customer.phone)}
+              onPress={() => router.push({ pathname: '/admin/[businessId]/customers/[customerId]', params: { businessId, customerId: b.customer.id } })} />
+          )}
+          {!b.customer.walk_in ? (
+            <Cell icon="logo-whatsapp" tint={ui.success} label={t.whatsapp}
+              onPress={() => Linking.openURL(`https://wa.me/${b.customer.phone.replace(/\D/g, '')}?text=${encodeURIComponent(waText)}`)} />
+          ) : null}
           <Cell icon="arrow-up-circle" tint={ui.accent} label={term(business.vertical, 'starts_at') ?? ''} value={when(b.starts_at)} />
           {b.kind === 'rental' && b.ends_at ? <Cell icon="arrow-down-circle" tint={ui.warning} label={term(business.vertical, 'ends_at') ?? ''} value={when(b.ends_at)} /> : null}
           {b.staff.length > 0 ? <Cell icon="person-circle" tint={ui.gray} label={t.attendedBy} value={b.staff.map((x) => x.name).join(', ')} /> : null}
-          {b.fulfillment === 'delivery' ? <Cell icon="car" tint={ui.gray} label={t.delivery} sublabel={b.delivery_address ?? ''} /> : null}
+          {b.fulfillment === 'delivery' ? <Cell icon={b.kind === 'service' ? 'home' : 'car'} tint={ui.gray} label={b.kind === 'service' ? t.homeService : t.delivery} sublabel={b.delivery_address ?? ''} /> : null}
           {b.hold_expires_at ? <Cell icon="hourglass" tint={ui.warning} label={t.holdUntil} value={when(b.hold_expires_at)} /> : null}
           {b.notes ? <Cell icon="document-text" tint={ui.gray} label={b.notes} /> : null}
         </Group>
@@ -163,10 +170,12 @@ export default function BookingDetail() {
               {rentalStep === 1 && (
                 <>
                   {docs.length > 0 && <SubStep title={f.sub.documents} description={f.sub.documentsHint} done={allDone(docs)}>{cards(docs, true)}</SubStep>}
-                  <SubStep title={t.docs.section} description={t.docs.sectionHint} done={additional.length ? allDone(additional) : undefined}>
-                    {cards(additional, true)}
-                    <BookingDocuments businessId={businessId} booking={b} editable={editable} onDone={show} />
-                  </SubStep>
+                  {(additional.length > 0 || has('bookingDocuments')) && (
+                    <SubStep title={t.docs.section} description={t.docs.sectionHint} done={additional.length ? allDone(additional) : undefined}>
+                      {cards(additional, true)}
+                      {has('bookingDocuments') && <BookingDocuments businessId={businessId} booking={b} editable={editable} onDone={show} />}
+                    </SubStep>
+                  )}
                   {outPhotos.length > 0 && <SubStep title={f.sub.outPhotos} description={f.sub.outPhotosHint} done={allDone(outPhotos)}>{cards(outPhotos, true)}</SubStep>}
                   <SubStep title={f.sub.payment} description={f.sub.checkoutPaymentHint} done={settled}>{balance}{payments}</SubStep>
                   <SubStep title={f.sub.doCheckout} description={f.sub.doCheckoutHint}>
@@ -233,12 +242,12 @@ export default function BookingDetail() {
         )}
 
         {/* After the check-out (and for other kinds) the documents stay at hand in their own section. */}
-        {(b.kind !== 'rental' || rentalStep > 1 || closedNote) && (
+        {(b.kind !== 'rental' || rentalStep > 1 || closedNote) && (additional.length > 0 || has('bookingDocuments')) && (
           <View>
             <Text variant="footnote" color="labelSecondary" style={{ marginHorizontal: 16, marginBottom: 6 }}>{t.docs.section.toUpperCase()}</Text>
             <View style={{ gap: 10 }}>
               {cards(additional, false)}
-              <BookingDocuments businessId={businessId} booking={b} editable={editable} onDone={show} />
+              {has('bookingDocuments') && <BookingDocuments businessId={businessId} booking={b} editable={editable} onDone={show} />}
             </View>
           </View>
         )}

@@ -1,12 +1,18 @@
 {
   "kind": "service",
   "features": [
-    "staff"
+    "staff",
+    "walkIn"
+  ],
+  "optional_features": [
+    "homeService"
   ],
   "settings": {
     "deposit_percent": 0,
     "cancel_hours": 2,
-    "hold_hours": 2
+    "hold_hours": 2,
+    "advance_only_online": true,
+    "buffer_minutes": 5
   },
   "hours": [
     {
@@ -28,32 +34,28 @@
       "name": "Corte de cabello",
       "description": "Corte a máquina y tijera, con lavado.",
       "price": 15000,
-      "duration_minutes": 40,
-      "buffer_minutes": 5
+      "duration_minutes": 40
     },
     {
       "kind": "service",
       "name": "Corte y barba",
       "description": "Corte de cabello y arreglo de barba con toalla caliente.",
       "price": 22000,
-      "duration_minutes": 60,
-      "buffer_minutes": 5
+      "duration_minutes": 60
     },
     {
       "kind": "service",
       "name": "Arreglo de barba",
       "description": "Perfilado y rasurado con navaja.",
       "price": 10000,
-      "duration_minutes": 25,
-      "buffer_minutes": 5
+      "duration_minutes": 25
     },
     {
       "kind": "service",
       "name": "Corte infantil",
       "description": "Para menores de 12 años.",
       "price": 12000,
-      "duration_minutes": 30,
-      "buffer_minutes": 5
+      "duration_minutes": 30
     }
   ],
   "steps": [],
