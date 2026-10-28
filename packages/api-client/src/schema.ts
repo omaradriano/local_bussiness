@@ -314,6 +314,25 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/v1/b/{businessId}/inventory": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                businessId: components["parameters"]["BusinessId"];
+            };
+            cookie?: never;
+        };
+        /** Unidades de renta con sus rentas activas o por venir, ordenadas por fecha */
+        get: operations["getInventory"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/v1/b/{businessId}/settings": {
         parameters: {
             query?: never;
@@ -762,6 +781,30 @@ export interface components {
             urls: {
                 [key: string]: string;
             } | null;
+        };
+        InventoryRow: {
+            /** @enum {string} */
+            state: "available" | "rented" | "scheduled" | "inactive";
+            /**
+             * Format: date-time
+             * @description rentada: regreso; agendada: salida
+             */
+            date: string | null;
+            /** Format: uuid */
+            unit_id: string;
+            unit_code: string;
+            unit_status: components["schemas"]["UnitStatus"];
+            /** Format: uuid */
+            item_id: string;
+            item_name: string;
+            /** Format: uuid */
+            booking_id: string | null;
+            booking_status: string | null;
+            customer_name: string | null;
+            /** Format: date-time */
+            starts_at: string | null;
+            /** Format: date-time */
+            ends_at: string | null;
         };
         /** @enum {string} */
         DocType: "ine" | "proof_of_address" | "guarantor_id";
@@ -1655,6 +1698,30 @@ export interface operations {
                 content?: never;
             };
             404: components["responses"]["Error"];
+        };
+    };
+    getInventory: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                businessId: components["parameters"]["BusinessId"];
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        rows: components["schemas"]["InventoryRow"][];
+                    };
+                };
+            };
         };
     };
     getSettings: {

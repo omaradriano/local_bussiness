@@ -234,3 +234,66 @@ func TestIntegrationExtendRental(t *testing.T) {
 		t.Fatalf("return on Sunday: %v", err)
 	}
 }
+
+func TestIntegrationInventory(t *testing.T) {
+	p := pool(t)
+	ctx := context.Background()
+	f := setup(t, p, "tool_rental", `{"security_deposit_enabled": false}`)
+	var spare, broken string
+	if err := p.QueryRow(ctx, `insert into public.item_units (business_id, item_id, code) values ($1, $2, 'RM-02') returning id::text`, f.business, f.item).Scan(&spare); err != nil {
+		t.Fatal(err)
+	}
+	if err := p.QueryRow(ctx, `insert into public.item_units (business_id, item_id, code, status) values ($1, $2, 'RM-03', 'maintenance') returning id::text`, f.business, f.item).Scan(&broken); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := p.Exec(ctx, `delete from public.workflow_steps where business_id = $1`, f.business); err != nil {
+		t.Fatal(err)
+	}
+	rent := func(start, end string, qty int) Booking {
+		b, _, err := Create(ctx, p, f.business, CreateInput{Customer: cust("6143030004"), ItemID: f.item, Quantity: qty, StartsAt: at(start), EndsAt: at(end), Source: "admin"}, now)
+		if err != nil {
+			t.Fatal(err)
+		}
+		return b
+	}
+	out := rent("2026-11-02T15:00:00Z", "2026-11-04T15:00:00Z", 1)
+	if _, err := Checkout(ctx, p, f.business, out.ID, "", "", now); err != nil {
+		t.Fatal(err)
+	}
+	rent("2026-11-09T15:00:00Z", "2026-11-10T15:00:00Z", 2) // both active units, later
+	cancelled := rent("2026-11-12T15:00:00Z", "2026-11-13T15:00:00Z", 1)
+	if _, err := Transition(ctx, p, f.business, cancelled.ID, "cancelled", "", ""); err != nil {
+		t.Fatal(err)
+	}
+
+	// A unit whose only rental is already finished still shows up as available.
+	var done string
+	if err := p.QueryRow(ctx, `insert into public.item_units (business_id, item_id, code) values ($1, $2, 'RM-04') returning id::text`, f.business, f.item).Scan(&done); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := p.Exec(ctx, `insert into public.booking_resources (business_id, booking_id, item_unit_id, during)
+		values ($1, $2, $3, tstzrange('2026-10-01', '2026-10-02'))`, f.business, cancelled.ID, done); err != nil {
+		t.Fatal(err)
+	}
+	rows, err := Inventory(ctx, p, f.business)
+	if err != nil {
+		t.Fatal(err)
+	}
+	var got []string
+	for _, r := range rows {
+		got = append(got, r.State+" "+r.UnitCode)
+	}
+	// RM-01 is out (returns the 4th) and booked again the 9th with RM-02; RM-02 is free now; RM-03 in maintenance.
+	want := []string{"rented RM-01", "scheduled RM-01", "scheduled RM-02", "available RM-02", "available RM-04", "inactive RM-03"}
+	if len(got) != len(want) {
+		t.Fatalf("got %v, want %v", got, want)
+	}
+	for i := range want {
+		if got[i] != want[i] {
+			t.Fatalf("got %v, want %v", got, want)
+		}
+	}
+	if !rows[0].Date.Equal(*at("2026-11-04T15:00:00Z")) || *rows[0].CustomerName != "Ana" {
+		t.Fatalf("rented row: %+v", rows[0])
+	}
+}

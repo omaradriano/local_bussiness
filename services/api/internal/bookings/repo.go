@@ -50,3 +50,7 @@ func (r Repo) Return(ctx context.Context, businessID, id, condition, actor strin
 func (r Repo) Extend(ctx context.Context, businessID, id string, newEnd time.Time, actor string, now time.Time) (Booking, error) {
 	return Extend(ctx, r.DB, businessID, id, newEnd, actor, now)
 }
+
+func (r Repo) Inventory(ctx context.Context, businessID string) ([]InventoryRow, error) {
+	return Inventory(ctx, r.DB, businessID)
+}

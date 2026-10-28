@@ -206,6 +206,15 @@ export const strings = {
     },
     nothing: 'Nada pendiente para hoy.',
   },
+  inventory: {
+    title: 'Inventario',
+    month: 'Mes',
+    states: { available: 'Disponible', rented: 'Rentado', scheduled: 'Agendado', inactive: 'Inactivo' } as Record<string, string>,
+    returns: 'Regresa',
+    goesOut: 'Sale',
+    empty: 'Nada con estos filtros.',
+    noUnits: 'Todavía no hay unidades de renta.',
+  },
   customers: {
     title: 'Clientes',
     search: 'Buscar por nombre o teléfono',
