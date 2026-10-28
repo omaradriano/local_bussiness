@@ -1,4 +1,5 @@
-// Visible UI text (es-MX), centralized so it can vary by vertical later.
+// Visible UI text (es-MX) shared by every type of business. Text that changes with the type
+// ("Rentas" / "Citas" / "Pedidos", gendered states) lives in verticalTexts.ts.
 export const strings = {
   appName: 'Local Bussiness',
   common: {
@@ -42,15 +43,7 @@ export const strings = {
   },
   business: {
     groups: { daily: 'Día a día', business: 'Tu negocio' },
-    hints: {
-      today: 'Lo que sale y regresa hoy',
-      calendar: 'Inventario y rentas por fecha',
-      customers: 'Fichas, documentos y aval',
-      history: 'Todas las rentas, con búsqueda y filtros',
-      catalog: 'Herramientas, precios y unidades',
-      hours: 'Días y horas de atención',
-      settings: 'Depósito, retrasos y días cerrados',
-    },
+    hints: { hours: 'Días y horas de atención' },
     sections: { catalog: 'Catálogo', staff: 'Equipo', hours: 'Horario', calendar: 'Calendario', today: 'Hoy', settings: 'Ajustes', customers: 'Clientes' },
     back: 'Mis negocios',
   },
@@ -71,7 +64,6 @@ export const strings = {
     unitsToCreateHint: 'Cuántas piezas iguales tienes; cada una lleva su propio código.',
     photosHint: 'La primera foto es la portada. Toca una foto para verla en grande.',
     activeLabel: 'Disponible',
-    activeHint: 'Si la desactivas ya no aparece al registrar rentas; las rentas existentes no cambian.',
     perDayNote: (m: number) => `Se cobra por día. Un día de retraso cuesta el precio por día × ${m} (se cambia en Ajustes).`,
     duration: 'Duración (minutos)',
     buffer: 'Margen entre citas (minutos)',
@@ -129,11 +121,10 @@ export const strings = {
     checking: 'Revisando disponibilidad…',
     noUnits: 'Esta herramienta no tiene unidades libres este mes. Si aún no registras sus piezas, agrégalas aquí.',
     availabilityError: 'No se pudo cargar la disponibilidad.',
-    noneThatDay: 'Sin reservas activas ese día.',
     freeBadge: (n: number) => `${n} libre${n === 1 ? '' : 's'}`,
     closedBadge: 'cerrado',
     flow: {
-      item: { title: (thing: string) => `¿Qué ${thing.toLowerCase()}?`, description: 'Elige qué se va a rentar y cuántas piezas.' },
+      item: { title: (thing: string) => `¿Qué ${thing.toLowerCase()}?` },
       dates: {
         title: 'Fechas',
         description: 'Toca el día de salida y luego el de regreso. Los días grises no tienen piezas libres o el negocio está cerrado.',
@@ -142,10 +133,9 @@ export const strings = {
         deposit: 'Depósito de garantía (se cobra a la salida y se devuelve)',
       },
       when: { title: 'Fecha y hora', description: 'Elige el día y después el horario disponible.' },
-      customer: { title: 'Cliente', description: 'Busca o registra al cliente. Su dirección, aval y documentos se guardan en su ficha.' },
+      customer: { title: 'Cliente' },
       payment: {
         title: 'Pago y confirmación',
-        description: 'Por lo general se cobra al registrar la salida. Registra un pago aquí solo si el cliente deja algo ahora.',
         now: 'Paga ahora',
         remaining: 'Restante',
       },
@@ -175,19 +165,7 @@ export const strings = {
         closePaymentHint: 'Cobra el saldo, el recargo por retraso o algún daño, y devuelve el depósito.',
       },
       overdue: 'La fecha de regreso ya pasó. Extiende la renta o registra la devolución.',
-      closed: 'Esta renta ya no está activa.',
     },
-    rentalStatus: {
-      pending_deposit: 'Apartada · falta anticipo',
-      confirmed: 'Agendada · por salir',
-      checked_out: 'Rentada · con el cliente',
-      overdue: 'Vencida · no ha regresado',
-      returned: 'Devuelta · por cerrar',
-      completed: 'Cerrada',
-      cancelled: 'Cancelada',
-      expired: 'Expirada · no se pagó el anticipo',
-      no_show: 'No se presentó',
-    } as Record<string, string>,
     docs: {
       name: 'Nombre del documento',
       namePlaceholder: 'Contrato, identificación del aval…',
@@ -309,13 +287,9 @@ export const strings = {
     addPdf: 'PDF',
   },
   history: {
-    title: 'Rentas',
     search: 'Buscar',
-    searchPlaceholder: 'Cliente, teléfono o herramienta',
     groups: { all: 'Todas', active: 'Activas', finished: 'Terminadas', cancelled: 'Canceladas' } as Record<string, string>,
-    empty: 'No hay rentas con estos filtros.',
     loadMore: 'Ver más',
-    customerRentals: 'Rentas de este cliente',
   },
   inventory: {
     title: 'Inventario',
@@ -371,6 +345,23 @@ export const strings = {
   },
   settings: {
     title: 'Ajustes',
+    general: {
+      title: 'Anticipo y apartados',
+      deposit: 'Anticipo (% del total)',
+      depositHint: 'Lo que se pide para apartar. 0 = no se pide anticipo y todo queda confirmado al registrarlo.',
+      hold: 'Horas para pagar el anticipo',
+      holdHint: 'Si no se paga en este tiempo, el apartado vence y se libera.',
+      hint: 'Aplica a todo lo que se registra en el negocio.',
+    },
+    delivery: {
+      title: 'Zonas de entrega',
+      hint: 'Al tomar un pedido a domicilio se elige la zona y se suma su costo de envío. Sin zonas, se entrega sin costo de envío.',
+      empty: 'Sin zonas configuradas.',
+      zone: 'Zona',
+      fee: 'Envío (pesos)',
+      add: 'Agregar zona',
+      remove: 'Quitar zona',
+    },
     rentals: 'Rentas',
     securityDeposit: 'Pedir depósito de garantía',
     securityDepositHint: 'Se cobra al dar la salida y se devuelve al regresar la herramienta.',
@@ -378,7 +369,6 @@ export const strings = {
     lateMultiplierHint: 'Un día atrasado cuesta el precio por día × este número (por ejemplo 2 = el doble).',
     spanClosed: 'Permitir rentas que pasen por días cerrados',
     chargeClosed: 'Cobrar los días cerrados',
-    inspection: 'Revisión entre rentas (minutos)',
     late: 'Retrasos',
     inspectionTitle: 'Revisión entre rentas',
     inspectionToggle: 'Apartar tiempo para revisar',
@@ -404,7 +394,6 @@ export const strings = {
     inspectionHint: 'Al regresar, la pieza queda apartada estas horas antes de poder rentarse otra vez, para revisarla y limpiarla.',
     closedDays: 'Días cerrados',
     closedDaysHint: 'La salida y el regreso nunca pueden caer en un día cerrado.',
-    lateAndInspection: 'Retrasos y revisión',
     save: 'Guardar ajustes',
     saved: 'Ajustes guardados.',
     onlyOwner: 'Solo el dueño puede cambiar los ajustes.',

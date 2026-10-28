@@ -12,6 +12,7 @@ import { uploadPhotos, type PickedPhoto } from '../../../../../../lib/photos';
 import { errorText, fieldErrors } from '../../../../../../lib/errors';
 import { useBusiness } from '../../../../../../lib/useMe';
 import { useSettings } from '../../../../../../lib/useSettings';
+import { useTexts } from '../../../../../../lib/useTexts';
 
 type Item = components['schemas']['CatalogItem'];
 type Fields = components['schemas']['CatalogItemFields'];
@@ -64,6 +65,7 @@ export default function CatalogItemForm() {
   const pathname = usePathname();
   const { businessId, itemId, error: carriedError } = useLocalSearchParams<{ businessId: string; itemId: string; error?: string }>();
   const { business } = useBusiness(businessId);
+  const { texts } = useTexts();
   const toast = useToast();
   const { settings } = useSettings(businessId);
   const depositEnabled = settings?.rentals.security_deposit_enabled ?? true;
@@ -161,7 +163,7 @@ export default function CatalogItemForm() {
         )}
       </Group>
       {item && isOwner && (
-        <Group footer={t.activeHint}>
+        <Group footer={texts.catalog.activeHint}>
           <Cell label={t.activeLabel} accessory={<Switch accessibilityLabel={t.activeLabel} value={item.active} onValueChange={toggleActive} />} />
         </Group>
       )}

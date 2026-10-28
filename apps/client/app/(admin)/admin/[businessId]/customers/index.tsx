@@ -5,6 +5,7 @@ import { useCallback, useState } from 'react';
 import { ActivityIndicator } from 'react-native';
 import { missingDocs } from '../../../../../components/CustomerPicker';
 import { api } from '../../../../../lib/api';
+import { useTexts } from '../../../../../lib/useTexts';
 import { Button, Cell, EmptyState, Field, Group, Screen, Text, useUI } from '../../../../../ui';
 
 type Customer = components['schemas']['Customer'];
@@ -13,6 +14,7 @@ const t = strings.customers;
 export default function Customers() {
   const { businessId } = useLocalSearchParams<{ businessId: string }>();
   const ui = useUI();
+  const { isRental } = useTexts();
   const [q, setQ] = useState('');
   const [list, setList] = useState<Customer[] | null>(null);
 
@@ -34,11 +36,11 @@ export default function Customers() {
       {!!list?.length && (
         <Group separatorInset={58}>
           {list.map((c) => {
-            const missing = missingDocs(c);
+            const missing = isRental ? missingDocs(c) : [];
             return (
-              <Cell key={c.id} icon={c.trusted ? 'shield-checkmark' : 'person'} tint={c.trusted ? ui.success : ui.indigo}
+              <Cell key={c.id} icon={isRental && c.trusted ? 'shield-checkmark' : 'person'} tint={isRental && c.trusted ? ui.success : ui.indigo}
                 label={c.name}
-                sublabel={`${formatPhone(c.phone)}${c.trusted ? ` · ${t.trustedBadge}` : missing.length ? ` · ${t.missingDocs(missing.join(', '))}` : ''}`}
+                sublabel={`${formatPhone(c.phone)}${isRental && c.trusted ? ` · ${t.trustedBadge}` : missing.length ? ` · ${t.missingDocs(missing.join(', '))}` : ''}`}
                 onPress={() => router.push({ pathname: '/admin/[businessId]/customers/[customerId]', params: { businessId, customerId: c.id } })} />
             );
           })}

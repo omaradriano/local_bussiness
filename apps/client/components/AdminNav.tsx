@@ -1,30 +1,24 @@
 import { strings, term } from '@lb/shared';
 import { Ionicons } from '@expo/vector-icons';
-import { router, usePathname, type Href } from 'expo-router';
+import { router, type Href } from 'expo-router';
 import { useState } from 'react';
 import { Modal, Pressable, ScrollView, useWindowDimensions, View } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { signOut, useBusiness } from '../lib/useMe';
+import { useCurrentBusinessId, useTexts } from '../lib/useTexts';
 import { Cell, Group, PressableScale, Text, radius, useUI } from '../ui';
 
-const UUID = /^\/admin\/([0-9a-f-]{36})(\/.*)?$/;
 const WIDE = 900; // from here the sections fit inline in the header
 
 type Section = { path: string; label: string; icon: keyof typeof Ionicons.glyphMap };
-
-/** The business the current screen belongs to (from the URL), or null outside a business. */
-function useCurrentBusiness() {
-  const pathname = usePathname();
-  const m = UUID.exec(pathname);
-  return { businessId: m?.[1] ?? null, rest: m?.[2] ?? '' };
-}
 
 /**
  * Header navigation inside a business: the essential sections inline on wide screens, and a
  * menu button (☰) on phones with every section, switching business and signing out.
  */
 export function AdminNav() {
-  const { businessId, rest } = useCurrentBusiness();
+  const { businessId, rest } = useCurrentBusinessId();
+  const { texts } = useTexts();
   const { business } = useBusiness(businessId ?? '');
   const { width } = useWindowDimensions();
   const insets = useSafeAreaInsets();
@@ -36,7 +30,7 @@ export function AdminNav() {
   const essential: Section[] = [
     { path: '/today', label: s.today, icon: 'today' },
     { path: '/calendar', label: s.calendar, icon: 'calendar' },
-    { path: '/bookings', label: strings.history.title, icon: 'list' },
+    { path: '/bookings', label: texts.bookings.plural, icon: 'list' },
     { path: '/customers', label: s.customers, icon: 'people' },
     { path: '/catalog', label: term(business.vertical, 'catalog') ?? s.catalog, icon: 'construct' },
   ];
