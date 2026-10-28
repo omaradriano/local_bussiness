@@ -48,9 +48,40 @@ func Releases(status string) bool { return slices.Contains(releasing, status) }
 func Next(kind, from string) []string {
 	var out []string
 	for _, s := range transitions[kind][from] {
-		if ByPeople(s) && !(from == "overdue" && s == "checked_out") {
+		if ByPeople(s) && !backward(from, s) {
 			out = append(out, s)
 		}
 	}
 	return out
 }
+
+// StillAhead reports whether status `to` is still to come from `from` (reachable by later moves).
+// A step that must be done "before X" can still be changed while X is ahead.
+func StillAhead(kind, from, to string) bool {
+	if from == to {
+		return false
+	}
+	seen := map[string]bool{from: true}
+	queue := []string{from}
+	for len(queue) > 0 {
+		cur := queue[0]
+		queue = queue[1:]
+		for _, next := range transitions[kind][cur] {
+			if backward(cur, next) {
+				continue
+			}
+			if next == to {
+				return true
+			}
+			if !seen[next] {
+				seen[next] = true
+				queue = append(queue, next)
+			}
+		}
+	}
+	return false
+}
+
+// backward: the one move that goes back (an extended overdue rental is "rented" again);
+// it's neither a panel button nor progress.
+func backward(from, to string) bool { return from == "overdue" && to == "checked_out" }

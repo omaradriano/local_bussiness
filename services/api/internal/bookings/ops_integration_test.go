@@ -19,11 +19,11 @@ func TestIntegrationF3_5_PagosYSaldo(t *testing.T) {
 		t.Fatalf("confirm without advance: %v", err)
 	}
 	// Paying the advance confirms the hold by itself.
-	b, err = AddPayment(ctx, p, f.business, b.ID, Payment{Type: "advance", Method: "transfer", Amount: 7500}, "", now)
+	b, err = AddPayment(ctx, p, f.business, b.ID, Payment{Type: "advance", Method: "transfer", Amount: 7500}, "", now, noFiles)
 	if err != nil || b.Status != "confirmed" || b.HoldExpiresAt != nil || b.Balance.Due != 17500 {
 		t.Fatalf("after advance: status=%s hold=%v bal=%+v err=%v", b.Status, b.HoldExpiresAt, b.Balance, err)
 	}
-	if _, err := AddPayment(ctx, p, f.business, b.ID, Payment{Type: "balance", Method: "cash", Amount: 20000}, "", now); !errors.As(err, &inv) || inv.Field != "amount" {
+	if _, err := AddPayment(ctx, p, f.business, b.ID, Payment{Type: "balance", Method: "cash", Amount: 20000}, "", now, noFiles); !errors.As(err, &inv) || inv.Field != "amount" {
 		t.Fatalf("overpay: %v", err)
 	}
 	if _, err := Transition(ctx, p, f.business, b.ID, "in_progress", "", ""); err != nil {
@@ -32,7 +32,7 @@ func TestIntegrationF3_5_PagosYSaldo(t *testing.T) {
 	if _, err := Transition(ctx, p, f.business, b.ID, "completed", "", ""); !errors.As(err, &inv) {
 		t.Fatalf("complete with balance due: %v", err)
 	}
-	b, err = AddPayment(ctx, p, f.business, b.ID, Payment{Type: "balance", Method: "cash", Amount: 17500}, "", now)
+	b, err = AddPayment(ctx, p, f.business, b.ID, Payment{Type: "balance", Method: "cash", Amount: 17500}, "", now, noFiles)
 	if err != nil || b.Balance.Due != 0 || b.Balance.Paid != b.Total {
 		t.Fatalf("saldo = total − pagos: %+v %v", b.Balance, err)
 	}
@@ -65,7 +65,7 @@ func TestIntegrationF3_6_TransicionesYBitacora(t *testing.T) {
 	if len(b.Events) != 2 || b.Events[1].ToStatus != "cancelled" || *b.Events[1].Note != "Avisó por WhatsApp" {
 		t.Fatalf("bitácora: %+v", b.Events)
 	}
-	if _, err := AddPayment(ctx, p, f.business, b.ID, Payment{Type: "balance", Method: "cash", Amount: 100}, "", now); !errors.As(err, &inv) {
+	if _, err := AddPayment(ctx, p, f.business, b.ID, Payment{Type: "balance", Method: "cash", Amount: 100}, "", now, noFiles); !errors.As(err, &inv) {
 		t.Fatalf("payment on a cancelled booking: %v", err)
 	}
 }
@@ -85,7 +85,7 @@ func TestIntegrationF3_6_PasosObligatoriosPendientes(t *testing.T) {
 	if _, err := Transition(ctx, p, f.business, b.ID, "in_progress", "", ""); err != nil {
 		t.Fatal(err)
 	}
-	if _, err := AddPayment(ctx, p, f.business, b.ID, Payment{Type: "balance", Method: "cash", Amount: 25000}, "", now); err != nil {
+	if _, err := AddPayment(ctx, p, f.business, b.ID, Payment{Type: "balance", Method: "cash", Amount: 25000}, "", now, noFiles); err != nil {
 		t.Fatal(err)
 	}
 	var sp StepsPending
@@ -113,11 +113,11 @@ func TestIntegrationF3_4_FlujoCompletoPorGiro(t *testing.T) {
 		}
 		steps := []func() (Booking, error){
 			func() (Booking, error) {
-				return AddPayment(ctx, p, f.business, b.ID, Payment{Type: "advance", Method: "cash", Amount: 7500}, "", now)
+				return AddPayment(ctx, p, f.business, b.ID, Payment{Type: "advance", Method: "cash", Amount: 7500}, "", now, noFiles)
 			},
 			func() (Booking, error) { return Transition(ctx, p, f.business, b.ID, "in_progress", "", "") },
 			func() (Booking, error) {
-				return AddPayment(ctx, p, f.business, b.ID, Payment{Type: "balance", Method: "card", Amount: 17500}, "", now)
+				return AddPayment(ctx, p, f.business, b.ID, Payment{Type: "balance", Method: "card", Amount: 17500}, "", now, noFiles)
 			},
 			func() (Booking, error) { return Transition(ctx, p, f.business, b.ID, "completed", "", "") },
 		}
@@ -149,7 +149,7 @@ func TestIntegrationF3_4_FlujoCompletoPorGiro(t *testing.T) {
 				t.Fatalf("%s: %v", to, err)
 			}
 		}
-		AddPayment(ctx, p, f.business, b.ID, Payment{Type: "balance", Method: "transfer", Amount: b.Balance.Due}, "", now)
+		AddPayment(ctx, p, f.business, b.ID, Payment{Type: "balance", Method: "transfer", Amount: b.Balance.Due}, "", now, noFiles)
 		if b, err = Transition(ctx, p, f.business, b.ID, "completed", "", "Entregado a la mamá"); err != nil || b.Status != "completed" {
 			t.Fatalf("complete: %v %v", b.Status, err)
 		}

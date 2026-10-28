@@ -17,8 +17,10 @@ const t = strings.bookings;
  * One configured step of a booking (e.g. "Foto del INE"). How it's completed depends on its type;
  * unknown types are shown read-only (the API validates every submission with the type registry).
  */
-export function StepCard({ businessId, bookingId, step, editable, onDone }: {
-  businessId: string; bookingId: string; step: Step; editable: boolean; onDone: (b: Booking) => void;
+export function StepCard({ businessId, bookingId, step, editable, canAddMore, onDone }: {
+  businessId: string; bookingId: string; step: Step; editable: boolean;
+  /** A done photo step can take more photos while its moment hasn't passed (the API checks it too). */
+  canAddMore?: boolean; onDone: (b: Booking) => void;
 }) {
   const ui = useUI();
   const toast = useToast();
@@ -43,7 +45,7 @@ export function StepCard({ businessId, bookingId, step, editable, onDone }: {
   async function addPhotos() {
     setBusy(true);
     setMessage(null);
-    const picked = await pickPhotos(maxFiles);
+    const picked = await pickPhotos(Math.max(1, maxFiles - (step.status === 'done' ? step.files.length : 0)));
     if (picked === 'cancelled') return setBusy(false);
     if (typeof picked === 'string') { setBusy(false); return toast(picked, 'error'); }
     const keys: string[] = [];
@@ -95,6 +97,10 @@ export function StepCard({ businessId, bookingId, step, editable, onDone }: {
         <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: 8 }}>
           {urls.map((u) => <ZoomableImage key={u} source={u} style={{ width: 80, height: 80, borderRadius: 10 }} contentFit="cover" accessibilityLabel={step.label} />)}
         </View>
+      )}
+
+      {done && editable && canAddMore && step.files.length < maxFiles && step.bucket !== '' && step.customer_doc === '' && (step.step_type === 'photo' || step.step_type === 'file_upload') && (
+        <Button size="sm" icon="add" busy={busy} onPress={addPhotos}>{t.addMorePhotos}</Button>
       )}
 
       {!done && editable && !step.on_file && (

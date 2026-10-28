@@ -1,6 +1,9 @@
 package bookings
 
-import "testing"
+import (
+	"context"
+	"testing"
+)
 
 func TestF3_5_SaldoCuadraConTotalMenosPagos(t *testing.T) {
 	cases := []struct {
@@ -65,3 +68,31 @@ func TestValidatePayment(t *testing.T) {
 		})
 	}
 }
+
+func TestPaymentAllowedByMoment(t *testing.T) {
+	cases := []struct {
+		status, typ string
+		ok          bool
+	}{
+		{"confirmed", "balance", true},
+		{"confirmed", "security_deposit", true},
+		{"confirmed", "late_fee", false},
+		{"checked_out", "damage_fee", false},
+		{"overdue", "late_fee", false}, // the fee is known when it comes back
+		{"returned", "late_fee", true},
+		{"returned", "damage_fee", true},
+		{"returned", "security_deposit", false},
+		{"completed", "refund", true},
+	}
+	for _, tc := range cases {
+		if err := PaymentAllowed("rental", tc.status, tc.typ); (err == nil) != tc.ok {
+			t.Errorf("%s %s: err=%v, want ok=%v", tc.status, tc.typ, err, tc.ok)
+		}
+	}
+	if err := PaymentAllowed("service", "confirmed", "balance"); err != nil {
+		t.Fatal(err)
+	}
+}
+
+// noFiles: payments without evidence never look up files.
+var noFiles FileExists = func(context.Context, string, string) error { return nil }

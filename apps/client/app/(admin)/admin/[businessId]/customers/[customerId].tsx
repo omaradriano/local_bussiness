@@ -3,6 +3,7 @@ import { strings } from '@lb/shared';
 import { router, Stack, useLocalSearchParams } from 'expo-router';
 import { useEffect, useState } from 'react';
 import { ActivityIndicator, View } from 'react-native';
+import { BookingHistory } from '../../../../../components/BookingHistory';
 import { CustomerDocuments, CustomerForm } from '../../../../../components/CustomerForm';
 import { api } from '../../../../../lib/api';
 import { useBusiness } from '../../../../../lib/useMe';
@@ -36,6 +37,12 @@ export default function CustomerScreen() {
       <CustomerForm key={customer?.id ?? 'new'} businessId={businessId} customer={customer ?? undefined} isOwner={isOwner}
         onSaved={(c) => (isNew ? open(c.id) : setCustomer(c))} onExisting={open} />
       {customer && <View style={{ marginTop: 28 }}><CustomerDocuments businessId={businessId} customer={customer} isOwner={isOwner} onChange={setCustomer} /></View>}
+      {customer && (
+        <View style={{ marginTop: 28 }}>
+          <Text variant="title" style={{ marginBottom: 12 }}>{strings.history.customerRentals}</Text>
+          <BookingHistory businessId={businessId} customerId={customer.id} compact />
+        </View>
+      )}
     </Screen>
   );
 }

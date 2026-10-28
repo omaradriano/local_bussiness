@@ -32,7 +32,7 @@ func TestIntegrationF3_3_ApartadoSinAnticipoExpiraYLibera(t *testing.T) {
 	}
 	// Paid holds never expire (they were confirmed).
 	paid, _, _ := Create(ctx, p, f.business, CreateInput{Customer: cust("6149990003"), ItemID: f.item, StartsAt: at("2026-11-02T19:00:00Z"), Source: "admin"}, now)
-	AddPayment(ctx, p, f.business, paid.ID, Payment{Type: "advance", Method: "cash", Amount: 7500}, "", now)
+	AddPayment(ctx, p, f.business, paid.ID, Payment{Type: "advance", Method: "cash", Amount: 7500}, "", now, noFiles)
 	ExpireHolds(ctx, p, now.Add(48*time.Hour))
 	if got, _ := Get(ctx, p, f.business, paid.ID); got.Status != "confirmed" {
 		t.Fatalf("paid hold expired: %s", got.Status)
@@ -49,7 +49,7 @@ func TestIntegrationRentasVencidas(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	AddPayment(ctx, p, f.business, b.ID, Payment{Type: "security_deposit", Method: "cash", Amount: 100000}, "", now)
+	AddPayment(ctx, p, f.business, b.ID, Payment{Type: "security_deposit", Method: "cash", Amount: 100000}, "", now, noFiles)
 	if _, err := Checkout(ctx, p, f.business, b.ID, "", "", now); err != nil {
 		t.Fatal(err)
 	}
