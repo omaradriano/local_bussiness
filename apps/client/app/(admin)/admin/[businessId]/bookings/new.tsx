@@ -1,6 +1,6 @@
 import type { components } from '@lb/api-client';
 import { addDays, firstOfMonth, parsePesos, formatMXN, hhmm, lastOfMonth, localToISO, strings, term, todayISO } from '@lb/shared';
-import { Link, router, Stack, useLocalSearchParams } from 'expo-router';
+import { router, Stack, useLocalSearchParams } from 'expo-router';
 import { useEffect, useMemo, useState } from 'react';
 import { ActivityIndicator, View } from 'react-native';
 import { Calendar, type DayInfo } from '../../../../../components/Calendar';
@@ -222,9 +222,10 @@ export default function NewBooking() {
               {item.kind === 'rental' && (settings?.rentals.rentals_span_closed_days ?? true) && <Text variant="footnote" color="labelSecondary">{t.closedDayHint}</Text>}
               {daysState !== 'loading' && daysState !== 'ready' && <Notice tone="warning">{daysState}</Notice>}
               {item.kind === 'rental' && daysState === 'ready' && Object.values(days).every((d) => d.remaining === 0) && (
-                <Link href={{ pathname: '/admin/[businessId]/catalog/[itemId]', params: { businessId, itemId: item.id } }}>
-                  <Text style={{ textDecorationLine: 'underline' }}>{t.noUnits}</Text>
-                </Link>
+                <View style={{ gap: 8 }}>
+                  <Notice tone="warning">{t.noUnits}</Notice>
+                  <Button size="sm" onPress={() => router.push({ pathname: '/admin/[businessId]/catalog/[itemId]', params: { businessId, itemId: item.id } })}>{t.goToUnits}</Button>
+                </View>
               )}
             </>
           )}

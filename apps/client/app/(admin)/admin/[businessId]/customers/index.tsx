@@ -1,16 +1,18 @@
 import type { components } from '@lb/api-client';
 import { formatPhone, strings } from '@lb/shared';
-import { Link, Stack, useFocusEffect, useLocalSearchParams } from 'expo-router';
+import { router, Stack, useFocusEffect, useLocalSearchParams } from 'expo-router';
 import { useCallback, useState } from 'react';
-import { FlatList, Text, TextInput, View } from 'react-native';
+import { ActivityIndicator } from 'react-native';
 import { missingDocs } from '../../../../../components/CustomerPicker';
 import { api } from '../../../../../lib/api';
+import { Button, Cell, EmptyState, Field, Group, Screen, Text, useUI } from '../../../../../ui';
 
 type Customer = components['schemas']['Customer'];
 const t = strings.customers;
 
 export default function Customers() {
   const { businessId } = useLocalSearchParams<{ businessId: string }>();
+  const ui = useUI();
   const [q, setQ] = useState('');
   const [list, setList] = useState<Customer[] | null>(null);
 
@@ -21,27 +23,27 @@ export default function Customers() {
   useFocusEffect(useCallback(() => { search(q); }, [search])); // eslint-disable-line react-hooks/exhaustive-deps
 
   return (
-    <View style={{ flex: 1, padding: 16, gap: 12, maxWidth: 640, width: '100%', alignSelf: 'center' }}>
+    <Screen>
       <Stack.Screen options={{ title: t.title }} />
-      <Link href={{ pathname: '/admin/[businessId]/customers/[customerId]', params: { businessId, customerId: 'new' } }}>
-        <Text style={{ textDecorationLine: 'underline', fontSize: 16 }}>+ {t.new}</Text>
-      </Link>
-      <TextInput accessibilityLabel={t.search} placeholder={t.search} value={q} onChangeText={(v) => { setQ(v); search(v); }}
-        style={{ borderWidth: 1, borderRadius: 6, padding: 10 }} />
-      <FlatList data={list ?? []} keyExtractor={(c) => c.id}
-        ListEmptyComponent={list ? <Text>{t.empty}</Text> : undefined}
-        renderItem={({ item: c }) => {
-          const missing = missingDocs(c);
-          return (
-            <Link href={{ pathname: '/admin/[businessId]/customers/[customerId]', params: { businessId, customerId: c.id } }} style={{ paddingVertical: 10, borderBottomWidth: 1, borderColor: '#ddd' }}>
-              <View>
-                <Text style={{ fontWeight: '600' }}>{c.name}{c.trusted ? ` · ${t.trustedBadge}` : ''}</Text>
-                <Text>{formatPhone(c.phone)}</Text>
-                {missing.length > 0 && <Text style={{ opacity: 0.7 }}>{t.missingDocs(missing.join(', '))}</Text>}
-              </View>
-            </Link>
-          );
-        }} />
-    </View>
+      <Text variant="largeTitle" accessibilityRole="header" style={{ marginBottom: 16 }}>{t.title}</Text>
+      <Field label={t.search} placeholder={t.searchPlaceholder} value={q} onChangeText={(v) => { setQ(v); search(v); }} autoCorrect={false} />
+      <Button variant="primary" icon="person-add" style={{ marginBottom: 24 }}
+        onPress={() => router.push({ pathname: '/admin/[businessId]/customers/[customerId]', params: { businessId, customerId: 'new' } })}>{t.new}</Button>
+      {list === null && <ActivityIndicator />}
+      {list?.length === 0 && <EmptyState icon="people-outline" title={t.empty} />}
+      {!!list?.length && (
+        <Group separatorInset={58}>
+          {list.map((c) => {
+            const missing = missingDocs(c);
+            return (
+              <Cell key={c.id} icon={c.trusted ? 'shield-checkmark' : 'person'} tint={c.trusted ? ui.success : ui.indigo}
+                label={c.name}
+                sublabel={`${formatPhone(c.phone)}${c.trusted ? ` · ${t.trustedBadge}` : missing.length ? ` · ${t.missingDocs(missing.join(', '))}` : ''}`}
+                onPress={() => router.push({ pathname: '/admin/[businessId]/customers/[customerId]', params: { businessId, customerId: c.id } })} />
+            );
+          })}
+        </Group>
+      )}
+    </Screen>
   );
 }

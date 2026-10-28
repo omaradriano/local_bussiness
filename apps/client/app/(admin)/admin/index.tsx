@@ -1,42 +1,42 @@
 import { strings, term } from '@lb/shared';
-import { Link, router, Stack } from 'expo-router';
-import { ActivityIndicator, Button, Text, View } from 'react-native';
+import { router, Stack } from 'expo-router';
+import { ActivityIndicator } from 'react-native';
 import { supabase } from '../../../lib/supabase';
 import { useMe } from '../../../lib/useMe';
+import { Button, Cell, EmptyState, Group, Notice, Screen, Text, useUI } from '../../../ui';
 
 const t = strings.admin;
 
 export default function AdminHome() {
   const { businesses, error, reload } = useMe();
+  const ui = useUI();
 
   return (
-    <View style={{ flex: 1, padding: 16, gap: 12 }}>
+    <Screen>
       <Stack.Screen options={{ title: t.title }} />
+      <Text variant="largeTitle" accessibilityRole="header" style={{ marginBottom: 20 }}>{t.title}</Text>
       {error ? (
-        <>
-          <Text accessibilityRole="alert">{error}</Text>
-          <Button title={strings.common.retry} onPress={reload} />
-        </>
+        <Group padded>
+          <Notice tone="warning">{error}</Notice>
+          <Button onPress={reload} style={{ marginTop: 12 }}>{strings.common.retry}</Button>
+        </Group>
       ) : businesses === null ? (
         <ActivityIndicator accessibilityLabel={strings.common.loading} />
       ) : businesses.length === 0 ? (
-        <>
-          <Text>{t.noBusinesses}</Text>
-          <Button title={t.createBusiness} onPress={() => router.push('/onboarding')} />
-        </>
+        <EmptyState icon="storefront-outline" title={t.noBusinesses}
+          action={<Button variant="primary" icon="add-circle" onPress={() => router.push('/onboarding')}>{t.createBusiness}</Button>} />
       ) : (
-        <>
-          <Text accessibilityRole="header" style={{ fontSize: 18, fontWeight: '600' }}>{t.yourBusinesses}</Text>
+        <Group label={t.yourBusinesses} separatorInset={58}>
           {businesses.map((b) => (
-            <Link key={b.business_id} href={{ pathname: '/admin/[businessId]', params: { businessId: b.business_id } }}>
-              <Text style={{ textDecorationLine: 'underline' }}>
-                {b.name} · {term(b.vertical, 'catalog')} · {t.role[b.role]}
-              </Text>
-            </Link>
+            <Cell key={b.business_id} icon="storefront" tint={ui.accent} label={b.name}
+              sublabel={`${term(b.vertical, 'catalog')} · ${t.role[b.role]}`}
+              onPress={() => router.push({ pathname: '/admin/[businessId]', params: { businessId: b.business_id } })} />
           ))}
-        </>
+        </Group>
       )}
-      <Button title={t.signOut} onPress={() => supabase.auth.signOut()} />
-    </View>
+      <Group>
+        <Cell label={t.signOut} destructive onPress={() => supabase.auth.signOut()} />
+      </Group>
+    </Screen>
   );
 }

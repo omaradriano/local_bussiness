@@ -2,11 +2,13 @@ import type { components } from '@lb/api-client';
 import { shiftsToWeek, strings, weekToShifts, type DayRow } from '@lb/shared';
 import { Stack, useLocalSearchParams } from 'expo-router';
 import { useEffect, useState } from 'react';
-import { ActivityIndicator, Button, Pressable, ScrollView, Text, TextInput, View } from 'react-native';
+import { Ionicons } from '@expo/vector-icons';
+import { ActivityIndicator, View } from 'react-native';
 import { HoursEditor } from '../../../../../components/HoursEditor';
 import { api } from '../../../../../lib/api';
 import { errorText, fieldErrors } from '../../../../../lib/errors';
 import { useBusiness } from '../../../../../lib/useMe';
+import { Button, Cell, Field, Group, Notice, Screen, Text, useUI } from '../../../../../ui';
 
 type Staff = components['schemas']['StaffMember'];
 type Item = components['schemas']['CatalogItem'];
@@ -16,6 +18,7 @@ export default function StaffDetail() {
   const { businessId, staffId } = useLocalSearchParams<{ businessId: string; staffId: string }>();
   const { business } = useBusiness(businessId);
   const isOwner = business?.role === 'owner';
+  const ui = useUI();
   const [person, setPerson] = useState<Staff | null>(null);
   const [services, setServices] = useState<Item[]>([]);
   const [selected, setSelected] = useState<Set<string>>(new Set());
@@ -68,35 +71,29 @@ export default function StaffDetail() {
   }
 
   return (
-    <ScrollView contentContainerStyle={{ padding: 16, gap: 14, maxWidth: 560, width: '100%', alignSelf: 'center' }}>
+    <Screen>
       <Stack.Screen options={{ title: person.name }} />
-      <Text>{t.name}</Text>
-      <TextInput accessibilityLabel={t.name} editable={isOwner} value={name} onChangeText={setName} style={{ borderWidth: 1, borderRadius: 6, padding: 10 }} />
-
-      <Text style={{ fontWeight: '600' }}>{t.services}</Text>
-      <View style={{ gap: 6 }}>
+      <Text variant="largeTitle" accessibilityRole="header" style={{ marginBottom: 20 }}>{person.name}</Text>
+      <Group padded>
+        <Field label={t.name} editable={isOwner} value={name} onChangeText={setName} />
+      </Group>
+      <Group label={t.services}>
         {services.map((it) => (
-          <Pressable key={it.id} accessibilityRole="checkbox" accessibilityState={{ checked: selected.has(it.id), disabled: !isOwner }}
-            disabled={!isOwner} onPress={() => toggle(it.id)}
-            style={{ flexDirection: 'row', gap: 8, alignItems: 'center' }}>
-            <Text style={{ width: 20 }}>{selected.has(it.id) ? '☑' : '☐'}</Text>
-            <Text>{it.name}</Text>
-          </Pressable>
+          <Cell key={it.id} label={it.name} onPress={isOwner ? () => toggle(it.id) : undefined}
+            accessory={selected.has(it.id) ? <Ionicons name="checkmark" size={20} color={ui.accent} /> : undefined} />
         ))}
-      </View>
-
-      <Text style={{ fontWeight: '600' }}>{t.hours}</Text>
+      </Group>
+      <Text variant="footnote" color="labelSecondary" style={{ marginHorizontal: 16, marginBottom: 6 }}>{t.hours.toUpperCase()}</Text>
       <HoursEditor week={week} onChange={setWeek} editable={isOwner} />
-
-      {message && <Text accessibilityRole="alert">{message}</Text>}
+      {message && <View style={{ marginBottom: 12 }}><Notice tone={message === t.saved ? 'success' : 'warning'}>{message}</Notice></View>}
       {isOwner && (
         <View style={{ gap: 8 }}>
-          <Button title={t.save} onPress={() => save()} disabled={busy} />
+          <Button variant="primary" busy={busy} onPress={() => save()}>{t.save}</Button>
           {!person.is_owner && (
-            <Button title={person.active ? t.deactivate : t.activate} onPress={() => save(!person.active)} disabled={busy} />
+            <Button variant={person.active ? 'destructive' : 'secondary'} disabled={busy} onPress={() => save(!person.active)}>{person.active ? t.deactivate : t.activate}</Button>
           )}
         </View>
       )}
-    </ScrollView>
+    </Screen>
   );
 }

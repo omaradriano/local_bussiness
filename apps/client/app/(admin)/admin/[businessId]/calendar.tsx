@@ -1,13 +1,15 @@
 import type { components } from '@lb/api-client';
-import { bookingDays, firstOfMonth, formatMXN, monthWindow, strings, term, todayISO } from '@lb/shared';
-import { Link, Stack, useFocusEffect, useLocalSearchParams } from 'expo-router';
+import { bookingDays, firstOfMonth, monthWindow, strings, todayISO } from '@lb/shared';
+import { Stack, useFocusEffect, useLocalSearchParams } from 'expo-router';
 import { useCallback, useMemo, useState } from 'react';
-import { ActivityIndicator, Pressable, ScrollView, Text, View } from 'react-native';
+import { ActivityIndicator, View } from 'react-native';
 import { Calendar } from '../../../../components/Calendar';
+import { BookingCell } from '../../../../components/BookingCell';
 import { InventoryList } from '../../../../components/InventoryList';
 import { api } from '../../../../lib/api';
 import { errorText } from '../../../../lib/errors';
 import { useBusiness } from '../../../../lib/useMe';
+import { Cell, Group, Notice, Screen, Segmented, Text } from '../../../../ui';
 
 type Summary = components['schemas']['BookingSummary'];
 const t = strings.bookings;
@@ -45,45 +47,33 @@ export default function BookingCalendar() {
   if (!business) return <ActivityIndicator style={{ marginTop: 24 }} />;
   const selected = byDay[day] ?? [];
 
+  const rental = business.vertical === 'tool_rental';
   return (
-    <ScrollView contentContainerStyle={{ padding: 16, gap: 12, maxWidth: 560, width: '100%', alignSelf: 'center' }}>
+    <Screen>
       <Stack.Screen options={{ title: strings.business.sections.calendar }} />
-      {business.vertical === 'tool_rental' && (
-        <View accessibilityRole="tablist" style={{ flexDirection: 'row', gap: 8 }}>
-          {(['inventory', 'month'] as const).map((v) => (
-            <Pressable key={v} accessibilityRole="tab" accessibilityState={{ selected: view === v }} onPress={() => setView(v)}
-              style={{ borderBottomWidth: view === v ? 2 : 0, paddingVertical: 6, paddingHorizontal: 10 }}>
-              <Text style={{ fontWeight: view === v ? '600' : '400' }}>{v === 'inventory' ? strings.inventory.title : strings.inventory.month}</Text>
-            </Pressable>
-          ))}
+      <Text variant="largeTitle" accessibilityRole="header" style={{ marginBottom: 16 }}>{strings.business.sections.calendar}</Text>
+      {rental && (
+        <View style={{ marginBottom: 16 }}>
+          <Segmented options={[{ value: 'inventory', label: strings.inventory.title }, { value: 'month', label: strings.inventory.month }]} value={view} onChange={setView} />
         </View>
       )}
-      {business.vertical === 'tool_rental' && view === 'inventory' ? <InventoryList businessId={businessId} /> : (<>
-      <Calendar
-        month={month}
-        onMonthChange={setMonth}
-        from={day}
-        onSelect={setDay}
-        dayInfo={(d) => (byDay[d] ? { badge: t.countBadge(byDay[d].length) } : {})}
-      />
-      {error && <Text accessibilityRole="alert">{error}</Text>}
-      {list === null && !error && <ActivityIndicator />}
-      <Text style={{ fontWeight: '600' }}>{new Date(`${day}T12:00:00`).toLocaleDateString('es-MX', { weekday: 'long', day: 'numeric', month: 'long' })}</Text>
-      {list && selected.length === 0 && <Text>{t.noneThatDay}</Text>}
-      {selected.map((b) => (
-        <Link key={b.id} href={{ pathname: '/admin/[businessId]/bookings/[bookingId]', params: { businessId, bookingId: b.id } }}>
-          <View style={{ borderWidth: 1, borderRadius: 8, padding: 10, gap: 2 }}>
-            <Text style={{ fontWeight: '600' }}>{b.items}{b.units.length ? ` · ${b.units.join(', ')}` : ''}{b.staff.length ? ` · ${b.staff.join(', ')}` : ''}</Text>
-            <Text>{b.customer_name} · {t.status[b.status]}</Text>
-            <Text>
-              {term(business.vertical, 'starts_at')}: {when(b.starts_at)}
-              {b.kind === 'rental' && b.ends_at ? `  →  ${term(business.vertical, 'ends_at')}: ${when(b.ends_at)}` : ''}
-            </Text>
-            <Text>{t.total}: {formatMXN(b.total)}</Text>
-          </View>
-        </Link>
-      ))}
-      </>)}
-    </ScrollView>
+      {rental && view === 'inventory' ? <InventoryList businessId={businessId} /> : (
+        <>
+          <Group padded>
+            <Calendar month={month} onMonthChange={setMonth} from={day} onSelect={setDay}
+              dayInfo={(d) => (byDay[d] ? { badge: t.countBadge(byDay[d].length) } : {})} />
+          </Group>
+          {error && <Notice tone="warning">{error}</Notice>}
+          {list === null && !error && <ActivityIndicator />}
+          <Group label={new Date(`${day}T12:00:00`).toLocaleDateString('es-MX', { weekday: 'long', day: 'numeric', month: 'long' })}>
+            {list && selected.length === 0 ? <Cell label={t.noneThatDay} /> : null}
+            {selected.map((b) => (
+              <BookingCell key={b.id} businessId={businessId} b={b}
+                time={b.kind === 'rental' && b.ends_at ? `${when(b.starts_at)} → ${when(b.ends_at)}` : when(b.starts_at)} />
+            ))}
+          </Group>
+        </>
+      )}
+    </Screen>
   );
 }

@@ -1,26 +1,15 @@
 import { strings } from '@lb/shared';
 import { Stack, useLocalSearchParams } from 'expo-router';
 import { useEffect, useState } from 'react';
-import { ActivityIndicator, Button, ScrollView, Switch, Text, TextInput, View } from 'react-native';
+import { ActivityIndicator, Switch, View } from 'react-native';
 import { api } from '../../../../lib/api';
 import { errorText, fieldErrors } from '../../../../lib/errors';
 import { useBusiness } from '../../../../lib/useMe';
 import { useSettings, type Settings } from '../../../../lib/useSettings';
+import { Button, Cell, Field, Group, Notice, Screen, Text } from '../../../../ui';
 
 const t = strings.settings;
 type Rentals = Settings['rentals'];
-
-function Toggle({ label, hint, value, onChange, disabled }: { label: string; hint?: string; value: boolean; onChange: (v: boolean) => void; disabled?: boolean }) {
-  return (
-    <View style={{ gap: 2, opacity: disabled ? 0.5 : 1 }}>
-      <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', gap: 12 }}>
-        <Text style={{ flexShrink: 1 }}>{label}</Text>
-        <Switch accessibilityLabel={label} value={value} onValueChange={onChange} disabled={disabled} />
-      </View>
-      {hint && <Text style={{ opacity: 0.7, fontSize: 12 }}>{hint}</Text>}
-    </View>
-  );
-}
 
 export default function SettingsScreen() {
   const { businessId } = useLocalSearchParams<{ businessId: string }>();
@@ -59,30 +48,35 @@ export default function SettingsScreen() {
   }
 
   return (
-    <ScrollView contentContainerStyle={{ padding: 16, gap: 16, maxWidth: 560, width: '100%', alignSelf: 'center' }}>
+    <Screen>
       <Stack.Screen options={{ title: t.title }} />
-      {!isOwner && <Text>{t.onlyOwner}</Text>}
-      <Text style={{ fontWeight: '600' }}>{t.rentals}</Text>
-      <Toggle label={t.securityDeposit} hint={t.securityDepositHint} value={r.security_deposit_enabled} disabled={!isOwner}
-        onChange={(v) => set({ security_deposit_enabled: v })} />
-      <View style={{ gap: 4 }}>
-        <Text>{t.lateMultiplier}</Text>
-        <TextInput accessibilityLabel={t.lateMultiplier} value={multiplier} onChangeText={setMultiplier} keyboardType="decimal-pad" editable={isOwner}
-          style={{ borderWidth: 1, borderRadius: 6, padding: 10, width: 120 }} />
-        <Text style={{ opacity: 0.7, fontSize: 12 }}>{t.lateMultiplierHint}</Text>
-        {errors.late_fee_multiplier && <Text accessibilityRole="alert">{errors.late_fee_multiplier}</Text>}
-      </View>
-      <Toggle label={t.spanClosed} value={r.rentals_span_closed_days} disabled={!isOwner} onChange={(v) => set({ rentals_span_closed_days: v })} />
-      <Toggle label={t.chargeClosed} value={r.charge_closed_days} disabled={!isOwner || !r.rentals_span_closed_days}
-        onChange={(v) => set({ charge_closed_days: v })} />
-      <View style={{ gap: 4 }}>
-        <Text>{t.inspection}</Text>
-        <TextInput accessibilityLabel={t.inspection} value={inspection} onChangeText={setInspection} keyboardType="numeric" editable={isOwner}
-          style={{ borderWidth: 1, borderRadius: 6, padding: 10, width: 120 }} />
-        {errors.inspection_minutes && <Text accessibilityRole="alert">{errors.inspection_minutes}</Text>}
-      </View>
-      {message && <Text accessibilityRole="alert">{message}</Text>}
-      {isOwner && <Button title={busy ? '…' : t.save} onPress={save} disabled={busy} />}
-    </ScrollView>
+      <Text variant="largeTitle" accessibilityRole="header" style={{ marginBottom: 20 }}>{t.title}</Text>
+      {!isOwner && <View style={{ marginBottom: 16 }}><Notice>{t.onlyOwner}</Notice></View>}
+
+      <Group label={t.rentals} footer={t.securityDepositHint}>
+        <Cell label={t.securityDeposit} accessory={
+          <Switch accessibilityLabel={t.securityDeposit} value={r.security_deposit_enabled} disabled={!isOwner}
+            onValueChange={(v) => set({ security_deposit_enabled: v })} />} />
+      </Group>
+
+      <Group label={t.closedDays} footer={t.closedDaysHint}>
+        <Cell label={t.spanClosed} accessory={
+          <Switch accessibilityLabel={t.spanClosed} value={r.rentals_span_closed_days} disabled={!isOwner}
+            onValueChange={(v) => set({ rentals_span_closed_days: v })} />} />
+        <Cell label={t.chargeClosed} accessory={
+          <Switch accessibilityLabel={t.chargeClosed} value={r.charge_closed_days} disabled={!isOwner || !r.rentals_span_closed_days}
+            onValueChange={(v) => set({ charge_closed_days: v })} />} />
+      </Group>
+
+      <Group label={t.lateAndInspection} padded>
+        <Field label={t.lateMultiplier} value={multiplier} onChangeText={setMultiplier} keyboardType="decimal-pad" editable={isOwner}
+          hint={t.lateMultiplierHint} error={errors.late_fee_multiplier} />
+        <Field label={t.inspection} value={inspection} onChangeText={setInspection} keyboardType="numeric" editable={isOwner}
+          hint={t.inspectionHint} error={errors.inspection_minutes} />
+      </Group>
+
+      {message && <View style={{ marginBottom: 16 }}><Notice tone={message === t.saved ? 'success' : 'warning'}>{message}</Notice></View>}
+      {isOwner && <Button variant="primary" busy={busy} onPress={save}>{t.save}</Button>}
+    </Screen>
   );
 }

@@ -1,11 +1,12 @@
 import type { components } from '@lb/api-client';
 import { strings } from '@lb/shared';
-import { Link, Stack, useFocusEffect, useLocalSearchParams } from 'expo-router';
+import { router, Stack, useFocusEffect, useLocalSearchParams } from 'expo-router';
 import { useCallback, useState } from 'react';
-import { ActivityIndicator, Button, ScrollView, Text, TextInput, View } from 'react-native';
+import { ActivityIndicator } from 'react-native';
 import { api } from '../../../../../lib/api';
 import { errorText, fieldErrors } from '../../../../../lib/errors';
 import { useBusiness } from '../../../../../lib/useMe';
+import { Button, Cell, Field, Group, Screen, Text, useUI } from '../../../../../ui';
 
 type Staff = components['schemas']['StaffMember'];
 const t = strings.staff;
@@ -14,6 +15,7 @@ export default function StaffList() {
   const { businessId } = useLocalSearchParams<{ businessId: string }>();
   const { business } = useBusiness(businessId);
   const isOwner = business?.role === 'owner';
+  const ui = useUI();
   const [staff, setStaff] = useState<Staff[] | null>(null);
   const [name, setName] = useState('');
   const [error, setError] = useState<string | null>(null);
@@ -34,28 +36,27 @@ export default function StaffList() {
   }
 
   return (
-    <ScrollView contentContainerStyle={{ padding: 16, gap: 12, maxWidth: 520, width: '100%', alignSelf: 'center' }}>
+    <Screen>
       <Stack.Screen options={{ title: t.title }} />
-      <Text style={{ opacity: 0.7 }}>{t.hint}</Text>
+      <Text variant="largeTitle" accessibilityRole="header" style={{ marginBottom: 8 }}>{t.title}</Text>
+      <Text variant="subhead" color="labelSecondary" style={{ marginBottom: 20 }}>{t.hint}</Text>
       {staff === null && !error && <ActivityIndicator accessibilityLabel={strings.common.loading} />}
-      {staff?.map((s) => (
-        <Link key={s.id} href={{ pathname: '/admin/[businessId]/staff/[staffId]', params: { businessId, staffId: s.id } }}>
-          <View style={{ borderWidth: 1, borderRadius: 8, padding: 12, opacity: s.active ? 1 : 0.55 }}>
-            <Text style={{ fontWeight: '600' }}>
-              {s.name}{s.is_owner ? ` (${t.you})` : ''}{s.active ? '' : ` · ${t.inactive}`}
-            </Text>
-            <Text>{s.service_ids.length} servicios · {s.hours.length ? `${new Set(s.hours.map((h) => h.weekday)).size} días` : 'sin horario'}</Text>
-          </View>
-        </Link>
-      ))}
-      {error && <Text accessibilityRole="alert">{error}</Text>}
-      {isOwner && (
-        <View style={{ gap: 6 }}>
-          <Text>{t.name}</Text>
-          <TextInput accessibilityLabel={t.name} value={name} onChangeText={setName} onSubmitEditing={add} style={{ borderWidth: 1, borderRadius: 6, padding: 10 }} />
-          <Button title={t.add} onPress={add} />
-        </View>
+      {!!staff?.length && (
+        <Group separatorInset={58}>
+          {staff.map((p) => (
+            <Cell key={p.id} icon="person" tint={p.active ? ui.success : ui.gray}
+              label={`${p.name}${p.is_owner ? ` (${t.you})` : ''}${p.active ? '' : ` · ${t.inactive}`}`}
+              sublabel={`${p.service_ids.length} servicios · ${p.hours.length ? `${new Set(p.hours.map((h) => h.weekday)).size} días` : 'sin horario'}`}
+              onPress={() => router.push({ pathname: '/admin/[businessId]/staff/[staffId]', params: { businessId, staffId: p.id } })} />
+          ))}
+        </Group>
       )}
-    </ScrollView>
+      {isOwner && (
+        <Group label={t.add} padded>
+          <Field label={t.name} value={name} onChangeText={setName} onSubmitEditing={add} error={error} />
+          <Button icon="person-add" onPress={add}>{t.add}</Button>
+        </Group>
+      )}
+    </Screen>
   );
 }

@@ -2,10 +2,11 @@ import type { components } from '@lb/api-client';
 import { strings } from '@lb/shared';
 import { router, Stack, useLocalSearchParams } from 'expo-router';
 import { useEffect, useState } from 'react';
-import { ActivityIndicator, ScrollView, Text } from 'react-native';
+import { ActivityIndicator, View } from 'react-native';
 import { CustomerDocuments, CustomerForm } from '../../../../../components/CustomerForm';
 import { api } from '../../../../../lib/api';
 import { useBusiness } from '../../../../../lib/useMe';
+import { Screen, Text } from '../../../../../ui';
 
 type Customer = components['schemas']['Customer'];
 const t = strings.customers;
@@ -29,11 +30,12 @@ export default function CustomerScreen() {
   const open = (id: string) => router.replace({ pathname: '/admin/[businessId]/customers/[customerId]', params: { businessId, customerId: id } });
 
   return (
-    <ScrollView contentContainerStyle={{ padding: 16, gap: 20, maxWidth: 560, width: '100%', alignSelf: 'center' }}>
+    <Screen>
       <Stack.Screen options={{ title: customer?.name ?? t.new }} />
+      <Text variant="largeTitle" accessibilityRole="header" style={{ marginBottom: 20 }}>{customer?.name ?? t.new}</Text>
       <CustomerForm key={customer?.id ?? 'new'} businessId={businessId} customer={customer ?? undefined} isOwner={isOwner}
         onSaved={(c) => (isNew ? open(c.id) : setCustomer(c))} onExisting={open} />
-      {customer && <CustomerDocuments businessId={businessId} customer={customer} isOwner={isOwner} onChange={setCustomer} />}
-    </ScrollView>
+      {customer && <View style={{ marginTop: 28 }}><CustomerDocuments businessId={businessId} customer={customer} isOwner={isOwner} onChange={setCustomer} /></View>}
+    </Screen>
   );
 }

@@ -1,7 +1,8 @@
 import type { components } from '@lb/api-client';
 import { strings } from '@lb/shared';
 import { useCallback, useEffect, useState } from 'react';
-import { ActivityIndicator, Button, Text, TextInput, View } from 'react-native';
+import { ActivityIndicator, View } from 'react-native';
+import { Button, Cell, Field, Group, Segmented, Text, useUI } from '../ui';
 import { api } from '../lib/api';
 import { errorText, fieldErrors } from '../lib/errors';
 
@@ -12,6 +13,7 @@ const STATUSES: Status[] = ['available', 'maintenance', 'retired'];
 
 /** The rental item's pieces (units) and their status, inside the item's edit screen. */
 export function UnitsSection({ businessId, itemId, isOwner }: { businessId: string; itemId: string; isOwner: boolean }) {
+  const ui = useUI();
   const [units, setUnits] = useState<Unit[] | null>(null);
   const [code, setCode] = useState('');
   const [error, setError] = useState<string | null>(null);
@@ -45,35 +47,27 @@ export function UnitsSection({ businessId, itemId, isOwner }: { businessId: stri
   }
 
   return (
-    <View style={{ gap: 12 }}>
-      <Text style={{ fontWeight: '600' }}>{t.title}</Text>
-      <Text style={{ opacity: 0.7 }}>{t.hint}</Text>
-      {error && <Text accessibilityRole="alert">{error}</Text>}
-      {units === null && !error && <ActivityIndicator accessibilityLabel={strings.common.loading} />}
-      {units?.length === 0 && <Text>{t.empty}</Text>}
-      {units?.map((u) => (
-        <View key={u.id} style={{ borderWidth: 1, borderRadius: 8, padding: 12, gap: 6 }}>
-          <Text style={{ fontWeight: '600' }}>{u.code} · {t.status[u.status]}</Text>
+    <Group label={t.title} footer={error ?? t.hint}>
+      {units === null && !error ? <View style={{ padding: 16 }}><ActivityIndicator accessibilityLabel={strings.common.loading} /></View> : null}
+      {units?.length === 0 ? <Cell label={t.empty} /> : null}
+      {(units ?? []).map((u) => (
+        <View key={u.id} style={{ paddingHorizontal: 16, paddingVertical: 12, gap: 8 }}>
+          <View style={{ flexDirection: 'row', alignItems: 'center', gap: 10 }}>
+            <View style={{ width: 10, height: 10, borderRadius: 5, backgroundColor: u.status === 'available' ? ui.success : u.status === 'maintenance' ? ui.warning : ui.gray }} />
+            <Text style={{ flex: 1, fontVariant: ['tabular-nums'] }}>{u.code}</Text>
+            <Text variant="footnote" color="labelSecondary">{t.status[u.status]}</Text>
+          </View>
           {isOwner && (
-            <View style={{ flexDirection: 'row', gap: 16, flexWrap: 'wrap' }}>
-              {STATUSES.filter((s) => s !== u.status).map((s) => (
-                <Text key={s} accessibilityRole="button" onPress={() => setStatus(u, s)} style={{ textDecorationLine: 'underline' }}>
-                  {t.status[s]}
-                </Text>
-              ))}
-            </View>
+            <Segmented options={STATUSES.map((st) => ({ value: st, label: t.status[st] }))} value={u.status} onChange={(st) => st !== u.status && setStatus(u, st)} />
           )}
         </View>
       ))}
-      {isOwner && (
-        <View style={{ gap: 6 }}>
-          <Text>{t.code}</Text>
-          <TextInput accessibilityLabel={t.code} autoCapitalize="characters" value={code} onChangeText={setCode} onSubmitEditing={add}
-            style={{ borderWidth: 1, borderRadius: 6, padding: 10 }} />
-          {codeError && <Text accessibilityRole="alert">{codeError}</Text>}
-          <Button title={t.add} onPress={add} />
+      {isOwner ? (
+        <View style={{ padding: 16 }}>
+          <Field label={t.code} autoCapitalize="characters" value={code} onChangeText={setCode} onSubmitEditing={add} error={codeError} />
+          <Button icon="add" onPress={add}>{t.add}</Button>
         </View>
-      )}
-    </View>
+      ) : null}
+    </Group>
   );
 }

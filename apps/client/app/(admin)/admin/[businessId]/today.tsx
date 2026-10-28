@@ -1,14 +1,15 @@
 import type { components } from '@lb/api-client';
-import { addDays, agendaGroups, type AgendaGroup, formatMXN, strings, todayISO } from '@lb/shared';
-import { Link, Stack, useFocusEffect, useLocalSearchParams } from 'expo-router';
+import { addDays, agendaGroups, type AgendaGroup, strings, todayISO } from '@lb/shared';
+import { Stack, useFocusEffect, useLocalSearchParams } from 'expo-router';
 import { useCallback, useState } from 'react';
-import { ActivityIndicator, Button, ScrollView, Text, View } from 'react-native';
+import { ActivityIndicator } from 'react-native';
+import { BookingCell } from '../../../../components/BookingCell';
 import { api } from '../../../../lib/api';
 import { errorText } from '../../../../lib/errors';
 import { useBusiness } from '../../../../lib/useMe';
+import { Button, EmptyState, Group, Notice, Screen, Text } from '../../../../ui';
 
 type Summary = components['schemas']['BookingSummary'];
-const t = strings.bookings;
 const order: AgendaGroup[] = ['overdue', 'awaitingDeposit', 'appointments', 'deliveries', 'goingOut', 'comingBack'];
 
 const hour = (iso: string) => new Date(iso).toLocaleTimeString('es-MX', { hour: '2-digit', minute: '2-digit' });
@@ -38,28 +39,22 @@ export default function Today() {
   const empty = groups && order.every((k) => groups[k].length === 0);
 
   return (
-    <ScrollView contentContainerStyle={{ padding: 16, gap: 8, maxWidth: 600, width: '100%', alignSelf: 'center' }}>
+    <Screen>
       <Stack.Screen options={{ title: strings.business.sections.today }} />
-      <Text style={{ fontWeight: '600' }}>{new Date().toLocaleDateString('es-MX', { weekday: 'long', day: 'numeric', month: 'long' })}</Text>
-      {error && (<><Text accessibilityRole="alert">{error}</Text><Button title={strings.common.retry} onPress={load} /></>)}
+      <Text variant="footnote" color="labelSecondary" style={{ textTransform: 'capitalize' }}>
+        {new Date().toLocaleDateString('es-MX', { weekday: 'long', day: 'numeric', month: 'long' })}
+      </Text>
+      <Text variant="largeTitle" accessibilityRole="header" style={{ marginBottom: 20 }}>{strings.business.sections.today}</Text>
+      {error && (<Group padded><Notice tone="warning">{error}</Notice><Button onPress={load} style={{ marginTop: 12 }}>{strings.common.retry}</Button></Group>)}
       {!rows && !error && <ActivityIndicator />}
-      {empty && <Text>{strings.today.nothing}</Text>}
+      {empty && <EmptyState icon="sunny-outline" title={strings.today.nothing} />}
       {groups && order.filter((k) => groups[k].length).map((k) => (
-        <View key={k} style={{ gap: 6, marginTop: 8 }}>
-          <Text style={{ fontWeight: '600' }}>{strings.today.groups[k]} ({groups[k].length})</Text>
+        <Group key={k} label={`${strings.today.groups[k]} (${groups[k].length})`}>
           {groups[k].map((b) => (
-            <Link key={`${k}-${b.id}`} href={{ pathname: '/admin/[businessId]/bookings/[bookingId]', params: { businessId, bookingId: b.id } }}>
-              <View style={{ borderWidth: 1, borderRadius: 8, padding: 10, gap: 2 }}>
-                <Text style={{ fontWeight: '600' }}>
-                  {k === 'comingBack' && b.ends_at ? hour(b.ends_at) : hour(b.starts_at)} · {b.items}
-                  {b.units.length ? ` · ${b.units.join(', ')}` : ''}{b.staff.length ? ` · ${b.staff.join(', ')}` : ''}
-                </Text>
-                <Text>{b.customer_name} · {t.status[b.status]} · {formatMXN(b.total)}</Text>
-              </View>
-            </Link>
+            <BookingCell key={`${k}-${b.id}`} businessId={businessId} b={b} time={k === 'comingBack' && b.ends_at ? hour(b.ends_at) : hour(b.starts_at)} />
           ))}
-        </View>
+        </Group>
       ))}
-    </ScrollView>
+    </Screen>
   );
 }

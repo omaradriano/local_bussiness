@@ -2,7 +2,9 @@ import type { components } from '@lb/api-client';
 import { strings } from '@lb/shared';
 import { ZoomableImage } from './ZoomableImage';
 import { useEffect, useState } from 'react';
-import { Button, Pressable, Text, View } from 'react-native';
+import { Ionicons } from '@expo/vector-icons';
+import { Pressable, View } from 'react-native';
+import { Button, Text, useUI } from '../ui';
 import { api } from '../lib/api';
 import { errorText } from '../lib/errors';
 import { pickPhotos, uploadPhoto, type PickedPhoto } from '../lib/photos';
@@ -18,11 +20,12 @@ type Props = { businessId: string; editable: boolean } & (
   | { itemId?: undefined; images?: never; reload?: never; pending: PickedPhoto[]; onPendingChange: (p: PickedPhoto[]) => void }
 );
 
-const box = { width: 96, height: 96, borderRadius: 6 } as const;
+const box = { width: 88, height: 88, borderRadius: 10 } as const;
 
 /** Photos of a catalog item: thumbnails, add and remove. */
 export function ItemPhotos(props: Props) {
   const { businessId, editable } = props;
+  const ui = useUI();
   const [busy, setBusy] = useState(false);
   const [message, setMessage] = useState<string | null>(null);
   const images = props.images ?? [];
@@ -68,23 +71,24 @@ export function ItemPhotos(props: Props) {
     props.reload?.();
   }
 
+  // A small ✕ on the corner of each photo (44 pt touch target through hitSlop).
   const removeLink = (onPress: () => void) => editable && (
-    <Pressable accessibilityRole="button" onPress={onPress}>
-      <Text style={{ textDecorationLine: 'underline', fontSize: 12 }}>{t.remove}</Text>
+    <Pressable accessibilityRole="button" accessibilityLabel={t.remove} onPress={onPress} hitSlop={12}
+      style={{ position: 'absolute', top: -6, right: -6, width: 24, height: 24, borderRadius: 12, backgroundColor: ui.label, alignItems: 'center', justifyContent: 'center' }}>
+      <Ionicons name="close" size={14} color={ui.bg} />
     </Pressable>
   );
 
   return (
-    <View style={{ gap: 8 }}>
-      <Text style={{ fontWeight: '600' }}>{t.title}</Text>
+    <View style={{ gap: 12 }}>
       <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: 8 }}>
         {images.map((img) => (
-          <View key={img.id} style={{ width: 96, gap: 4 }}>
+          <View key={img.id} style={{ width: 88 }}>
             {img.status === 'ready' && img.urls?.thumb ? (
               <ZoomableImage source={img.urls.thumb} fullSource={img.urls.detail} placeholder={img.blurhash ? { blurhash: img.blurhash } : undefined}
                 accessibilityLabel={t.title} style={box} contentFit="cover" transition={150} />
             ) : (
-              <View style={[box, { borderWidth: 1, justifyContent: 'center', alignItems: 'center' }]}>
+              <View style={[box, { backgroundColor: ui.fill, justifyContent: 'center', alignItems: 'center' }]}>
                 <Text style={{ fontSize: 12, textAlign: 'center' }}>{img.status === 'failed' ? t.failed : t.processing}</Text>
               </View>
             )}
@@ -92,14 +96,14 @@ export function ItemPhotos(props: Props) {
           </View>
         ))}
         {pending.map((p, i) => (
-          <View key={p.uri} style={{ width: 96, gap: 4 }}>
+          <View key={p.uri} style={{ width: 88 }}>
             <ZoomableImage source={p.uri} accessibilityLabel={t.title} style={box} contentFit="cover" />
             {removeLink(() => props.onPendingChange?.(pending.filter((_, j) => j !== i)))}
           </View>
         ))}
       </View>
-      {message && <Text accessibilityRole="alert">{message}</Text>}
-      {editable && count < MAX_PHOTOS && <Button title={busy ? t.uploading : t.add} onPress={add} disabled={busy} />}
+      {message && <Text variant="footnote" color="labelSecondary" accessibilityRole="alert">{message}</Text>}
+      {editable && count < MAX_PHOTOS && <Button icon="images" busy={busy} busyLabel={t.uploading} onPress={add}>{t.add}</Button>}
     </View>
   );
 }
