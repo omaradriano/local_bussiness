@@ -1,6 +1,6 @@
 import type { components } from '@lb/api-client';
 import { splitE164, strings, toE164, type CountryCode } from '@lb/shared';
-import { Image } from 'expo-image';
+import { ZoomableImage } from './ZoomableImage';
 import { useState } from 'react';
 import { Button, Pressable, Switch, Text, TextInput, View } from 'react-native';
 import { api } from '../lib/api';
@@ -142,7 +142,7 @@ export function CustomerDocuments({ businessId, customer, isOwner, onChange }: {
               {docs.map((d) => (
                 <View key={d.id} style={{ gap: 4, alignItems: 'center' }}>
                   {urls[d.key] ? (
-                    <Image source={urls[d.key]} style={{ width: 96, height: 96, borderRadius: 6 }} contentFit="cover" accessibilityLabel={t.docTypes[type]} />
+                    <ZoomableImage source={urls[d.key]} style={{ width: 96, height: 96, borderRadius: 6 }} contentFit="cover" accessibilityLabel={t.docTypes[type]} />
                   ) : (
                     <Pressable accessibilityRole="button" onPress={() => show(d.key)}><Text style={{ textDecorationLine: 'underline' }}>{t.seeDoc}</Text></Pressable>
                   )}

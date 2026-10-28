@@ -1,6 +1,6 @@
 import type { components } from '@lb/api-client';
 import { strings } from '@lb/shared';
-import { Image } from 'expo-image';
+import { ZoomableImage } from './ZoomableImage';
 import { useEffect, useState } from 'react';
 import { Button, Pressable, Text, View } from 'react-native';
 import { api } from '../lib/api';
@@ -81,7 +81,7 @@ export function ItemPhotos(props: Props) {
         {images.map((img) => (
           <View key={img.id} style={{ width: 96, gap: 4 }}>
             {img.status === 'ready' && img.urls?.thumb ? (
-              <Image source={img.urls.thumb} placeholder={img.blurhash ? { blurhash: img.blurhash } : undefined}
+              <ZoomableImage source={img.urls.thumb} fullSource={img.urls.detail} placeholder={img.blurhash ? { blurhash: img.blurhash } : undefined}
                 accessibilityLabel={t.title} style={box} contentFit="cover" transition={150} />
             ) : (
               <View style={[box, { borderWidth: 1, justifyContent: 'center', alignItems: 'center' }]}>
@@ -93,7 +93,7 @@ export function ItemPhotos(props: Props) {
         ))}
         {pending.map((p, i) => (
           <View key={p.uri} style={{ width: 96, gap: 4 }}>
-            <Image source={p.uri} accessibilityLabel={t.title} style={box} contentFit="cover" />
+            <ZoomableImage source={p.uri} accessibilityLabel={t.title} style={box} contentFit="cover" />
             {removeLink(() => props.onPendingChange?.(pending.filter((_, j) => j !== i)))}
           </View>
         ))}

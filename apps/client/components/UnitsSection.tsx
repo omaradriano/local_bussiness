@@ -1,21 +1,17 @@
 import type { components } from '@lb/api-client';
 import { strings } from '@lb/shared';
-import { Stack, useLocalSearchParams } from 'expo-router';
 import { useCallback, useEffect, useState } from 'react';
-import { ActivityIndicator, Button, ScrollView, Text, TextInput, View } from 'react-native';
-import { api } from '../../../../../../lib/api';
-import { errorText, fieldErrors } from '../../../../../../lib/errors';
-import { useBusiness } from '../../../../../../lib/useMe';
+import { ActivityIndicator, Button, Text, TextInput, View } from 'react-native';
+import { api } from '../lib/api';
+import { errorText, fieldErrors } from '../lib/errors';
 
 type Unit = components['schemas']['Unit'];
 type Status = components['schemas']['UnitStatus'];
 const t = strings.units;
 const STATUSES: Status[] = ['available', 'maintenance', 'retired'];
 
-export default function Units() {
-  const { businessId, itemId } = useLocalSearchParams<{ businessId: string; itemId: string }>();
-  const { business } = useBusiness(businessId);
-  const isOwner = business?.role === 'owner';
+/** The rental item's pieces (units) and their status, inside the item's edit screen. */
+export function UnitsSection({ businessId, itemId, isOwner }: { businessId: string; itemId: string; isOwner: boolean }) {
   const [units, setUnits] = useState<Unit[] | null>(null);
   const [code, setCode] = useState('');
   const [error, setError] = useState<string | null>(null);
@@ -49,8 +45,8 @@ export default function Units() {
   }
 
   return (
-    <ScrollView contentContainerStyle={{ padding: 16, gap: 12, maxWidth: 520, width: '100%', alignSelf: 'center' }}>
-      <Stack.Screen options={{ title: t.title }} />
+    <View style={{ gap: 12 }}>
+      <Text style={{ fontWeight: '600' }}>{t.title}</Text>
       <Text style={{ opacity: 0.7 }}>{t.hint}</Text>
       {error && <Text accessibilityRole="alert">{error}</Text>}
       {units === null && !error && <ActivityIndicator accessibilityLabel={strings.common.loading} />}
@@ -78,6 +74,6 @@ export default function Units() {
           <Button title={t.add} onPress={add} />
         </View>
       )}
-    </ScrollView>
+    </View>
   );
 }

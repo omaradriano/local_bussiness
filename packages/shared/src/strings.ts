@@ -79,6 +79,8 @@ export const strings = {
   },
   photos: {
     title: 'Fotos',
+    enlarge: 'ampliar',
+    close: 'Cerrar',
     add: 'Agregar fotos',
     processing: 'Procesando…',
     failed: 'No se pudo procesar',
@@ -200,6 +202,7 @@ export const strings = {
   customers: {
     title: 'Clientes',
     search: 'Buscar por nombre o teléfono',
+    registered: 'Elegir de los clientes registrados',
     new: 'Nuevo cliente',
     empty: 'No hay clientes con esa búsqueda.',
     name: 'Nombre completo',

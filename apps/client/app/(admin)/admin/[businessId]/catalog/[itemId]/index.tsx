@@ -4,6 +4,7 @@ import { router, Stack, useLocalSearchParams, usePathname } from 'expo-router';
 import { useCallback, useEffect, useState } from 'react';
 import { ActivityIndicator, Button, Pressable, ScrollView, Text, TextInput, View } from 'react-native';
 import { ItemPhotos } from '../../../../../../components/ItemPhotos';
+import { UnitsSection } from '../../../../../../components/UnitsSection';
 import { api } from '../../../../../../lib/api';
 import { goBack } from '../../../../../../lib/nav';
 import { uploadPhotos, type PickedPhoto } from '../../../../../../lib/photos';
@@ -165,6 +166,7 @@ export default function CatalogItemForm() {
       )}
       {message && <Text accessibilityRole="alert">{message}</Text>}
       <Button title={t.save} onPress={save} disabled={busy} />
+      {item && kind === 'rental' && <UnitsSection businessId={businessId} itemId={item.id} isOwner={business.role === 'owner'} />}
     </ScrollView>
   );
 }
