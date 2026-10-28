@@ -114,8 +114,10 @@ func TestIntegrationCustomerDocsAreReused(t *testing.T) {
 	p := pool(t)
 	ctx := context.Background()
 	f := setup(t, p, "tool_rental", `{"security_deposit_enabled": false}`)
-	if _, err := p.Exec(ctx, `delete from public.workflow_steps where business_id = $1;
-		insert into public.workflow_steps (business_id, applies_to_kind, actor, moment, to_status, step_type, label, config, sort) values
+	if _, err := p.Exec(ctx, `delete from public.workflow_steps where business_id = $1`, f.business); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := p.Exec(ctx, `insert into public.workflow_steps (business_id, applies_to_kind, actor, moment, to_status, step_type, label, config, sort) values
 		  ($1, 'rental', 'business', 'before_status', 'checked_out', 'photo', 'Foto del INE', '{"bucket":"private-docs","customer_doc":"ine"}', 1),
 		  ($1, 'rental', 'business', 'before_status', 'checked_out', 'photo', 'Comprobante de domicilio', '{"bucket":"private-docs","customer_doc":"proof_of_address"}', 2)`, f.business); err != nil {
 		t.Fatal(err)
