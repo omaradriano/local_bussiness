@@ -540,6 +540,136 @@ paths:
         "404": { $ref: "#/components/responses/Error" }
         "422": { $ref: "#/components/responses/Error" }
 
+  /v1/b/{businessId}/bookings/{bookingId}/uploads:
+    parameters:
+      - $ref: "#/components/parameters/BusinessId"
+      - { name: bookingId, in: path, required: true, schema: { type: string, format: uuid } }
+    post:
+      operationId: createBookingUpload
+      summary: URL prefirmada para subir un archivo de un paso (INE, evidencias) a su bucket privado
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [step_id, content_type, size]
+              properties:
+                step_id: { type: string, format: uuid }
+                content_type: { type: string, enum: [image/jpeg, image/png, image/webp] }
+                size: { type: integer, minimum: 1, maximum: 5242880 }
+      responses:
+        "201":
+          description: Subir con PUT y luego mandar `key` al completar el paso
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [key, upload_url, upload_headers]
+                properties:
+                  key: { type: string }
+                  upload_url: { type: string }
+                  upload_headers: { type: object, additionalProperties: { type: string } }
+        "404": { $ref: "#/components/responses/Error" }
+        "422": { $ref: "#/components/responses/Error" }
+        "503": { $ref: "#/components/responses/Error" }
+
+  /v1/b/{businessId}/bookings/{bookingId}/steps/{stepId}:
+    parameters:
+      - $ref: "#/components/parameters/BusinessId"
+      - { name: bookingId, in: path, required: true, schema: { type: string, format: uuid } }
+      - { name: stepId, in: path, required: true, schema: { type: string, format: uuid } }
+    post:
+      operationId: completeStep
+      summary: Completa un paso; lo valida el tipo de paso registrado
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                data: { type: object, additionalProperties: true, description: "text: {text}; number: {value}; checklist: {checked: {item: true}}" }
+                files: { type: array, items: { type: string }, maxItems: 20 }
+      responses:
+        "200":
+          description: OK
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Booking" }
+        "404": { $ref: "#/components/responses/Error" }
+        "422": { $ref: "#/components/responses/Error" }
+
+  /v1/b/{businessId}/bookings/{bookingId}/files:
+    parameters:
+      - $ref: "#/components/parameters/BusinessId"
+      - { name: bookingId, in: path, required: true, schema: { type: string, format: uuid } }
+    get:
+      operationId: getBookingFile
+      summary: URL de lectura de 5 minutos para un archivo privado de la reserva
+      parameters:
+        - { name: bucket, in: query, required: true, schema: { type: string, enum: [private-docs, rental-evidence] } }
+        - { name: key, in: query, required: true, schema: { type: string } }
+      responses:
+        "200":
+          description: OK
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [url]
+                properties:
+                  url: { type: string }
+        "404": { $ref: "#/components/responses/Error" }
+
+  /v1/b/{businessId}/bookings/{bookingId}/checkout:
+    parameters:
+      - $ref: "#/components/parameters/BusinessId"
+      - { name: bookingId, in: path, required: true, schema: { type: string, format: uuid } }
+    post:
+      operationId: checkoutRental
+      summary: Salida de la renta (pasos previos hechos y depósito de garantía cobrado)
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                condition: { type: string, maxLength: 500 }
+      responses:
+        "200":
+          description: OK
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Booking" }
+        "404": { $ref: "#/components/responses/Error" }
+        "422": { $ref: "#/components/responses/Error" }
+
+  /v1/b/{businessId}/bookings/{bookingId}/return:
+    parameters:
+      - $ref: "#/components/parameters/BusinessId"
+      - { name: bookingId, in: path, required: true, schema: { type: string, format: uuid } }
+    post:
+      operationId: returnRental
+      summary: Devolución; si es anticipada libera las unidades; el recargo por retraso queda sugerido en `rental`
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                condition: { type: string, maxLength: 500 }
+      responses:
+        "200":
+          description: OK
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Booking" }
+        "404": { $ref: "#/components/responses/Error" }
+        "422": { $ref: "#/components/responses/Error" }
+
   /v1/b/{businessId}/bookings/{bookingId}/payments:
     parameters:
       - $ref: "#/components/parameters/BusinessId"
@@ -753,7 +883,7 @@ components:
 
     Booking:
       type: object
-      required: [id, kind, status, starts_at, ends_at, customer, items, staff, units, subtotal, deposit_required, total, source, hold_expires_at, public_token, created_at, payments, balance, events, steps, next]
+      required: [id, kind, status, starts_at, ends_at, customer, items, staff, units, subtotal, deposit_required, total, source, hold_expires_at, public_token, created_at, payments, balance, events, steps, next, rental]
       properties:
         id: { type: string, format: uuid }
         kind: { $ref: "#/components/schemas/ItemKind" }
@@ -829,7 +959,7 @@ components:
           type: array
           items:
             type: object
-            required: [id, label, step_type, to_status, required, status, completed_at, files]
+            required: [id, label, step_type, to_status, required, status, completed_at, files, config, bucket]
             properties:
               id: { type: string, format: uuid }
               label: { type: string }
@@ -839,9 +969,23 @@ components:
               status: { type: string, enum: [pending, done, skipped] }
               completed_at: { type: [string, "null"], format: date-time }
               files: { type: array, items: { type: string } }
+              config: { type: object, additionalProperties: true }
+              bucket: { type: string, description: "Bucket privado de sus archivos (vacío si no lleva archivos)" }
         next:
           type: array
           items: { $ref: "#/components/schemas/BookingStatus" }
+        rental:
+          oneOf:
+            - type: "null"
+            - type: object
+              required: [checked_out_at, returned_at, out_condition, return_condition, late_days, late_fee_suggested]
+              properties:
+                checked_out_at: { type: [string, "null"], format: date-time }
+                returned_at: { type: [string, "null"], format: date-time }
+                out_condition: { type: [string, "null"] }
+                return_condition: { type: [string, "null"] }
+                late_days: { type: integer }
+                late_fee_suggested: { type: integer, format: int64 }
 
     BookingSummary:
       type: object

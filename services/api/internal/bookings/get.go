@@ -8,6 +8,7 @@ import (
 
 	"github.com/jackc/pgx/v5"
 
+	"github.com/omaradriano/local_bussiness/services/api/internal/steps"
 	"github.com/omaradriano/local_bussiness/services/api/internal/store"
 )
 
@@ -80,14 +81,16 @@ type Event struct {
 
 // Step is a copied workflow step (e.g. "Foto del INE" before checked_out) and its result.
 type Step struct {
-	ID          string     `json:"id"`
-	Label       string     `json:"label"`
-	StepType    string     `json:"step_type"`
-	ToStatus    *string    `json:"to_status"`
-	Required    bool       `json:"required"`
-	Status      string     `json:"status"` // pending | done | skipped
-	CompletedAt *time.Time `json:"completed_at"`
-	Files       []string   `json:"files"` // S3 keys (private buckets)
+	ID          string          `json:"id"`
+	Label       string          `json:"label"`
+	StepType    string          `json:"step_type"`
+	ToStatus    *string         `json:"to_status"`
+	Required    bool            `json:"required"`
+	Status      string          `json:"status"` // pending | done | skipped
+	CompletedAt *time.Time      `json:"completed_at"`
+	Files       []string        `json:"files"` // S3 keys (private buckets)
+	Config      json.RawMessage `json:"config"`
+	Bucket      string          `json:"bucket"` // where its files live ("" = no files)
 }
 
 // Get returns one booking of the business with its customer, lines and assigned staff/units.
@@ -144,7 +147,8 @@ func Get(ctx context.Context, db store.DB, businessID, id string) (Booking, erro
 	}
 
 	rows, err = db.Query(ctx, `select id::text, coalesce(step_snapshot->>'label', ''), coalesce(step_snapshot->>'step_type', ''),
-		step_snapshot->>'to_status', coalesce((step_snapshot->>'required')::boolean, true), status, completed_at, s3_keys
+		step_snapshot->>'to_status', coalesce((step_snapshot->>'required')::boolean, true), status, completed_at, s3_keys,
+		coalesce(step_snapshot->'config', '{}'), ''
 		from public.booking_steps where booking_id = $1 order by (step_snapshot->>'sort')::int nulls last, id`, b.ID)
 	if err != nil {
 		return b, err
@@ -154,6 +158,11 @@ func Get(ctx context.Context, db store.DB, businessID, id string) (Booking, erro
 	}
 	if b.Steps == nil {
 		b.Steps = []Step{}
+	}
+	for i := range b.Steps {
+		if st, ok := steps.Lookup(b.Steps[i].StepType); ok {
+			b.Steps[i].Bucket = st.Bucket(b.Steps[i].Config)
+		}
 	}
 	if b.Kind == "rental" {
 		var r RentalInfo
