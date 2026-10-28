@@ -107,6 +107,16 @@ func CompleteStep(ctx context.Context, db store.DB, businessID, bookingID, stepI
 		bookingID, stepID, data, sub.Files, actor, now); err != nil {
 		return Booking{}, err
 	}
+	// A customer document (ID, proof of address) also goes to the customer's profile, so the
+	// next rental doesn't ask for it again.
+	if _, err := tx.Exec(ctx, `
+		insert into public.customer_documents (business_id, customer_id, doc_type, s3_key, uploaded_by)
+		select b.business_id, b.customer_id, bs.step_snapshot->'config'->>'customer_doc', k, nullif($3, '')::uuid
+		from public.booking_steps bs join public.bookings b on b.id = bs.booking_id, unnest($4::text[]) k
+		where bs.booking_id = $1 and bs.id = $2 and bs.step_snapshot->'config'->>'customer_doc' is not null
+		on conflict (s3_key) do nothing`, bookingID, stepID, actor, sub.Files); err != nil {
+		return Booking{}, err
+	}
 	if err := tx.Commit(ctx); err != nil {
 		return Booking{}, err
 	}
@@ -127,6 +137,9 @@ func Checkout(ctx context.Context, db store.DB, businessID, bookingID, condition
 	}
 	if b.kind != "rental" || !CanTransition(b.kind, b.status, "checked_out") {
 		return Booking{}, Invalid{"status", fmt.Sprintf("No se puede registrar la salida de una renta «%s».", label(b.status))}
+	}
+	if err := satisfyFromCustomer(ctx, tx, bookingID, now); err != nil {
+		return Booking{}, err
 	}
 	if pending, err := pendingSteps(ctx, tx, bookingID, "checked_out"); err != nil || len(pending) > 0 {
 		if err != nil {
@@ -210,4 +223,22 @@ func LateDays(due, returned time.Time) int64 {
 		return 0
 	}
 	return int64((late + 24*time.Hour - 1) / (24 * time.Hour))
+}
+
+// satisfyFromCustomer completes the pending "customer document" steps (config.customer_doc) with
+// what's already in the customer's profile; a trusted customer satisfies them all.
+func satisfyFromCustomer(ctx context.Context, tx pgx.Tx, bookingID string, now time.Time) error {
+	_, err := tx.Exec(ctx, `
+		update public.booking_steps bs
+		set status = 'done', completed_at = $2, data = '{"from_customer": true}',
+		    s3_keys = coalesce((select array_agg(cd.s3_key order by cd.created_at desc) from public.customer_documents cd
+		                        where cd.customer_id = b.customer_id and cd.doc_type = bs.step_snapshot->'config'->>'customer_doc'), '{}')
+		from public.bookings b
+		join public.customers c on c.id = b.customer_id
+		where bs.booking_id = $1 and b.id = $1 and bs.status = 'pending'
+		  and bs.step_snapshot->'config' ? 'customer_doc'
+		  and (c.trusted or exists (select 1 from public.customer_documents cd
+		                            where cd.customer_id = b.customer_id and cd.doc_type = bs.step_snapshot->'config'->>'customer_doc'))`,
+		bookingID, now)
+	return err
 }

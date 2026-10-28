@@ -91,7 +91,9 @@ type Step struct {
 	CompletedAt *time.Time      `json:"completed_at"`
 	Files       []string        `json:"files"` // S3 keys (private buckets)
 	Config      json.RawMessage `json:"config"`
-	Bucket      string          `json:"bucket"` // where its files live ("" = no files)
+	Bucket      string          `json:"bucket"`       // where its files live ("" = no files)
+	CustomerDoc string          `json:"customer_doc"` // "" or the customer document it takes (ine, proof_of_address)
+	OnFile      bool            `json:"on_file"`      // that document is already in the customer's profile (or they're trusted)
 }
 
 // Get returns one booking of the business with its customer, lines and assigned staff/units.
@@ -147,10 +149,13 @@ func Get(ctx context.Context, db store.DB, businessID, id string) (Booking, erro
 		return b, err
 	}
 
-	rows, err = db.Query(ctx, `select id::text, coalesce(step_snapshot->>'label', ''), coalesce(step_snapshot->>'step_type', ''),
-		step_snapshot->>'to_status', coalesce((step_snapshot->>'required')::boolean, true), status, completed_at, s3_keys,
-		coalesce(step_snapshot->'config', '{}'), ''
-		from public.booking_steps where booking_id = $1 order by (step_snapshot->>'sort')::int nulls last, id`, b.ID)
+	rows, err = db.Query(ctx, `select bs.id::text, coalesce(bs.step_snapshot->>'label', ''), coalesce(bs.step_snapshot->>'step_type', ''),
+		bs.step_snapshot->>'to_status', coalesce((bs.step_snapshot->>'required')::boolean, true), bs.status, bs.completed_at, bs.s3_keys,
+		coalesce(bs.step_snapshot->'config', '{}'), '', coalesce(bs.step_snapshot->'config'->>'customer_doc', ''),
+		bs.step_snapshot->'config' ? 'customer_doc' and (c.trusted or exists (select 1 from public.customer_documents cd
+		  where cd.customer_id = c.id and cd.doc_type = bs.step_snapshot->'config'->>'customer_doc'))
+		from public.booking_steps bs join public.bookings bk on bk.id = bs.booking_id join public.customers c on c.id = bk.customer_id
+		where bs.booking_id = $1 order by (bs.step_snapshot->>'sort')::int nulls last, bs.id`, b.ID)
 	if err != nil {
 		return b, err
 	}

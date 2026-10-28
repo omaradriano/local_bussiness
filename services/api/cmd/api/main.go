@@ -19,6 +19,7 @@ import (
 	"github.com/omaradriano/local_bussiness/services/api/internal/businesses"
 
 	"github.com/omaradriano/local_bussiness/services/api/internal/catalog"
+	"github.com/omaradriano/local_bussiness/services/api/internal/customers"
 	"github.com/omaradriano/local_bussiness/services/api/internal/files"
 	"github.com/omaradriano/local_bussiness/services/api/internal/httpapi"
 	"github.com/omaradriano/local_bussiness/services/api/internal/jobs"
@@ -73,6 +74,7 @@ func run(log *slog.Logger) error {
 			Availability: availability.Loader{DB: pool},
 			Bookings:     bookings.Repo{DB: pool},
 			Settings:     settings.Repo{DB: pool},
+			Customers:    customers.Repo{DB: pool},
 			CreateBusiness: func(ctx context.Context, userID string, in businesses.Input) (businesses.Business, error) {
 				return businesses.Create(ctx, pool, userID, in)
 			},

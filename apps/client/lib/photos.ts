@@ -79,3 +79,16 @@ export async function uploadStepPhoto(businessId: string, bookingId: string, ste
   if (!put.ok) return { error: `${strings.common.error} (S3 ${put.status})` };
   return { key: created.data.key };
 }
+
+/** Upload a picked photo of a customer document to the private bucket; returns the key or an error message. */
+export async function uploadCustomerDoc(businessId: string, customerId: string, docType: 'ine' | 'proof_of_address' | 'guarantor_id', photo: PickedPhoto): Promise<{ key: string } | { error: string }> {
+  const blob = await (await fetch(photo.uri)).blob();
+  const created = await api.POST('/v1/b/{businessId}/customers/{customerId}/uploads', {
+    params: { path: { businessId, customerId } },
+    body: { doc_type: docType, content_type: 'image/jpeg', size: blob.size },
+  });
+  if (!created.data) return { error: fieldErrors(created.error).file ?? errorText(created.error, created.response.status) };
+  const put = await fetch(created.data.upload_url, { method: 'PUT', headers: created.data.upload_headers, body: blob });
+  if (!put.ok) return { error: `${strings.common.error} (S3 ${put.status})` };
+  return { key: created.data.key };
+}

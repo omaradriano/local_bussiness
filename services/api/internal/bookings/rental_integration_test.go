@@ -109,3 +109,54 @@ func TestIntegrationLateReturnSuggestsFee(t *testing.T) {
 		t.Fatalf("late return: %+v %v", b.Rental, err)
 	}
 }
+
+func TestIntegrationCustomerDocsAreReused(t *testing.T) {
+	p := pool(t)
+	ctx := context.Background()
+	f := setup(t, p, "tool_rental", `{"security_deposit_enabled": false}`)
+	if _, err := p.Exec(ctx, `delete from public.workflow_steps where business_id = $1`, f.business); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := p.Exec(ctx, `insert into public.workflow_steps (business_id, applies_to_kind, actor, moment, to_status, step_type, label, config, sort) values
+		  ($1, 'rental', 'business', 'before_status', 'checked_out', 'photo', 'Foto del INE', '{"bucket":"private-docs","customer_doc":"ine"}', 1),
+		  ($1, 'rental', 'business', 'before_status', 'checked_out', 'photo', 'Comprobante de domicilio', '{"bucket":"private-docs","customer_doc":"proof_of_address"}', 2)`, f.business); err != nil {
+		t.Fatal(err)
+	}
+	rent := func(start, end string) Booking {
+		b, _, err := Create(ctx, p, f.business, CreateInput{Customer: cust("6143030001"), ItemID: f.item, StartsAt: at(start), EndsAt: at(end), Source: "admin"}, now)
+		if err != nil {
+			t.Fatal(err)
+		}
+		return b
+	}
+	ok := func(context.Context, string, string) error { return nil }
+
+	first := rent("2026-11-02T15:00:00Z", "2026-11-03T15:00:00Z")
+	var sp StepsPending
+	if _, err := Checkout(ctx, p, f.business, first.ID, "", "", now); !errors.As(err, &sp) || len(sp.Labels) != 2 {
+		t.Fatalf("new customer, nothing on file: %v", err)
+	}
+	// The ID uploaded on this rental goes to the customer's profile too.
+	if _, err := CompleteStep(ctx, p, f.business, first.ID, first.Steps[0].ID, steps.Submission{Files: []string{NewFileKey(f.business, first.ID, "jpg")}}, "", now, ok); err != nil {
+		t.Fatal(err)
+	}
+
+	second := rent("2026-11-05T15:00:00Z", "2026-11-06T15:00:00Z")
+	if !second.Steps[0].OnFile || second.Steps[1].OnFile {
+		t.Fatalf("on file flags: %+v", second.Steps)
+	}
+	if _, err := Checkout(ctx, p, f.business, second.ID, "", "", now); !errors.As(err, &sp) || len(sp.Labels) != 1 || sp.Labels[0] != "Comprobante de domicilio" {
+		t.Fatalf("ID on file, proof missing: %v", err)
+	}
+	// A trusted customer doesn't need documents.
+	if _, err := p.Exec(ctx, `update public.customers set trusted = true where business_id = $1`, f.business); err != nil {
+		t.Fatal(err)
+	}
+	b, err := Checkout(ctx, p, f.business, second.ID, "", "", now)
+	if err != nil || b.Status != "checked_out" {
+		t.Fatalf("trusted customer checkout: %v %v", b.Status, err)
+	}
+	if b.Steps[0].Status != "done" || len(b.Steps[0].Files) != 1 {
+		t.Fatalf("ID step filled from the profile: %+v", b.Steps[0])
+	}
+}
