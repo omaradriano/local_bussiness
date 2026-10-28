@@ -2,7 +2,8 @@ import type { components } from '@lb/api-client';
 import { splitE164, strings, toE164, type CountryCode } from '@lb/shared';
 import { ZoomableImage } from './ZoomableImage';
 import { useState } from 'react';
-import { Button, Pressable, Switch, Text, TextInput, View } from 'react-native';
+import { Pressable, Switch, Text, TextInput, View } from 'react-native';
+import { Button } from '../ui';
 import { api } from '../lib/api';
 import { errorText, fieldErrors } from '../lib/errors';
 import { pickPhotos, uploadCustomerDoc } from '../lib/photos';
@@ -86,8 +87,8 @@ export function CustomerForm({ businessId, customer, isOwner, onSaved, onExistin
         </View>
       )}
       {message && <Text accessibilityRole="alert">{message}</Text>}
-      {existing && onExisting && <Button title={t.openExisting} onPress={() => onExisting(existing)} />}
-      <Button title={busy ? '…' : t.save} onPress={save} disabled={busy} />
+      {existing && onExisting && <Button onPress={() => onExisting(existing)}>{t.openExisting}</Button>}
+      <Button onPress={save} disabled={busy}>{busy ? '…' : t.save}</Button>
     </View>
   );
 }
@@ -136,7 +137,7 @@ export function CustomerDocuments({ businessId, customer, isOwner, onChange }: {
       {(['ine', 'proof_of_address', 'guarantor_id'] as const).map((type) => {
         const docs = customer.documents.filter((d) => d.doc_type === type);
         return (
-          <View key={type} style={{ borderWidth: 1, borderRadius: 8, padding: 10, gap: 6 }}>
+          <View key={type} style={{ borderRadius: 12, padding: 12, backgroundColor: 'rgba(118,118,128,0.12)', gap: 6 }}>
             <Text>{docs.length ? '✓' : '○'} {t.docTypes[type]} · {docs.length ? t.hasDoc(docs.length) : t.noDoc}</Text>
             <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: 8 }}>
               {docs.map((d) => (
@@ -150,7 +151,7 @@ export function CustomerDocuments({ businessId, customer, isOwner, onChange }: {
                 </View>
               ))}
             </View>
-            <Button title={busy === type ? '…' : t.addDoc} onPress={() => add(type)} disabled={busy !== null} />
+            <Button onPress={() => add(type)} disabled={busy !== null}>{busy === type ? '…' : t.addDoc}</Button>
           </View>
         );
       })}

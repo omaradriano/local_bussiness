@@ -2,7 +2,8 @@ import type { components } from '@lb/api-client';
 import { strings } from '@lb/shared';
 import { ZoomableImage } from './ZoomableImage';
 import { useState } from 'react';
-import { Button, Pressable, Text, TextInput, View } from 'react-native';
+import { Pressable, Text, TextInput, View } from 'react-native';
+import { Button } from '../ui';
 import { api } from '../lib/api';
 import { errorText, fieldErrors } from '../lib/errors';
 import { pickPhotos, uploadStepPhoto } from '../lib/photos';
@@ -66,7 +67,7 @@ export function StepCard({ businessId, bookingId, step, editable, onDone }: {
   const done = step.status === 'done';
   const target = step.to_status ? ` · antes de «${t.status[step.to_status as Booking['status']] ?? step.to_status}»` : '';
   return (
-    <View style={{ borderWidth: 1, borderRadius: 8, padding: 10, gap: 6 }}>
+    <View style={{ borderRadius: 12, padding: 12, backgroundColor: 'rgba(118,118,128,0.12)', gap: 6 }}>
       <Text style={{ fontWeight: '600' }}>{done ? '✓' : '○'} {step.label}{step.required ? '' : ' (opcional)'}</Text>
       <Text style={{ opacity: 0.7 }}>{done ? t.stepDone : t.stepPending}{target}</Text>
       {step.customer_doc !== '' && <Text style={{ opacity: 0.7 }}>{step.on_file ? `✓ ${strings.customers.fromProfile}` : strings.customers.missingDocs(strings.customers.docTypes[step.customer_doc] ?? step.label)}</Text>}
@@ -84,16 +85,16 @@ export function StepCard({ businessId, bookingId, step, editable, onDone }: {
       {!done && editable && !step.on_file && (
         <>
           {(step.step_type === 'photo' || step.step_type === 'file_upload') && (
-            <Button title={busy ? '…' : t.addStepPhotos} onPress={addPhotos} disabled={busy} />
+            <Button onPress={addPhotos} disabled={busy}>{busy ? '…' : t.addStepPhotos}</Button>
           )}
           {(step.step_type === 'text' || step.step_type === 'number') && (
             <>
               <TextInput accessibilityLabel={step.label} placeholder={step.step_type === 'text' ? t.stepText : t.stepNumber} value={text} onChangeText={setText}
                 keyboardType={step.step_type === 'number' ? 'decimal-pad' : 'default'} style={{ borderWidth: 1, borderRadius: 6, padding: 8 }} />
-              <Button title={t.completeStep} disabled={busy} onPress={() => {
+              <Button disabled={busy} onPress={() => {
                 setBusy(true);
                 submit({ data: step.step_type === 'text' ? { text } : { value: Number(text) } });
-              }} />
+              }}>{t.completeStep}</Button>
             </>
           )}
           {step.step_type === 'checklist' && (
@@ -104,7 +105,7 @@ export function StepCard({ businessId, bookingId, step, editable, onDone }: {
                   <Text>{checked[it] ? '☑' : '☐'}</Text><Text>{it}</Text>
                 </Pressable>
               ))}
-              <Button title={t.completeStep} disabled={busy} onPress={() => { setBusy(true); submit({ data: { checked } }); }} />
+              <Button onPress={() => { setBusy(true); submit({ data: { checked } }); }} disabled={busy}>{t.completeStep}</Button>
             </>
           )}
         </>

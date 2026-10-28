@@ -2,7 +2,7 @@ import type { components } from '@lb/api-client';
 import { addDays, firstOfMonth, parsePesos, formatMXN, hhmm, lastOfMonth, localToISO, strings, term, todayISO } from '@lb/shared';
 import { Link, router, Stack, useLocalSearchParams } from 'expo-router';
 import { useEffect, useMemo, useState } from 'react';
-import { ActivityIndicator, Button, Pressable, ScrollView, Text, TextInput, View } from 'react-native';
+import { ActivityIndicator, View } from 'react-native';
 import { Calendar, type DayInfo } from '../../../../../components/Calendar';
 import type { Customer } from '../../../../../components/CustomerForm';
 import { CustomerPicker } from '../../../../../components/CustomerPicker';
@@ -10,6 +10,7 @@ import { api } from '../../../../../lib/api';
 import { errorText, fieldErrors } from '../../../../../lib/errors';
 import { useBusiness } from '../../../../../lib/useMe';
 import { useSettings } from '../../../../../lib/useSettings';
+import { Button, Chip, Chips, Field as UIField, Notice, Row, Screen, Segmented, Step, Text, type StepState } from '../../../../../ui';
 
 type Item = components['schemas']['CatalogItem'];
 type Availability = components['schemas']['Availability'];
@@ -17,28 +18,13 @@ type Slot = NonNullable<Availability['slots']>[number];
 type Day = NonNullable<Availability['days']>[number];
 const t = strings.bookings;
 
-const input = { borderWidth: 1, borderRadius: 6, padding: 10 } as const;
-
-function Choice({ selected, label, onPress }: { selected: boolean; label: string; onPress: () => void }) {
-  return (
-    <Pressable accessibilityRole="radio" accessibilityState={{ checked: selected }} onPress={onPress}
-      style={{ borderWidth: selected ? 2 : 1, borderRadius: 6, paddingVertical: 8, paddingHorizontal: 10 }}>
-      <Text>{label}</Text>
-    </Pressable>
-  );
-}
-
-function Field({ label, value, onChange, error, keyboard }: {
-  label: string; value: string; onChange: (v: string) => void; error?: string; keyboard?: 'phone-pad' | 'numeric';
+function Field({ label, value, onChange, error, keyboard, hint }: {
+  label: string; value: string; onChange: (v: string) => void; error?: string; keyboard?: 'phone-pad' | 'numeric'; hint?: string;
 }) {
-  return (
-    <View style={{ gap: 4 }}>
-      <Text>{label}</Text>
-      <TextInput accessibilityLabel={label} value={value} onChangeText={onChange} keyboardType={keyboard} style={input} />
-      {error && <Text accessibilityRole="alert">{error}</Text>}
-    </View>
-  );
+  return <UIField label={label} value={value} onChangeText={onChange} keyboardType={keyboard} error={error} hint={hint} />;
 }
+
+type Quote = { total: number; security_deposit: number; periods: number };
 
 export default function NewBooking() {
   const { businessId } = useLocalSearchParams<{ businessId: string }>();
@@ -64,7 +50,7 @@ export default function NewBooking() {
   const [zone, setZone] = useState('');
   const [customer, setCustomer] = useState<Customer | null>(null);
   const [notes, setNotes] = useState('');
-  const [payMode, setPayMode] = useState<'none' | 'total' | 'partial'>('total'); // usually paid in full up front
+  const [payMode, setPayMode] = useState<'none' | 'total' | 'partial'>('none'); // the real payment is usually at check-out
   const [payMethod, setPayMethod] = useState<'cash' | 'transfer' | 'card'>('cash');
   const [payAmount, setPayAmount] = useState('');
 
@@ -126,6 +112,18 @@ export default function NewBooking() {
     api.GET('/v1/b/{businessId}/availability', { params: { path: { businessId }, query: { item_id: item.id, from: outISO, to: backISO, quantity: qty } } })
       .then(({ data, error, response }) => (data ? setExact(data) : setMessage(errorText(error, response.status))));
   }, [businessId, item, outISO, backISO, qty]);
+
+  // Price as soon as the dates (or the slot) are known: the API applies the same rules as when creating.
+  const [quote, setQuote] = useState<Quote | null>(null);
+  const quoteStart = item?.kind === 'service' ? slot?.starts_at : outISO;
+  const quoteReady = !!item && !!quoteStart && (item.kind !== 'rental' || !!exact?.available);
+  useEffect(() => {
+    setQuote(null);
+    if (!item || !quoteReady || !quoteStart) return;
+    api.GET('/v1/b/{businessId}/quote', {
+      params: { path: { businessId }, query: { item_id: item.id, quantity: qty, starts_at: quoteStart, ...(item.kind === 'rental' && backISO ? { ends_at: backISO } : {}) } },
+    }).then(({ data }) => setQuote(data ?? null));
+  }, [businessId, item, qty, quoteStart, backISO, quoteReady]);
 
   function dayInfo(date: string): DayInfo {
     if (date < today) return { disabled: true };
@@ -189,108 +187,135 @@ export default function NewBooking() {
   if (!business || !items) return <ActivityIndicator style={{ marginTop: 24 }} />;
   const bookingTerm = term(business.vertical, 'booking') ?? '';
   const canSave = !!item && (item.kind === 'service' ? !!slot : item.kind === 'product' ? !!from && !!outISO : !!exact?.available);
+  const paidNow = payMode === 'total' ? quote?.total ?? 0 : payMode === 'partial' ? parsePesos(payAmount) ?? 0 : 0;
+  const remaining = quote ? Math.max(quote.total - paidNow, 0) : null;
+  // Each step is done once its data is there; the first one not done is the current one.
+  const doneFlags = [!!item, canSave, !!customer, true];
+  const current = doneFlags.indexOf(false);
+  const state = (i: number): StepState => (doneFlags[i] && (current === -1 || i < current) ? 'done' : i === current || current === -1 ? 'current' : 'upcoming');
+  const s = t.flow;
 
   return (
-    <ScrollView contentContainerStyle={{ padding: 16, gap: 14, maxWidth: 560, width: '100%', alignSelf: 'center' }}>
+    <Screen>
       <Stack.Screen options={{ title: t.new(bookingTerm) }} />
+      <View style={{ gap: 16 }}>
+        <Step n={1} title={s.item.title(term(business.vertical, 'catalog_item') ?? '')} description={s.item.description} state={state(0)}>
+          <Chips>
+            {items.map((i) => (
+              <Chip key={i.id} selected={i.id === itemId} onPress={() => setItemId(i.id)}>{`${i.name} · ${formatMXN(i.price)}`}</Chip>
+            ))}
+          </Chips>
+          {item && item.kind !== 'service' && (
+            <Field label={t.quantity} value={quantity} onChange={setQuantity} keyboard="numeric" error={errors.quantity} />
+          )}
+        </Step>
 
-      <Text style={{ fontWeight: '600' }}>{term(business.vertical, 'catalog_item')}</Text>
-      <View accessibilityRole="radiogroup" style={{ gap: 6 }}>
-        {items.map((i) => (
-          <Choice key={i.id} selected={i.id === itemId} label={`${i.name} · ${formatMXN(i.price)}`} onPress={() => setItemId(i.id)} />
-        ))}
+        <Step n={2} title={item?.kind === 'rental' ? s.dates.title : s.when.title}
+          description={item?.kind === 'rental' ? s.dates.description : s.when.description} state={state(1)}>
+          {item && (
+            <>
+              <Text variant="subhead" color="labelSecondary">
+                {item.kind === 'rental' ? (from && !to ? t.pickReturn : t.pickRange) : t.pickDay}
+              </Text>
+              <Calendar month={month} onMonthChange={setMonth} minMonth={firstOfMonth(today)} from={from} to={item.kind === 'rental' ? to : null}
+                onSelect={pick} dayInfo={dayInfo} />
+              {item.kind === 'rental' && (settings?.rentals.rentals_span_closed_days ?? true) && <Text variant="footnote" color="labelSecondary">{t.closedDayHint}</Text>}
+              {daysState !== 'loading' && daysState !== 'ready' && <Notice tone="warning">{daysState}</Notice>}
+              {item.kind === 'rental' && daysState === 'ready' && Object.values(days).every((d) => d.remaining === 0) && (
+                <Link href={{ pathname: '/admin/[businessId]/catalog/[itemId]', params: { businessId, itemId: item.id } }}>
+                  <Text style={{ textDecorationLine: 'underline' }}>{t.noUnits}</Text>
+                </Link>
+              )}
+            </>
+          )}
+
+          {item?.kind === 'service' && from && (
+            <>
+              {slots === null && <ActivityIndicator />}
+              {slots?.length === 0 && <Text>{t.noSlots}</Text>}
+              {!!slots?.length && (
+                <Chips>
+                  {slots.map((sl) => (
+                    <Chip key={sl.starts_at} selected={slot?.starts_at === sl.starts_at} onPress={() => { setSlot(sl); setStaffId(null); }}>{hhmm(sl.starts_at)}</Chip>
+                  ))}
+                </Chips>
+              )}
+              {slot && slot.staff_ids.length > 1 && (
+                <>
+                  <Text variant="subhead" color="labelSecondary">{t.attendedBy}</Text>
+                  <Chips>
+                    <Chip selected={staffId === null} onPress={() => setStaffId(null)}>{t.anyone}</Chip>
+                    {slot.staff_ids.map((id) => (
+                      <Chip key={id} selected={staffId === id} onPress={() => setStaffId(id)}>{staffNames[id] ?? id.slice(0, 6)}</Chip>
+                    ))}
+                  </Chips>
+                </>
+              )}
+            </>
+          )}
+
+          {item?.kind === 'product' && from && (
+            <>
+              <Field label={t.deliveryTime} value={time} onChange={setTime} error={errors.starts_at} />
+              <Segmented options={[{ value: 'pickup', label: t.pickup }, { value: 'delivery', label: t.delivery }]} value={fulfillment} onChange={setFulfillment} />
+              {fulfillment === 'delivery' && (
+                <>
+                  <Field label={t.address} value={address} onChange={setAddress} error={errors.delivery_address} />
+                  <Field label={t.zone} value={zone} onChange={setZone} error={errors.delivery_zone} />
+                </>
+              )}
+            </>
+          )}
+
+          {item?.kind === 'rental' && from && (
+            <View style={{ flexDirection: 'row', gap: 12 }}>
+              <View style={{ flex: 1 }}><Field label={t.outTime} value={time} onChange={setTime} hint={s.dates.timeHint} /></View>
+              {to && <View style={{ flex: 1 }}><Field label={t.backTime} value={backTime} onChange={setBackTime} error={errors.ends_at} /></View>}
+            </View>
+          )}
+          {item?.kind === 'rental' && to && !exact && !message && <Text color="labelSecondary">{t.checking}</Text>}
+          {item?.kind === 'rental' && exact && (
+            <Notice tone={exact.available ? 'success' : 'warning'}>{exact.available ? t.free(exact.free_units?.length ?? 0) : t.notEnough}</Notice>
+          )}
+          {quote && (
+            <View style={{ gap: 6 }}>
+              {item?.kind === 'rental' && <Row label={s.dates.days} value={String(quote.periods)} />}
+              <Row label={t.total} value={formatMXN(quote.total)} strong />
+              {quote.security_deposit > 0 && <Row label={s.dates.deposit} value={formatMXN(quote.security_deposit)} />}
+            </View>
+          )}
+        </Step>
+
+        <Step n={3} title={s.customer.title} description={s.customer.description} state={state(2)}>
+          {item && (
+            <CustomerPicker businessId={businessId} isOwner={business.role === 'owner'} value={customer} onChange={setCustomer}
+              error={errors['customer.id'] ?? errors['customer.name']} />
+          )}
+        </Step>
+
+        <Step n={4} title={s.payment.title} description={s.payment.description} state={item ? state(3) : 'upcoming'}>
+          {item && (
+            <>
+              <Segmented options={(['none', 'total', 'partial'] as const).map((m) => ({ value: m, label: t.payModes[m] }))} value={payMode} onChange={setPayMode} />
+              {payMode !== 'none' && (
+                <Segmented options={(['cash', 'transfer', 'card'] as const).map((m) => ({ value: m, label: t.methods[m] }))} value={payMethod} onChange={setPayMethod} />
+              )}
+              {payMode === 'partial' && <Field label={t.amount} value={payAmount} onChange={setPayAmount} keyboard="numeric" error={errors.amount} />}
+              {quote && (
+                <View style={{ gap: 6 }}>
+                  <Row label={t.total} value={formatMXN(quote.total)} />
+                  <Row label={s.payment.now} value={formatMXN(paidNow)} />
+                  <Row label={s.payment.remaining} value={formatMXN(remaining ?? 0)} strong />
+                </View>
+              )}
+              <Field label={t.notes} value={notes} onChange={setNotes} />
+              {Object.entries(errors).filter(([k]) => k.startsWith('options.')).map(([k, v]) => <Notice key={k} tone="warning">{v}</Notice>)}
+              {message && <Notice tone="warning">{message}</Notice>}
+              <Button variant="primary" busy={busy} onPress={save} disabled={!canSave || !customer}>{t.save}</Button>
+            </>
+          )}
+        </Step>
       </View>
-
-      {item && item.kind !== 'service' && (
-        <Field label={t.quantity} value={quantity} onChange={setQuantity} keyboard="numeric" error={errors.quantity} />
-      )}
-
-      {item && (
-        <>
-          <Text>{item.kind === 'rental' ? (from && !to ? t.pickReturn : t.pickRange) : t.pickDay}</Text>
-          {item.kind === 'rental' && (settings?.rentals.rentals_span_closed_days ?? true) && <Text style={{ opacity: 0.7 }}>{t.closedDayHint}</Text>}
-          <Calendar month={month} onMonthChange={setMonth} minMonth={firstOfMonth(today)} from={from} to={item.kind === 'rental' ? to : null}
-            onSelect={pick} dayInfo={dayInfo} />
-          {daysState !== 'loading' && daysState !== 'ready' && <Text accessibilityRole="alert">{daysState}</Text>}
-          {item.kind === 'rental' && daysState === 'ready' && Object.values(days).every((d) => d.remaining === 0) && (
-            <Link href={{ pathname: '/admin/[businessId]/catalog/[itemId]', params: { businessId, itemId: item.id } }}>
-              <Text accessibilityRole="alert" style={{ textDecorationLine: 'underline' }}>{t.noUnits}</Text>
-            </Link>
-          )}
-        </>
-      )}
-
-      {item?.kind === 'service' && from && (
-        <>
-          {slots === null && <ActivityIndicator />}
-          {slots?.length === 0 && <Text>{t.noSlots}</Text>}
-          {!!slots?.length && (
-            <View accessibilityRole="radiogroup" style={{ flexDirection: 'row', flexWrap: 'wrap', gap: 6 }}>
-              {slots.map((s) => (
-                <Choice key={s.starts_at} selected={slot?.starts_at === s.starts_at} label={hhmm(s.starts_at)} onPress={() => { setSlot(s); setStaffId(null); }} />
-              ))}
-            </View>
-          )}
-          {slot && slot.staff_ids.length > 1 && (
-            <>
-              <Text>{t.attendedBy}</Text>
-              <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: 6 }}>
-                <Choice selected={staffId === null} label={t.anyone} onPress={() => setStaffId(null)} />
-                {slot.staff_ids.map((id) => (
-                  <Choice key={id} selected={staffId === id} label={staffNames[id] ?? id.slice(0, 6)} onPress={() => setStaffId(id)} />
-                ))}
-              </View>
-            </>
-          )}
-        </>
-      )}
-
-      {item?.kind === 'product' && from && (
-        <>
-          <Field label={t.deliveryTime} value={time} onChange={setTime} error={errors.starts_at} />
-          <View style={{ flexDirection: 'row', gap: 6 }}>
-            <Choice selected={fulfillment === 'pickup'} label={t.pickup} onPress={() => setFulfillment('pickup')} />
-            <Choice selected={fulfillment === 'delivery'} label={t.delivery} onPress={() => setFulfillment('delivery')} />
-          </View>
-          {fulfillment === 'delivery' && (
-            <>
-              <Field label={t.address} value={address} onChange={setAddress} error={errors.delivery_address} />
-              <Field label={t.zone} value={zone} onChange={setZone} error={errors.delivery_zone} />
-            </>
-          )}
-        </>
-      )}
-
-      {item?.kind === 'rental' && from && (
-        <>
-          <Field label={t.outTime} value={time} onChange={setTime} />
-          {to && <Field label={t.backTime} value={backTime} onChange={setBackTime} error={errors.ends_at} />}
-          {to && !exact && !message && <Text>{t.checking}</Text>}
-          {exact && <Text>{exact.available ? t.free(exact.free_units?.length ?? 0) : t.notEnough}</Text>}
-        </>
-      )}
-
-      {item && (
-        <>
-          <Text style={{ fontWeight: '600' }}>{t.customer}</Text>
-          <CustomerPicker businessId={businessId} isOwner={business.role === 'owner'} value={customer} onChange={setCustomer}
-            error={errors['customer.id'] ?? errors['customer.name']} />
-          <Field label={t.notes} value={notes} onChange={setNotes} />
-          <Text style={{ fontWeight: '600' }}>{t.initialPayment}</Text>
-          <View accessibilityRole="radiogroup" style={{ flexDirection: 'row', gap: 8, flexWrap: 'wrap' }}>
-            {(['total', 'partial', 'none'] as const).map((m) => <Choice key={m} selected={payMode === m} label={t.payModes[m]} onPress={() => setPayMode(m)} />)}
-          </View>
-          {payMode !== 'none' && (
-            <View accessibilityRole="radiogroup" style={{ flexDirection: 'row', gap: 8, flexWrap: 'wrap' }}>
-              {(['cash', 'transfer', 'card'] as const).map((m) => <Choice key={m} selected={payMethod === m} label={t.methods[m]} onPress={() => setPayMethod(m)} />)}
-            </View>
-          )}
-          {payMode === 'partial' && <Field label={t.amount} value={payAmount} onChange={setPayAmount} keyboard="numeric" error={errors.amount} />}
-          {Object.entries(errors).filter(([k]) => k.startsWith('options.')).map(([k, v]) => <Text key={k} accessibilityRole="alert">{v}</Text>)}
-          {message && <Text accessibilityRole="alert">{message}</Text>}
-          <Button title={busy ? '…' : t.save} onPress={save} disabled={busy || !canSave} />
-        </>
-      )}
-    </ScrollView>
+    </Screen>
   );
 }

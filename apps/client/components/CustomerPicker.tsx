@@ -1,6 +1,7 @@
 import { formatPhone, strings } from '@lb/shared';
 import { useEffect, useState } from 'react';
-import { Button, Pressable, ScrollView, Text, TextInput, View } from 'react-native';
+import { Pressable, ScrollView, Text, TextInput, View } from 'react-native';
+import { Button } from '../ui';
 import { api } from '../lib/api';
 import { CustomerForm, type Customer } from './CustomerForm';
 
@@ -42,7 +43,7 @@ export function CustomerPicker({ businessId, isOwner, value, onChange, error }: 
   if (value) {
     const missing = missingDocs(value);
     return (
-      <View style={{ borderWidth: 1, borderRadius: 8, padding: 10, gap: 4 }}>
+      <View style={{ borderRadius: 12, padding: 12, backgroundColor: 'rgba(118,118,128,0.12)', gap: 4 }}>
         <Text style={{ fontWeight: '600' }}>{value.name}{value.trusted ? ` · ${t.trustedBadge}` : ''}</Text>
         <Text>{formatPhone(value.phone)}</Text>
         {value.address && <Text style={{ opacity: 0.7 }}>{value.address}</Text>}
@@ -62,7 +63,7 @@ export function CustomerPicker({ businessId, isOwner, value, onChange, error }: 
             const { data } = await api.GET('/v1/b/{businessId}/customers/{customerId}/', { params: { path: { businessId, customerId: id } } });
             if (data) { setCreating(false); onChange(data); }
           }} />
-        <Button title={strings.common.cancel} onPress={() => setCreating(false)} />
+        <Button onPress={() => setCreating(false)}>{strings.common.cancel}</Button>
       </View>
     );
   }
@@ -70,7 +71,7 @@ export function CustomerPicker({ businessId, isOwner, value, onChange, error }: 
   return (
     <View style={{ gap: 6 }}>
       <TextInput accessibilityLabel={t.search} placeholder={t.search} value={q} onChangeText={setQ}
-        style={{ borderWidth: 1, borderRadius: 6, padding: 10 }} />
+        style={{ borderRadius: 10, padding: 12, backgroundColor: 'rgba(118,118,128,0.12)' }} />
       <Pressable accessibilityRole="button" accessibilityState={{ expanded: listOpen }} onPress={toggleList}
         style={{ borderWidth: 1, borderRadius: 6, padding: 10, flexDirection: 'row', justifyContent: 'space-between' }}>
         <Text>{t.registered}</Text><Text>{listOpen ? '▴' : '▾'}</Text>
