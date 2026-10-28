@@ -1,6 +1,6 @@
 import { formatPhone, strings } from '@lb/shared';
 import { useEffect, useState } from 'react';
-import { Button, Pressable, Text, TextInput, View } from 'react-native';
+import { Button, Pressable, ScrollView, Text, TextInput, View } from 'react-native';
 import { api } from '../lib/api';
 import { CustomerForm, type Customer } from './CustomerForm';
 
@@ -19,6 +19,16 @@ export function CustomerPicker({ businessId, isOwner, value, onChange, error }: 
   const [q, setQ] = useState('');
   const [results, setResults] = useState<Customer[]>([]);
   const [creating, setCreating] = useState(false);
+  const [all, setAll] = useState<Customer[] | null>(null); // the "select" of registered customers, loaded when opened
+  const [listOpen, setListOpen] = useState(false);
+
+  async function toggleList() {
+    if (!listOpen && !all) {
+      const { data } = await api.GET('/v1/b/{businessId}/customers', { params: { path: { businessId }, query: { limit: 100 } } });
+      setAll((data?.customers ?? []).sort((a, b) => a.name.localeCompare(b.name, 'es')));
+    }
+    setListOpen(!listOpen);
+  }
 
   useEffect(() => {
     if (value || creating || !q.trim()) return setResults([]);
@@ -61,6 +71,20 @@ export function CustomerPicker({ businessId, isOwner, value, onChange, error }: 
     <View style={{ gap: 6 }}>
       <TextInput accessibilityLabel={t.search} placeholder={t.search} value={q} onChangeText={setQ}
         style={{ borderWidth: 1, borderRadius: 6, padding: 10 }} />
+      <Pressable accessibilityRole="button" accessibilityState={{ expanded: listOpen }} onPress={toggleList}
+        style={{ borderWidth: 1, borderRadius: 6, padding: 10, flexDirection: 'row', justifyContent: 'space-between' }}>
+        <Text>{t.registered}</Text><Text>{listOpen ? '▴' : '▾'}</Text>
+      </Pressable>
+      {listOpen && (
+        <ScrollView style={{ maxHeight: 260, borderWidth: 1, borderRadius: 6 }} nestedScrollEnabled>
+          {all?.length === 0 && <Text style={{ padding: 8 }}>{t.empty}</Text>}
+          {all?.map((c) => (
+            <Pressable key={c.id} accessibilityRole="button" onPress={() => { setListOpen(false); onChange(c); }} style={{ padding: 10, borderBottomWidth: 1, borderColor: '#ddd' }}>
+              <Text>{c.name} · {formatPhone(c.phone)}</Text>
+            </Pressable>
+          ))}
+        </ScrollView>
+      )}
       {results.map((c) => (
         <Pressable key={c.id} accessibilityRole="button" onPress={() => onChange(c)} style={{ borderWidth: 1, borderRadius: 6, padding: 8 }}>
           <Text>{c.name} · {formatPhone(c.phone)}</Text>

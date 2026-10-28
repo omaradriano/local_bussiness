@@ -1,6 +1,6 @@
 import type { components } from '@lb/api-client';
 import { strings } from '@lb/shared';
-import { Image } from 'expo-image';
+import { ZoomableImage } from './ZoomableImage';
 import { useState } from 'react';
 import { Button, Pressable, Text, TextInput, View } from 'react-native';
 import { api } from '../lib/api';
@@ -74,7 +74,7 @@ export function StepCard({ businessId, bookingId, step, editable, onDone }: {
       {done && step.files.length > 0 && step.bucket !== '' && (
         urls ? (
           <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: 6 }}>
-            {urls.map((u) => <Image key={u} source={u} style={{ width: 96, height: 96, borderRadius: 6 }} contentFit="cover" accessibilityLabel={step.label} />)}
+            {urls.map((u) => <ZoomableImage key={u} source={u} style={{ width: 96, height: 96, borderRadius: 6 }} contentFit="cover" accessibilityLabel={step.label} />)}
           </View>
         ) : (
           <Pressable accessibilityRole="button" onPress={showFiles}><Text style={{ textDecorationLine: 'underline' }}>{t.seeFiles} ({step.files.length})</Text></Pressable>

@@ -1,6 +1,6 @@
 import type { components } from '@lb/api-client';
 import { formatMXN, strings, term } from '@lb/shared';
-import { Image } from 'expo-image';
+import { ZoomableImage } from '../../../../../components/ZoomableImage';
 import { Link, router, Stack, useFocusEffect, useLocalSearchParams } from 'expo-router';
 import { useCallback, useState } from 'react';
 import { ActivityIndicator, Button, ScrollView, Text, View } from 'react-native';
@@ -58,7 +58,7 @@ export default function CatalogList() {
         <View key={it.id} style={{ borderWidth: 1, borderRadius: 8, padding: 12, gap: 4, opacity: it.active ? 1 : 0.55 }}>
           <View style={{ flexDirection: 'row', gap: 10, alignItems: 'center' }}>
             {it.images?.[0]?.urls?.thumb && (
-              <Image source={it.images[0].urls.thumb} placeholder={it.images[0].blurhash ? { blurhash: it.images[0].blurhash } : undefined}
+              <ZoomableImage source={it.images[0].urls.thumb} fullSource={it.images[0].urls.detail} placeholder={it.images[0].blurhash ? { blurhash: it.images[0].blurhash } : undefined}
                 style={{ width: 48, height: 48, borderRadius: 6 }} contentFit="cover" accessibilityLabel={it.name} />
             )}
             <Text style={{ fontWeight: '600', flexShrink: 1 }}>
@@ -67,7 +67,7 @@ export default function CatalogList() {
           </View>
           <Text>{detail(it)}</Text>
           {it.kind === 'rental' && (
-            <Link href={{ pathname: '/admin/[businessId]/catalog/[itemId]/units', params: { businessId, itemId: it.id } }}>
+            <Link href={{ pathname: '/admin/[businessId]/catalog/[itemId]', params: { businessId, itemId: it.id } }}>
               <Text style={{ textDecorationLine: 'underline' }}>{t.units}</Text>
             </Link>
           )}

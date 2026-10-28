@@ -207,7 +207,7 @@ export default function NewBooking() {
             onSelect={pick} dayInfo={dayInfo} />
           {daysState !== 'loading' && daysState !== 'ready' && <Text accessibilityRole="alert">{daysState}</Text>}
           {item.kind === 'rental' && daysState === 'ready' && Object.values(days).every((d) => d.remaining === 0) && (
-            <Link href={{ pathname: '/admin/[businessId]/catalog/[itemId]/units', params: { businessId, itemId: item.id } }}>
+            <Link href={{ pathname: '/admin/[businessId]/catalog/[itemId]', params: { businessId, itemId: item.id } }}>
               <Text accessibilityRole="alert" style={{ textDecorationLine: 'underline' }}>{t.noUnits}</Text>
             </Link>
           )}
