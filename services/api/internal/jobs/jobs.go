@@ -6,15 +6,19 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"log/slog"
+	"time"
 
 	"github.com/jackc/pgx/v5"
 	"github.com/jackc/pgx/v5/pgxpool"
 	"github.com/riverqueue/river"
 	"github.com/riverqueue/river/riverdriver/riverpgxv5"
 
+	"github.com/omaradriano/local_bussiness/services/api/internal/bookings"
 	"github.com/omaradriano/local_bussiness/services/api/internal/files"
 	"github.com/omaradriano/local_bussiness/services/api/internal/images"
 	"github.com/omaradriano/local_bussiness/services/api/internal/media"
+	"github.com/omaradriano/local_bussiness/services/api/internal/store"
 )
 
 // ImageVariantsArgs: generate_image_variants for one catalog photo.
@@ -74,10 +78,43 @@ func (w *ImageVariantsWorker) fail(ctx context.Context, imageID string, cause er
 	return river.JobCancel(fmt.Errorf("image %s: %w", imageID, cause))
 }
 
-func Workers(m media.Repo, f FileStore) *river.Workers {
+// ExpireHoldsArgs / MarkOverdueArgs: periodic sweeps of bookings (see bookings.ExpireHolds / MarkOverdue).
+type ExpireHoldsArgs struct{}
+
+func (ExpireHoldsArgs) Kind() string { return "expire_unpaid_holds" }
+
+type MarkOverdueArgs struct{}
+
+func (MarkOverdueArgs) Kind() string { return "mark_overdue_rentals" }
+
+type sweepWorker[T river.JobArgs] struct {
+	river.WorkerDefaults[T]
+	DB    store.DB
+	Sweep func(ctx context.Context, db store.DB, now time.Time) (int, error)
+}
+
+func (w *sweepWorker[T]) Work(ctx context.Context, _ *river.Job[T]) error {
+	n, err := w.Sweep(ctx, w.DB, time.Now())
+	if n > 0 {
+		slog.InfoContext(ctx, "sweep", "kind", (*new(T)).Kind(), "bookings", n)
+	}
+	return err
+}
+
+func Workers(m media.Repo, f FileStore, db store.DB) *river.Workers {
 	ws := river.NewWorkers()
 	river.AddWorker(ws, &ImageVariantsWorker{Media: m, Files: f})
+	river.AddWorker(ws, &sweepWorker[ExpireHoldsArgs]{DB: db, Sweep: bookings.ExpireHolds})
+	river.AddWorker(ws, &sweepWorker[MarkOverdueArgs]{DB: db, Sweep: bookings.MarkOverdue})
 	return ws
+}
+
+// periodic: expire unpaid holds every 5 min, flag late rentals every 15 min (both run at start too).
+var periodic = []*river.PeriodicJob{
+	river.NewPeriodicJob(river.PeriodicInterval(5*time.Minute),
+		func() (river.JobArgs, *river.InsertOpts) { return ExpireHoldsArgs{}, nil }, &river.PeriodicJobOpts{RunOnStart: true}),
+	river.NewPeriodicJob(river.PeriodicInterval(15*time.Minute),
+		func() (river.JobArgs, *river.InsertOpts) { return MarkOverdueArgs{}, nil }, &river.PeriodicJobOpts{RunOnStart: true}),
 }
 
 // NewClient: with run=false it only inserts (API); with run=true it also works the default queue (worker).
@@ -85,6 +122,7 @@ func NewClient(pool *pgxpool.Pool, workers *river.Workers, run bool) (*river.Cli
 	cfg := &river.Config{Schema: "river", Workers: workers}
 	if run {
 		cfg.Queues = map[string]river.QueueConfig{river.QueueDefault: {MaxWorkers: 4}}
+		cfg.PeriodicJobs = periodic
 	}
 	return river.NewClient(riverpgxv5.New(pool), cfg)
 }
