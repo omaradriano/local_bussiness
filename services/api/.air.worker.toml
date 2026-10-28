@@ -1,0 +1,19 @@
+# Dev hot reload for the worker (go tool air -c .air.worker.toml). Rebuilds and restarts on Go/JSON changes.
+root = "."
+tmp_dir = "tmp"
+
+[build]
+cmd = "go build -tags nodynamic -o ./tmp/worker ./cmd/worker"
+entrypoint = ["./tmp/worker"]
+include_ext = ["go", "json"]
+exclude_dir = ["tmp", "bin"]
+exclude_regex = ["_test\\.go$"]
+delay = 500
+kill_delay = "2s"
+send_interrupt = true
+
+[log]
+main_only = true
+
+[misc]
+clean_on_exit = true

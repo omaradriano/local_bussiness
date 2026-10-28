@@ -39,3 +39,6 @@ supabase/.temp/
 *.tfstate
 *.tfstate.*
 *.tfplan
+
+# air (dev hot reload)
+services/api/tmp/

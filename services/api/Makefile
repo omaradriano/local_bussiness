@@ -7,11 +7,12 @@ export GO111MODULE=on
 -include .env
 export
 
+# Dev: hot reload (rebuild + restart on save) with air, a Go tool of this module.
 run:
-	PORT=$${PORT:-8090} go run ./cmd/api
+	PORT=$${PORT:-8090} go tool air -c .air.api.toml
 
 worker:
-	go run ./cmd/worker
+	go tool air -c .air.worker.toml
 
 test:
 	go test ./...

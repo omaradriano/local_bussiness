@@ -75,10 +75,12 @@ func setup(t *testing.T, p *pgxpool.Pool, vertical string, settingsJSON string) 
 	case "tool_rental":
 		must(p.QueryRow(ctx, `insert into public.catalog_items (business_id, kind, name, price, price_unit, security_deposit, late_fee_per_day)
 			values ($1, 'rental', 'Roto', 30000, 'day', 100000, 30000) returning id::text`, f.business).Scan(&f.item))
+		_, err := p.Exec(ctx, `insert into public.business_hours (business_id, weekday, opens_at, closes_at) select $1, d, '08:00', '18:00' from generate_series(1, 6) d`, f.business)
+		must(err)
 		var u string
 		must(p.QueryRow(ctx, `insert into public.item_units (business_id, item_id, code) values ($1, $2, 'RM-01') returning id::text`, f.business, f.item).Scan(&u))
 		f.units = append(f.units, u)
-		_, err := p.Exec(ctx, `insert into public.workflow_steps (business_id, applies_to_kind, actor, moment, to_status, step_type, label)
+		_, err = p.Exec(ctx, `insert into public.workflow_steps (business_id, applies_to_kind, actor, moment, to_status, step_type, label)
 			values ($1, 'rental', 'business', 'before_status', 'checked_out', 'photo', 'Foto del INE')`, f.business)
 		must(err)
 	}
@@ -287,5 +289,23 @@ func TestIntegrationListBookings(t *testing.T) {
 	all.OnlyActive = false
 	if got, _ := List(ctx, p, f.business, all); len(got) != 1 || got[0].Status != "cancelled" {
 		t.Fatalf("all statuses: %+v", got)
+	}
+}
+
+func TestIntegrationRentalNotOnClosedDays(t *testing.T) {
+	p := pool(t)
+	ctx := context.Background()
+	f := setup(t, p, "tool_rental", `{}`) // open Mon–Sat
+	var inv Invalid
+	// Pick-up on Sunday Nov 1: refused.
+	if _, _, err := Create(ctx, p, f.business, CreateInput{Customer: cust("6141010001"), ItemID: f.item,
+		StartsAt: at("2026-11-01T16:00:00Z"), EndsAt: at("2026-11-03T16:00:00Z"), Source: "admin"}, now); !errors.As(err, &inv) || inv.Field != "starts_at" {
+		t.Fatalf("pick-up on Sunday: %v", err)
+	}
+	// Saturday to Monday spans the closed Sunday: allowed (and charged).
+	b, _, err := Create(ctx, p, f.business, CreateInput{Customer: cust("6141010002"), ItemID: f.item,
+		StartsAt: at("2026-11-07T16:00:00Z"), EndsAt: at("2026-11-09T16:00:00Z"), Source: "admin"}, at("2026-11-05T12:00:00Z").UTC())
+	if err != nil || b.Total != 2*30000 {
+		t.Fatalf("spanning Sunday: total=%d err=%v", b.Total, err)
 	}
 }

@@ -311,3 +311,20 @@ func TestRentalDays(t *testing.T) {
 		})
 	}
 }
+
+// A closed day can't be a pick-up or return day, but a rental can span it: it still reports free units.
+func TestRentalDaysClosedDayCanBeSpanned(t *testing.T) {
+	q := RentalDaysQuery{
+		Loc: chih, From: monday, To: "2026-11-04", Now: local("2026-11-01", "12:00"), Quantity: 1,
+		BusinessHours: weekdays("08:00", "18:00", 1, 3), // Tuesday closed
+		Units:         []Unit{{ID: "rm-01"}, {ID: "rm-02", Busy: []Interval{{local("2026-11-03", "10:00"), local("2026-11-03", "11:00")}}}},
+	}
+	days := RentalDays(q)
+	tue := days[1]
+	if !tue.Closed || tue.Available || tue.Remaining != 1 {
+		t.Fatalf("closed Tuesday = %+v, want closed, not a pick-up day, 1 unit free all day", tue)
+	}
+	if days[0].Closed || !days[0].Available {
+		t.Fatalf("open Monday = %+v", days[0])
+	}
+}
