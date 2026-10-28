@@ -708,7 +708,7 @@ Cinco decisiones conviene cerrarlas antes de la fase 1; el resto del plan ya se 
 - [x] **URL de cada negocio:** ruta `dominio.com/<slug>` (decidido 2026-10-26).
 - [x] **Acceso de clientes finales:** solo nombre y teléfono (decidido 2026-10-26); apartados falsos se controlan con rate limit, límite de pendientes por teléfono y expiración sin anticipo.
 - [x] **Cola de jobs:** librería River sobre Postgres (decidido 2026-10-26).
-- [ ] **Giros en código o en base:** empezar con un archivo por giro en código (tipado y probado) y pasar a `business_types` cuando exista el panel de superadministrador, o crear la tabla desde ya.
+- [x] **Giros en código o en base:** un archivo por giro en código (tipado y probado) y pasar a `business_types` cuando exista el panel de superadministrador (decidido 2026-10-28). Los giros se agregan uno a uno conforme lleguen negocios reales con sus requerimientos.
 - [ ] **Landing personalizada:** bloques configurables, diseño a la medida o ambos según el plan contratado.
 - [ ] **Pagos en línea (fase 7):** Mercado Pago, Stripe o Conekta, según comisiones y lo que usen los negocios piloto.
 
