@@ -27,6 +27,7 @@ export default function BusinessHome() {
       <Group label={s.groups.daily} separatorInset={58}>
         <Cell icon="today" tint={ui.warning} label={s.sections.today} sublabel={s.hints.today} onPress={go('/admin/[businessId]/today')} />
         <Cell icon="calendar" tint={ui.accent} label={s.sections.calendar} sublabel={s.hints.calendar} onPress={go('/admin/[businessId]/calendar')} />
+        <Cell icon="time" tint={ui.purple} label={strings.history.title} sublabel={s.hints.history} onPress={go('/admin/[businessId]/bookings')} />
         <Cell icon="people" tint={ui.indigo} label={s.sections.customers} sublabel={s.hints.customers} onPress={go('/admin/[businessId]/customers')} />
       </Group>
 

@@ -92,3 +92,16 @@ export async function uploadCustomerDoc(businessId: string, customerId: string, 
   if (!put.ok) return { error: `${strings.common.error} (S3 ${put.status})` };
   return { key: created.data.key };
 }
+
+/** Upload a photo that proves a payment (transfer screenshot, card ticket); returns the key or an error message. */
+export async function uploadPaymentEvidence(businessId: string, bookingId: string, photo: PickedPhoto): Promise<{ key: string } | { error: string }> {
+  const blob = await (await fetch(photo.uri)).blob();
+  const created = await api.POST('/v1/b/{businessId}/bookings/{bookingId}/uploads', {
+    params: { path: { businessId, bookingId } },
+    body: { purpose: 'payment', content_type: 'image/jpeg', size: blob.size },
+  });
+  if (!created.data) return { error: fieldErrors(created.error).file ?? errorText(created.error, created.response.status) };
+  const put = await fetch(created.data.upload_url, { method: 'PUT', headers: created.data.upload_headers, body: blob });
+  if (!put.ok) return { error: `${strings.common.error} (S3 ${put.status})` };
+  return { key: created.data.key };
+}

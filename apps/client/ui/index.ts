@@ -6,7 +6,7 @@ export { Cell, Group } from './Group';
 export { PressableScale } from './PressableScale';
 export { Screen } from './Screen';
 export { Segmented, type SegmentOption } from './Segmented';
-export { Notice, Row, Step, type StepState } from './Step';
+export { Notice, Row, Step, SubStep, type StepState } from './Step';
 export { Text } from './Text';
 export { contentWidth, ease, radius, space, type, useUI, type UIColors } from './tokens';
 export { ToastProvider, useToast, type ToastTone } from './Toast';

@@ -200,7 +200,7 @@ export default function NewBooking() {
     <Screen>
       <Stack.Screen options={{ title: t.new(bookingTerm) }} />
       <View style={{ gap: 16 }}>
-        <Step n={1} title={s.item.title(term(business.vertical, 'catalog_item') ?? '')} description={s.item.description} state={state(0)}>
+        <Step inline n={1} title={s.item.title(term(business.vertical, 'catalog_item') ?? '')} description={s.item.description} state={state(0)}>
           <Chips>
             {items.map((i) => (
               <Chip key={i.id} selected={i.id === itemId} onPress={() => setItemId(i.id)}>{`${i.name} · ${formatMXN(i.price)}`}</Chip>
@@ -211,7 +211,7 @@ export default function NewBooking() {
           )}
         </Step>
 
-        <Step n={2} title={item?.kind === 'rental' ? s.dates.title : s.when.title}
+        <Step inline n={2} title={item?.kind === 'rental' ? s.dates.title : s.when.title}
           description={item?.kind === 'rental' ? s.dates.description : s.when.description} state={state(1)}>
           {item && (
             <>
@@ -288,14 +288,14 @@ export default function NewBooking() {
           )}
         </Step>
 
-        <Step n={3} title={s.customer.title} description={s.customer.description} state={state(2)}>
+        <Step inline n={3} title={s.customer.title} description={s.customer.description} state={state(2)}>
           {item && (
             <CustomerPicker businessId={businessId} isOwner={business.role === 'owner'} value={customer} onChange={setCustomer}
               error={errors['customer.id'] ?? errors['customer.name']} />
           )}
         </Step>
 
-        <Step n={4} title={s.payment.title} description={s.payment.description} state={item ? state(3) : 'upcoming'}>
+        <Step inline n={4} title={s.payment.title} description={s.payment.description} state={item ? state(3) : 'upcoming'}>
           {item && (
             <>
               <Segmented options={(['none', 'total', 'partial'] as const).map((m) => ({ value: m, label: t.payModes[m] }))} value={payMode} onChange={setPayMode} />
