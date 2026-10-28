@@ -53,7 +53,7 @@ func run(log *slog.Logger) error {
 		log.Info("s3 ok", "bucket", prefix+"-"+files.Catalog)
 	}
 
-	client, err := jobs.NewClient(pool, jobs.Workers(media.Repo{DB: pool}, fs), true)
+	client, err := jobs.NewClient(pool, jobs.Workers(media.Repo{DB: pool}, fs, pool), true)
 	if err != nil {
 		return err
 	}

@@ -117,7 +117,7 @@ func setupPhotos(ctx context.Context, log *slog.Logger, pool *pgxpool.Pool) (*ht
 		log.Info("s3 ok", "bucket", prefix+"-"+files.Catalog)
 	}
 	mediaRepo := media.Repo{DB: pool}
-	queue, err := jobs.NewClient(pool, jobs.Workers(mediaRepo, fs), false)
+	queue, err := jobs.NewClient(pool, jobs.Workers(mediaRepo, fs, pool), false)
 	if err != nil {
 		return nil, err
 	}
