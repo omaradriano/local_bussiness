@@ -113,3 +113,13 @@ func (s *S3) Delete(ctx context.Context, name, key string) error {
 	_, err := s.client.DeleteObject(ctx, &s3.DeleteObjectInput{Bucket: s.bucket(name), Key: aws.String(key)})
 	return err
 }
+
+// PresignGet returns a 5-minute read URL for a private file (ID photos, rental evidence).
+func (s *S3) PresignGet(ctx context.Context, name, key string) (string, error) {
+	req, err := s.presign.PresignGetObject(ctx, &s3.GetObjectInput{Bucket: s.bucket(name), Key: aws.String(key)},
+		s3.WithPresignExpires(5*time.Minute))
+	if err != nil {
+		return "", err
+	}
+	return req.URL, nil
+}

@@ -19,6 +19,7 @@ import (
 	"github.com/omaradriano/local_bussiness/services/api/internal/files"
 	"github.com/omaradriano/local_bussiness/services/api/internal/media"
 	"github.com/omaradriano/local_bussiness/services/api/internal/staff"
+	"github.com/omaradriano/local_bussiness/services/api/internal/steps"
 	"github.com/omaradriano/local_bussiness/services/api/internal/store"
 )
 
@@ -406,6 +407,9 @@ func (fakeFiles) Head(context.Context, string, string) (int64, string, error) {
 	return 500_000, "image/jpeg", nil
 }
 func (fakeFiles) Delete(context.Context, string, string) error { return nil }
+func (fakeFiles) PresignGet(_ context.Context, bucket, key string) (string, error) {
+	return "https://s3.test/" + bucket + "/" + key + "?get", nil
+}
 
 var enqueued []string
 
@@ -552,6 +556,38 @@ func (fakeBookings) AddPayment(_ context.Context, _, id string, p bookings.Payme
 	return bookings.Booking{ID: id, Status: "confirmed", Balance: bookings.Balance{Paid: p.Amount, Due: 10000 - p.Amount}}, nil
 }
 
+const stepID = "57575757-5757-5757-5757-575757575757"
+
+func (fakeBookings) StepUpload(_ context.Context, _, _, step string) (string, error) {
+	if step != stepID {
+		return "", bookings.ErrNotFound
+	}
+	return "private-docs", nil
+}
+
+func (fakeBookings) CompleteStep(ctx context.Context, _, id, step string, sub steps.Submission, _ string, _ time.Time, exists bookings.FileExists) (bookings.Booking, error) {
+	if step != stepID {
+		return bookings.Booking{}, bookings.ErrNotFound
+	}
+	for _, k := range sub.Files {
+		if err := exists(ctx, "private-docs", k); err != nil {
+			return bookings.Booking{}, bookings.Invalid{Field: "files", Message: "no se terminó de subir"}
+		}
+	}
+	return bookings.Booking{ID: id, Steps: []bookings.Step{{ID: step, Status: "done"}}}, nil
+}
+
+func (fakeBookings) Checkout(_ context.Context, _, id, condition, _ string, _ time.Time) (bookings.Booking, error) {
+	if condition == "sin ine" {
+		return bookings.Booking{}, bookings.StepsPending{Labels: []string{"Foto del INE"}}
+	}
+	return bookings.Booking{ID: id, Status: "checked_out"}, nil
+}
+
+func (fakeBookings) Return(_ context.Context, _, id, _, _ string, _ time.Time) (bookings.Booking, error) {
+	return bookings.Booking{ID: id, Status: "returned", Rental: &bookings.RentalInfo{LateDays: 2, LateFeeSuggested: 60000}}, nil
+}
+
 func (fakeBookings) Get(_ context.Context, _, id string) (bookings.Booking, error) {
 	if id != bookingID {
 		return bookings.Booking{}, bookings.ErrNotFound
@@ -664,4 +700,37 @@ func TestBookingDetailWithoutTrailingSlash(t *testing.T) {
 	if rec := do(http.MethodGet, "/v1/b/"+bizA+"/bookings/"+bookingID, "ok"); rec.Code != http.StatusOK {
 		t.Fatalf("got %d %s", rec.Code, rec.Body)
 	}
+}
+
+func TestRentalFlowRoutes(t *testing.T) {
+	one := "/v1/b/" + bizA + "/bookings/" + bookingID
+	prefix := bizA + "/bookings/" + bookingID + "/"
+	cases := []struct {
+		name, method, path, body string
+		uploaded                 bool
+		wantCode                 int
+		wantIn                   string
+	}{
+		{"subir INE", http.MethodPost, one + "/uploads", `{"step_id":"` + stepID + `","content_type":"image/jpeg","size":900000}`, true, http.StatusCreated, `"key":"` + prefix},
+		{"paso sin archivos o ajeno", http.MethodPost, one + "/uploads", `{"step_id":"eeeeeeee-0000-0000-0000-000000000000","content_type":"image/jpeg","size":1}`, true, http.StatusNotFound, `"not_found"`},
+		{"tipo de archivo inválido", http.MethodPost, one + "/uploads", `{"step_id":"` + stepID + `","content_type":"application/pdf","size":1}`, true, http.StatusUnprocessableEntity, `"file"`},
+		{"completar paso", http.MethodPost, one + "/steps/" + stepID, `{"files":["` + prefix + `a.jpg"]}`, true, http.StatusOK, `"status":"done"`},
+		{"completar con foto sin subir", http.MethodPost, one + "/steps/" + stepID, `{"files":["` + prefix + `a.jpg"]}`, false, http.StatusUnprocessableEntity, `"files"`},
+		{"ver archivo propio", http.MethodGet, one + "/files?bucket=private-docs&key=" + prefix + "a.jpg", "", true, http.StatusOK, `"url":"https://s3.test/private-docs/`},
+		{"archivo de otra reserva", http.MethodGet, one + "/files?bucket=private-docs&key=" + bizA + "/bookings/otra/a.jpg", "", true, http.StatusNotFound, `"not_found"`},
+		{"bucket público no", http.MethodGet, one + "/files?bucket=catalog&key=" + prefix + "a.jpg", "", true, http.StatusNotFound, `"not_found"`},
+		{"salida con pasos pendientes", http.MethodPost, one + "/checkout", `{"condition":"sin ine"}`, true, http.StatusUnprocessableEntity, `"steps_pending"`},
+		{"salida", http.MethodPost, one + "/checkout", `{"condition":"ok"}`, true, http.StatusOK, `"status":"checked_out"`},
+		{"devolución con recargo sugerido", http.MethodPost, one + "/return", `{}`, true, http.StatusOK, `"late_fee_suggested":60000`},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			uploaded = tc.uploaded
+			rec := doBody(tc.method, tc.path, "staff", strings.NewReader(tc.body))
+			if rec.Code != tc.wantCode || !strings.Contains(rec.Body.String(), tc.wantIn) {
+				t.Fatalf("got %d %s", rec.Code, rec.Body)
+			}
+		})
+	}
+	uploaded = true
 }
