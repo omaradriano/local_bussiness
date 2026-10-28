@@ -1,11 +1,12 @@
 import { fitWithin, strings } from '@lb/shared';
 import { ImageManipulator, SaveFormat } from 'expo-image-manipulator';
+import * as DocumentPicker from 'expo-document-picker';
 import * as ImagePicker from 'expo-image-picker';
 import { api } from './api';
 import { errorText, fieldErrors } from './errors';
 
-/** A photo chosen and already shrunk on the device, not uploaded yet. */
-export type PickedPhoto = { uri: string };
+/** A file chosen on the device, not uploaded yet: a shrunk JPEG photo, or a PDF (documents only). */
+export type PickedPhoto = { uri: string; type?: 'image/jpeg' | 'application/pdf'; name?: string };
 
 /** Shrink to 2048 px as JPEG (also applies the phone's EXIF rotation). */
 async function shrink(asset: ImagePicker.ImagePickerAsset): Promise<PickedPhoto> {
@@ -72,7 +73,7 @@ export async function uploadStepPhoto(businessId: string, bookingId: string, ste
   const blob = await (await fetch(photo.uri)).blob();
   const created = await api.POST('/v1/b/{businessId}/bookings/{bookingId}/uploads', {
     params: { path: { businessId, bookingId } },
-    body: { step_id: stepId, content_type: 'image/jpeg', size: blob.size },
+    body: { step_id: stepId, content_type: photo.type ?? 'image/jpeg', size: blob.size },
   });
   if (!created.data) return { error: fieldErrors(created.error).file ?? errorText(created.error, created.response.status) };
   const put = await fetch(created.data.upload_url, { method: 'PUT', headers: created.data.upload_headers, body: blob });
@@ -99,6 +100,26 @@ export async function uploadPaymentEvidence(businessId: string, bookingId: strin
   const created = await api.POST('/v1/b/{businessId}/bookings/{bookingId}/uploads', {
     params: { path: { businessId, bookingId } },
     body: { purpose: 'payment', content_type: 'image/jpeg', size: blob.size },
+  });
+  if (!created.data) return { error: fieldErrors(created.error).file ?? errorText(created.error, created.response.status) };
+  const put = await fetch(created.data.upload_url, { method: 'PUT', headers: created.data.upload_headers, body: blob });
+  if (!put.ok) return { error: `${strings.common.error} (S3 ${put.status})` };
+  return { key: created.data.key };
+}
+
+/** Pick PDF files (documents: a signed note, a contract). */
+export async function pickPdfs(limit: number): Promise<PickedPhoto[] | 'cancelled'> {
+  const res = await DocumentPicker.getDocumentAsync({ type: 'application/pdf', multiple: limit > 1, copyToCacheDirectory: true });
+  if (res.canceled || !res.assets.length) return 'cancelled';
+  return res.assets.slice(0, limit).map((a) => ({ uri: a.uri, type: 'application/pdf', name: a.name }));
+}
+
+/** Upload a file (photo or PDF) for a booking's free documents; returns the key or an error message. */
+export async function uploadBookingDocument(businessId: string, bookingId: string, file: PickedPhoto): Promise<{ key: string } | { error: string }> {
+  const blob = await (await fetch(file.uri)).blob();
+  const created = await api.POST('/v1/b/{businessId}/bookings/{bookingId}/uploads', {
+    params: { path: { businessId, bookingId } },
+    body: { purpose: 'document', content_type: file.type ?? 'image/jpeg', size: blob.size },
   });
   if (!created.data) return { error: fieldErrors(created.error).file ?? errorText(created.error, created.response.status) };
   const put = await fetch(created.data.upload_url, { method: 'PUT', headers: created.data.upload_headers, body: blob });

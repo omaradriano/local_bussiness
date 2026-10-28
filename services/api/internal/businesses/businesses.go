@@ -121,6 +121,7 @@ type TemplateStep struct {
 	Label         string         `json:"label"`
 	Required      bool           `json:"required"`
 	Config        map[string]any `json:"config"`
+	Active        *bool          `json:"active"` // default true; optional steps the owner turns on in Ajustes
 }
 
 func TemplateFor(vertical string) (Template, error) {
@@ -235,9 +236,9 @@ func Create(ctx context.Context, db Beginner, userID string, in Input) (Business
 		cfg, _ := json.Marshal(s.Config)
 		if _, err := tx.Exec(ctx, `
 			insert into public.workflow_steps
-			  (business_id, applies_to_kind, actor, moment, to_status, step_type, label, config, required, sort)
-			values ($1, $2, 'business', $3, nullif($4, ''), $5, $6, $7, $8, $9)`,
-			b.ID, s.AppliesToKind, s.Moment, s.ToStatus, s.StepType, s.Label, cfg, s.Required, i+1); err != nil {
+			  (business_id, applies_to_kind, actor, moment, to_status, step_type, label, config, required, sort, active)
+			values ($1, $2, 'business', $3, nullif($4, ''), $5, $6, $7, $8, $9, $10)`,
+			b.ID, s.AppliesToKind, s.Moment, s.ToStatus, s.StepType, s.Label, cfg, s.Required, i+1, s.Active == nil || *s.Active); err != nil {
 			return Business{}, err
 		}
 	}

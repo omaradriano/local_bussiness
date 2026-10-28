@@ -5,6 +5,7 @@ import { ActivityIndicator, Switch, View } from 'react-native';
 import { api } from '../../../../lib/api';
 import { errorText, fieldErrors } from '../../../../lib/errors';
 import { useBusiness } from '../../../../lib/useMe';
+import { DocumentTypesEditor } from '../../../../components/DocumentTypesEditor';
 import { useSettings, type Settings } from '../../../../lib/useSettings';
 import { Button, Cell, Field, Group, Notice, Screen, Text, useToast } from '../../../../ui';
 
@@ -18,7 +19,8 @@ export default function SettingsScreen() {
   const toast = useToast();
   const [r, setR] = useState<Rentals | null>(null);
   const [multiplier, setMultiplier] = useState('1');
-  const [inspection, setInspection] = useState('0');
+  const [inspectionOn, setInspectionOn] = useState(false);
+  const [hours, setHours] = useState('1');
   const [errors, setErrors] = useState<Record<string, string>>({});
   const [busy, setBusy] = useState(false);
 
@@ -26,7 +28,9 @@ export default function SettingsScreen() {
     if (!settings) return;
     setR(settings.rentals);
     setMultiplier(String(settings.rentals.late_fee_multiplier));
-    setInspection(String(settings.rentals.inspection_minutes));
+    // Stored in minutes; captured in whole hours.
+    setInspectionOn(settings.rentals.inspection_minutes > 0);
+    setHours(String(Math.max(1, Math.round(settings.rentals.inspection_minutes / 60))));
   }, [settings]);
 
   if (!business || !r) return <ActivityIndicator style={{ marginTop: 24 }} />;
@@ -34,11 +38,13 @@ export default function SettingsScreen() {
   const set = (patch: Partial<Rentals>) => setR({ ...r, ...patch });
 
   async function save() {
+    const h = Number(hours);
+    if (inspectionOn && (!Number.isInteger(h) || h < 1 || h > 168)) return setErrors({ inspection_minutes: t.inspectionHoursInvalid });
     setBusy(true);
     setErrors({});
     const { data, error, response } = await api.PATCH('/v1/b/{businessId}/settings', {
       params: { path: { businessId } },
-      body: { rentals: { ...r!, late_fee_multiplier: Number(multiplier.replace(',', '.')), inspection_minutes: Number(inspection) || 0 } },
+      body: { rentals: { ...r!, late_fee_multiplier: Number(multiplier.replace(',', '.')), inspection_minutes: inspectionOn ? h * 60 : 0 } },
     });
     setBusy(false);
     if (data) { setSettings(data); return toast(t.saved); }
@@ -67,14 +73,27 @@ export default function SettingsScreen() {
             onValueChange={(v) => set({ charge_closed_days: v })} />} />
       </Group>
 
-      <Group label={t.lateAndInspection} padded>
+      <Group label={t.late} padded>
         <Field label={t.lateMultiplier} value={multiplier} onChangeText={setMultiplier} keyboardType="decimal-pad" editable={isOwner}
           hint={t.lateMultiplierHint} error={errors.late_fee_multiplier} />
-        <Field label={t.inspection} value={inspection} onChangeText={setInspection} keyboardType="numeric" editable={isOwner}
-          hint={t.inspectionHint} error={errors.inspection_minutes} />
       </Group>
 
-      {isOwner && <Button variant="primary" busy={busy} onPress={save}>{t.save}</Button>}
+      <Group label={t.inspectionTitle} footer={t.inspectionHint}>
+        <Cell label={t.inspectionToggle} accessory={
+          <Switch accessibilityLabel={t.inspectionToggle} value={inspectionOn} disabled={!isOwner} onValueChange={setInspectionOn} />} />
+        {inspectionOn ? (
+          <View style={{ paddingHorizontal: 16, paddingTop: 4 }}>
+            <Field label={t.inspectionHours} value={hours} onChangeText={setHours} keyboardType="numeric" editable={isOwner} error={errors.inspection_minutes} />
+          </View>
+        ) : null}
+      </Group>
+
+      {isOwner && <Button variant="primary" busy={busy} onPress={save} style={{ marginBottom: 28 }}>{t.save}</Button>}
+
+      <Text variant="footnote" color="labelSecondary" style={{ marginHorizontal: 16, marginBottom: 6 }}>{t.documents.title.toUpperCase()}</Text>
+      <DocumentTypesEditor businessId={businessId} isOwner={isOwner} />
+      <Text variant="footnote" color="labelSecondary" style={{ marginHorizontal: 16, marginBottom: 28 }}>{t.documents.hint}</Text>
+
     </Screen>
   );
 }

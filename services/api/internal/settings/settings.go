@@ -67,8 +67,8 @@ func (r Rentals) Validate() map[string]string {
 	if r.LateFeeMultiplier < 0 || r.LateFeeMultiplier > 10 {
 		errs["late_fee_multiplier"] = "El multiplicador debe estar entre 0 y 10 (por ejemplo 1.5 o 2)."
 	}
-	if r.InspectionMinutes < 0 || r.InspectionMinutes > 24*60 {
-		errs["inspection_minutes"] = "La revisión entre rentas debe ser de 0 a 1440 minutos."
+	if r.InspectionMinutes < 0 || r.InspectionMinutes > 7*24*60 {
+		errs["inspection_minutes"] = "La revisión entre rentas debe ser de 0 a 168 horas."
 	}
 	return errs
 }

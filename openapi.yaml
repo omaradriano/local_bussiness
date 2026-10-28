@@ -441,6 +441,60 @@ paths:
                   periods: { type: integer, description: "Días que se cobran (renta)" }
         "422": { $ref: "#/components/responses/Error" }
 
+  /v1/b/{businessId}/settings/documents:
+    parameters:
+      - $ref: "#/components/parameters/BusinessId"
+    get:
+      operationId: listDocumentTypes
+      summary: Documentos adicionales que el negocio pide en cada renta
+      responses:
+        "200":
+          description: OK
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [documents]
+                properties:
+                  documents: { type: array, items: { $ref: "#/components/schemas/DocumentType" } }
+    post:
+      operationId: createDocumentType
+      summary: Agrega un documento adicional (solo dueño)
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/DocumentTypeInput" }
+      responses:
+        "201":
+          description: Creado
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/DocumentType" }
+        "403": { $ref: "#/components/responses/Error" }
+        "422": { $ref: "#/components/responses/Error" }
+
+  /v1/b/{businessId}/settings/documents/{docTypeId}:
+    parameters:
+      - $ref: "#/components/parameters/BusinessId"
+      - { name: docTypeId, in: path, required: true, schema: { type: string, format: uuid } }
+    patch:
+      operationId: updateDocumentType
+      summary: Renombra, hace obligatorio o activa/desactiva (solo afecta rentas nuevas)
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/DocumentTypeInput" }
+      responses:
+        "200":
+          description: OK
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/DocumentType" }
+        "404": { $ref: "#/components/responses/Error" }
+        "422": { $ref: "#/components/responses/Error" }
+
   /v1/b/{businessId}/inventory:
     parameters:
       - $ref: "#/components/parameters/BusinessId"
@@ -487,7 +541,7 @@ paths:
                     late_fee_multiplier: { type: number, minimum: 0, maximum: 10 }
                     rentals_span_closed_days: { type: boolean }
                     charge_closed_days: { type: boolean }
-                    inspection_minutes: { type: integer, minimum: 0, maximum: 1440 }
+                    inspection_minutes: { type: integer, minimum: 0, maximum: 10080 }
       responses:
         "200":
           description: OK
@@ -819,8 +873,8 @@ paths:
               required: [content_type, size]
               properties:
                 step_id: { type: string, format: uuid, description: "Paso al que pertenece (si no es evidencia de pago)" }
-                purpose: { type: string, enum: [payment], description: "payment = evidencia de un pago" }
-                content_type: { type: string, enum: [image/jpeg, image/png, image/webp] }
+                purpose: { type: string, enum: [payment, document], description: "payment = evidencia de un pago; document = documento adicional (foto o PDF)" }
+                content_type: { type: string, enum: [image/jpeg, image/png, image/webp, application/pdf] }
                 size: { type: integer, minimum: 1, maximum: 5242880 }
       responses:
         "201":
@@ -920,6 +974,47 @@ paths:
       summary: Quita una foto de un paso mientras su momento no haya pasado; sin fotos vuelve a pendiente
       parameters:
         - { name: key, in: query, required: true, schema: { type: string } }
+      responses:
+        "200":
+          description: OK
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Booking" }
+        "404": { $ref: "#/components/responses/Error" }
+        "422": { $ref: "#/components/responses/Error" }
+
+  /v1/b/{businessId}/bookings/{bookingId}/documents:
+    parameters:
+      - $ref: "#/components/parameters/BusinessId"
+      - { name: bookingId, in: path, required: true, schema: { type: string, format: uuid } }
+    post:
+      operationId: addBookingDocument
+      summary: Adjunta un documento con el nombre que le den (archivos subidos con purpose=document)
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [name, files]
+              properties:
+                name: { type: string, maxLength: 60 }
+                files: { type: array, minItems: 1, maxItems: 6, items: { type: string } }
+      responses:
+        "200":
+          description: OK
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Booking" }
+        "422": { $ref: "#/components/responses/Error" }
+
+  /v1/b/{businessId}/bookings/{bookingId}/documents/{docId}:
+    parameters:
+      - $ref: "#/components/parameters/BusinessId"
+      - { name: bookingId, in: path, required: true, schema: { type: string, format: uuid } }
+      - { name: docId, in: path, required: true, schema: { type: string, format: uuid } }
+    delete:
+      operationId: removeBookingDocument
       responses:
         "200":
           description: OK
@@ -1159,6 +1254,22 @@ components:
         starts_at: { type: [string, "null"], format: date-time }
         ends_at: { type: [string, "null"], format: date-time }
 
+    DocumentType:
+      type: object
+      required: [id, name, required, active]
+      properties:
+        id: { type: string, format: uuid }
+        name: { type: string }
+        required: { type: boolean, description: "La salida espera este documento" }
+        active: { type: boolean }
+
+    DocumentTypeInput:
+      type: object
+      properties:
+        name: { type: string, maxLength: 60 }
+        required: { type: boolean }
+        active: { type: boolean }
+
     DocType:
       type: string
       enum: [ine, proof_of_address, guarantor_id]
@@ -1212,7 +1323,7 @@ components:
             late_fee_multiplier: { type: number, description: "Un día atrasado cuesta el precio por día × esto" }
             rentals_span_closed_days: { type: boolean, description: "Una renta puede incluir días cerrados" }
             charge_closed_days: { type: boolean, description: "Esos días cerrados se cobran" }
-            inspection_minutes: { type: integer, description: "Revisión entre rentas de una unidad" }
+            inspection_minutes: { type: integer, description: "Revisión entre rentas de una unidad (0 = sin revisión; la app la captura en horas)" }
 
     Availability:
       type: object
@@ -1281,7 +1392,7 @@ components:
 
     Booking:
       type: object
-      required: [id, kind, status, starts_at, ends_at, customer, items, staff, units, subtotal, deposit_required, total, source, hold_expires_at, public_token, created_at, payments, balance, events, steps, next, rental]
+      required: [id, kind, status, starts_at, ends_at, customer, items, staff, units, subtotal, deposit_required, total, source, hold_expires_at, public_token, created_at, payments, balance, events, steps, next, rental, documents]
       properties:
         id: { type: string, format: uuid }
         kind: { $ref: "#/components/schemas/ItemKind" }
@@ -1322,6 +1433,17 @@ components:
         hold_expires_at: { type: [string, "null"], format: date-time }
         public_token: { type: string }
         created_at: { type: string, format: date-time }
+        documents:
+          type: array
+          description: "Documentos adjuntos con nombre libre"
+          items:
+            type: object
+            required: [id, name, files, created_at]
+            properties:
+              id: { type: string, format: uuid }
+              name: { type: string }
+              files: { type: array, items: { type: string } }
+              created_at: { type: string, format: date-time }
         payments:
           type: array
           items:

@@ -3,6 +3,7 @@ import { formatMXN, formatPhone, strings, term } from '@lb/shared';
 import { router, Stack, useLocalSearchParams } from 'expo-router';
 import { useCallback, useEffect, useState } from 'react';
 import { ActivityIndicator, Linking, View } from 'react-native';
+import { BookingDocuments } from '../../../../../components/BookingDocuments';
 import { ExtendRental } from '../../../../../components/ExtendRental';
 import { PaymentForm, PaymentList, paymentTypesFor, type PaymentType } from '../../../../../components/Payments';
 import { StatusBadge, statusLabel } from '../../../../../components/StatusBadge';
@@ -160,7 +161,10 @@ export default function BookingDetail() {
               {rentalStep === 1 && (
                 <>
                   {docs.length > 0 && <SubStep title={f.sub.documents} description={f.sub.documentsHint} done={allDone(docs)}>{cards(docs, true)}</SubStep>}
-                  {additional.length > 0 && <SubStep title={f.sub.additional} description={f.sub.additionalHint} done={allDone(additional)}>{cards(additional, true)}</SubStep>}
+                  <SubStep title={t.docs.section} description={t.docs.sectionHint} done={additional.length ? allDone(additional) : undefined}>
+                    {cards(additional, true)}
+                    <BookingDocuments businessId={businessId} booking={b} editable={editable} onDone={show} />
+                  </SubStep>
                   {outPhotos.length > 0 && <SubStep title={f.sub.outPhotos} description={f.sub.outPhotosHint} done={allDone(outPhotos)}>{cards(outPhotos, true)}</SubStep>}
                   <SubStep title={f.sub.payment} description={f.sub.checkoutPaymentHint} done={settled}>{balance}{payments}</SubStep>
                   <SubStep title={f.sub.doCheckout} description={f.sub.doCheckoutHint}>
@@ -224,6 +228,17 @@ export default function BookingDetail() {
             )}
             {b.steps.length > 0 && <Group label={t.steps} padded><View style={{ gap: 10 }}>{cards(b.steps, true)}</View></Group>}
           </>
+        )}
+
+        {/* After the check-out (and for other kinds) the documents stay at hand in their own section. */}
+        {(b.kind !== 'rental' || rentalStep > 1 || closedNote) && (
+          <View>
+            <Text variant="footnote" color="labelSecondary" style={{ marginHorizontal: 16, marginBottom: 6 }}>{t.docs.section.toUpperCase()}</Text>
+            <View style={{ gap: 10 }}>
+              {cards(additional, false)}
+              <BookingDocuments businessId={businessId} booking={b} editable={editable} onDone={show} />
+            </View>
+          </View>
         )}
 
         {b.payments.length > 0 && (

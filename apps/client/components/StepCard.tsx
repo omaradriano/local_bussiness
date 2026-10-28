@@ -1,13 +1,13 @@
 import { Ionicons } from '@expo/vector-icons';
 import type { components } from '@lb/api-client';
 import { strings } from '@lb/shared';
-import { ZoomableImage } from './ZoomableImage';
+import { FileThumb } from './FileThumb';
 import { useEffect, useState } from 'react';
 import { Pressable, TextInput, View } from 'react-native';
 import { Button, Text, radius, useToast, useUI } from '../ui';
 import { api } from '../lib/api';
 import { errorText, fieldErrors } from '../lib/errors';
-import { pickPhotos, uploadStepPhoto } from '../lib/photos';
+import { pickPdfs, pickPhotos, uploadStepPhoto } from '../lib/photos';
 
 type Booking = components['schemas']['Booking'];
 type Step = Booking['steps'][number];
@@ -42,10 +42,13 @@ export function StepCard({ businessId, bookingId, step, editable, canChange, onD
     toast(f.data ?? f.files ?? errorText(error, response.status), 'error');
   }
 
-  async function addPhotos() {
+  async function addPhotos(kind: 'photo' | 'pdf' = 'photo') {
     setBusy(true);
     setMessage(null);
-    const picked = await pickPhotos(Math.max(1, maxFiles - (step.status === 'done' ? step.files.length : 0)));
+    const room = Math.max(1, maxFiles - (step.status === 'done' ? step.files.length : 0));
+    const picked = kind === 'pdf'
+      ? await pickPdfs(room).then((r) => (r === 'cancelled' ? r : { photos: r, dropped: 0 }))
+      : await pickPhotos(room);
     if (picked === 'cancelled') return setBusy(false);
     if (typeof picked === 'string') { setBusy(false); return toast(picked, 'error'); }
     const keys: string[] = [];
@@ -79,6 +82,15 @@ export function StepCard({ businessId, bookingId, step, editable, canChange, onD
     toast(errorText(error, response.status), 'error');
   }
 
+  // Document steps (file_upload in the private bucket: a promissory note, a contract) also take PDF.
+  const takesPdf = step.step_type === 'file_upload' && step.bucket === 'private-docs';
+  const AddButtons = ({ label, size }: { label: string; size?: 'sm' }) => (takesPdf ? (
+    <View style={{ flexDirection: 'row', gap: 8 }}>
+      <Button size={size} icon="camera" busy={busy} onPress={() => addPhotos('photo')} style={{ flex: 1 }}>{strings.files.addPhotos}</Button>
+      <Button size={size} icon="document-text" disabled={busy} onPress={() => addPhotos('pdf')} style={{ flex: 1 }}>{strings.files.addPdf}</Button>
+    </View>
+  ) : <Button size={size} icon={size ? 'add' : 'camera'} busy={busy} onPress={() => addPhotos('photo')}>{label}</Button>);
+
   const done = step.status === 'done';
   // Show the step's photos right away once it's done (short-lived signed URLs).
   useEffect(() => {
@@ -106,9 +118,7 @@ export function StepCard({ businessId, bookingId, step, editable, canChange, onD
         <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: 10 }}>
           {step.files.map((key) => (
             <View key={key}>
-              {urls[key]
-                ? <ZoomableImage source={urls[key]} style={{ width: 80, height: 80, borderRadius: 10 }} contentFit="cover" accessibilityLabel={step.label} />
-                : <View style={{ width: 80, height: 80, borderRadius: 10, backgroundColor: ui.surface }} />}
+              <FileThumb fileKey={key} url={urls[key]} label={step.label} />
               {editable && canChange && !step.on_file && (
                 <Pressable accessibilityRole="button" accessibilityLabel={strings.photos.remove} hitSlop={12} disabled={busy} onPress={() => removeFile(key)}
                   style={{ position: 'absolute', top: -6, right: -6, width: 24, height: 24, borderRadius: 12, backgroundColor: ui.label, alignItems: 'center', justifyContent: 'center' }}>
@@ -121,13 +131,13 @@ export function StepCard({ businessId, bookingId, step, editable, canChange, onD
       )}
 
       {done && editable && canChange && step.files.length < maxFiles && step.bucket !== '' && step.customer_doc === '' && (step.step_type === 'photo' || step.step_type === 'file_upload') && (
-        <Button size="sm" icon="add" busy={busy} onPress={addPhotos}>{t.addMorePhotos}</Button>
+        <AddButtons size="sm" label={t.addMorePhotos} />
       )}
 
       {!done && editable && !step.on_file && (
         <>
           {(step.step_type === 'photo' || step.step_type === 'file_upload') && (
-            <Button icon="camera" busy={busy} onPress={addPhotos}>{t.addStepPhotos}</Button>
+            <AddButtons label={t.addStepPhotos} />
           )}
           {(step.step_type === 'text' || step.step_type === 'number') && (
             <>

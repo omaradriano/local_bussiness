@@ -333,6 +333,46 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/v1/b/{businessId}/settings/documents": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                businessId: components["parameters"]["BusinessId"];
+            };
+            cookie?: never;
+        };
+        /** Documentos adicionales que el negocio pide en cada renta */
+        get: operations["listDocumentTypes"];
+        put?: never;
+        /** Agrega un documento adicional (solo dueño) */
+        post: operations["createDocumentType"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/b/{businessId}/settings/documents/{docTypeId}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                businessId: components["parameters"]["BusinessId"];
+                docTypeId: string;
+            };
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        /** Renombra, hace obligatorio o activa/desactiva (solo afecta rentas nuevas) */
+        patch: operations["updateDocumentType"];
+        trace?: never;
+    };
     "/v1/b/{businessId}/inventory": {
         parameters: {
             query?: never;
@@ -700,6 +740,46 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/v1/b/{businessId}/bookings/{bookingId}/documents": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                businessId: components["parameters"]["BusinessId"];
+                bookingId: string;
+            };
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Adjunta un documento con el nombre que le den (archivos subidos con purpose=document) */
+        post: operations["addBookingDocument"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/b/{businessId}/bookings/{bookingId}/documents/{docId}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                businessId: components["parameters"]["BusinessId"];
+                bookingId: string;
+                docId: string;
+            };
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post?: never;
+        delete: operations["removeBookingDocument"];
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/v1/b/{businessId}/bookings/{bookingId}/extend": {
         parameters: {
             query?: never;
@@ -865,6 +945,19 @@ export interface components {
             /** Format: date-time */
             ends_at: string | null;
         };
+        DocumentType: {
+            /** Format: uuid */
+            id: string;
+            name: string;
+            /** @description La salida espera este documento */
+            required: boolean;
+            active: boolean;
+        };
+        DocumentTypeInput: {
+            name?: string;
+            required?: boolean;
+            active?: boolean;
+        };
         /** @enum {string} */
         DocType: "ine" | "proof_of_address" | "guarantor_id";
         CustomerInput: {
@@ -911,7 +1004,7 @@ export interface components {
                 rentals_span_closed_days: boolean;
                 /** @description Esos días cerrados se cobran */
                 charge_closed_days: boolean;
-                /** @description Revisión entre rentas de una unidad */
+                /** @description Revisión entre rentas de una unidad (0 = sin revisión; la app la captura en horas) */
                 inspection_minutes: number;
             };
         };
@@ -1028,6 +1121,15 @@ export interface components {
             public_token: string;
             /** Format: date-time */
             created_at: string;
+            /** @description Documentos adjuntos con nombre libre */
+            documents: {
+                /** Format: uuid */
+                id: string;
+                name: string;
+                files: string[];
+                /** Format: date-time */
+                created_at: string;
+            }[];
             payments: {
                 /** Format: uuid */
                 id: string;
@@ -1796,6 +1898,87 @@ export interface operations {
             422: components["responses"]["Error"];
         };
     };
+    listDocumentTypes: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                businessId: components["parameters"]["BusinessId"];
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        documents: components["schemas"]["DocumentType"][];
+                    };
+                };
+            };
+        };
+    };
+    createDocumentType: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                businessId: components["parameters"]["BusinessId"];
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["DocumentTypeInput"];
+            };
+        };
+        responses: {
+            /** @description Creado */
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["DocumentType"];
+                };
+            };
+            403: components["responses"]["Error"];
+            422: components["responses"]["Error"];
+        };
+    };
+    updateDocumentType: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                businessId: components["parameters"]["BusinessId"];
+                docTypeId: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["DocumentTypeInput"];
+            };
+        };
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["DocumentType"];
+                };
+            };
+            404: components["responses"]["Error"];
+            422: components["responses"]["Error"];
+        };
+    };
     getInventory: {
         parameters: {
             query?: never;
@@ -2321,12 +2504,12 @@ export interface operations {
                      */
                     step_id?: string;
                     /**
-                     * @description payment = evidencia de un pago
+                     * @description payment = evidencia de un pago; document = documento adicional (foto o PDF)
                      * @enum {string}
                      */
-                    purpose?: "payment";
+                    purpose?: "payment" | "document";
                     /** @enum {string} */
-                    content_type: "image/jpeg" | "image/png" | "image/webp";
+                    content_type: "image/jpeg" | "image/png" | "image/webp" | "application/pdf";
                     size: number;
                 };
             };
@@ -2458,6 +2641,63 @@ export interface operations {
                 businessId: components["parameters"]["BusinessId"];
                 bookingId: string;
                 stepId: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Booking"];
+                };
+            };
+            404: components["responses"]["Error"];
+            422: components["responses"]["Error"];
+        };
+    };
+    addBookingDocument: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                businessId: components["parameters"]["BusinessId"];
+                bookingId: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": {
+                    name: string;
+                    files: string[];
+                };
+            };
+        };
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Booking"];
+                };
+            };
+            422: components["responses"]["Error"];
+        };
+    };
+    removeBookingDocument: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                businessId: components["parameters"]["BusinessId"];
+                bookingId: string;
+                docId: string;
             };
             cookie?: never;
         };

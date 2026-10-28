@@ -5,9 +5,11 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"slices"
 	"testing"
 	"time"
 
+	"github.com/omaradriano/local_bussiness/services/api/internal/settings"
 	"github.com/omaradriano/local_bussiness/services/api/internal/steps"
 )
 
@@ -421,5 +423,65 @@ func TestIntegrationHistory(t *testing.T) {
 	}
 	if got, _ := History(ctx, p, f.business, HistoryFilter{CustomerID: cid, Limit: 10}); len(got) != 1 || got[0].ID != ids[2] {
 		t.Fatalf("by customer: %v", got)
+	}
+}
+
+func TestIntegrationAdditionalDocuments(t *testing.T) {
+	p := pool(t)
+	ctx := context.Background()
+	f := setup(t, p, "tool_rental", `{"security_deposit_enabled": false}`)
+	repo := settings.Repo{DB: p}
+	pagare, err := repo.CreateDocumentType(ctx, f.business, settings.DocumentType{Name: "Pagaré", Required: true, Active: true})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, err := repo.CreateDocumentType(ctx, f.business, settings.DocumentType{Name: "Contrato", Active: false}); err != nil {
+		t.Fatal(err)
+	}
+	b, _, err := Create(ctx, p, f.business, CreateInput{Customer: cust("6143030020"), ItemID: f.item, StartsAt: at("2026-11-02T15:00:00Z"), EndsAt: at("2026-11-03T15:00:00Z"), Source: "admin"}, now)
+	if err != nil {
+		t.Fatal(err)
+	}
+	// Only the active configured type is copied to the new rental, and it blocks the check-out.
+	var labels []string
+	for _, st := range b.Steps {
+		labels = append(labels, st.Label)
+	}
+	if !slices.Contains(labels, "Pagaré") || slices.Contains(labels, "Contrato") {
+		t.Fatalf("steps: %v", labels)
+	}
+	var sp StepsPending
+	if _, err := Checkout(ctx, p, f.business, b.ID, "", "", now); !errors.As(err, &sp) || !slices.Contains(sp.Labels, "Pagaré") {
+		t.Fatalf("checkout without the note: %v", err)
+	}
+	// Turning it off affects new rentals only.
+	off := false
+	if _, err := repo.UpdateDocumentType(ctx, f.business, pagare.Apply(settings.DocumentTypeInput{Active: &off})); err != nil {
+		t.Fatal(err)
+	}
+	if list, _ := repo.DocumentTypes(ctx, f.business); len(list) != 2 || list[0].Active {
+		t.Fatalf("types: %+v", list)
+	}
+
+	// Free documents: any name, keys under documents/, removable until the rental is closed.
+	ok := func(context.Context, string, string) error { return nil }
+	key := DocumentFilePrefix(f.business, b.ID) + RandomName("pdf")
+	var bad Invalid
+	if _, err := AddDocument(ctx, p, f.business, b.ID, "Contrato", []string{NewFileKey(f.business, b.ID, "pdf")}, "", ok); !errors.As(err, &bad) || bad.Field != "files" {
+		t.Fatalf("key outside documents/: %v", err)
+	}
+	b, err = AddDocument(ctx, p, f.business, b.ID, "  Contrato   firmado ", []string{key}, "", ok)
+	if err != nil || len(b.Documents) != 1 || b.Documents[0].Name != "Contrato firmado" {
+		t.Fatalf("add: %+v %v", b.Documents, err)
+	}
+	b, keys, err := RemoveDocument(ctx, p, f.business, b.ID, b.Documents[0].ID)
+	if err != nil || len(b.Documents) != 0 || len(keys) != 1 || keys[0] != key {
+		t.Fatalf("remove: %+v %v %v", b.Documents, keys, err)
+	}
+	if _, err := Transition(ctx, p, f.business, b.ID, "cancelled", "", ""); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := AddDocument(ctx, p, f.business, b.ID, "Tarde", []string{key}, "", ok); !errors.As(err, &bad) || bad.Field != "status" {
+		t.Fatalf("add after cancel: %v", err)
 	}
 }
