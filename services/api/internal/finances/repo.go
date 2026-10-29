@@ -10,7 +10,6 @@ import (
 	"unicode/utf8"
 
 	"github.com/jackc/pgx/v5"
-	"github.com/jackc/pgx/v5/pgconn"
 
 	"github.com/omaradriano/local_bussiness/services/api/internal/store"
 )
@@ -245,8 +244,8 @@ type Summary struct {
 	Payroll  []PayLine    `json:"payroll"`
 	Bookings []Count      `json:"bookings"` // bookings starting in the period, by status
 	// Charges of recurring expenses waiting for the owner to confirm (not counted until then).
-	PendingRecurring int `json:"pending_recurring"`
-	Overdue  []Overdue    `json:"overdue"`  // rentals not returned on time, right now (any period)
+	PendingRecurring int       `json:"pending_recurring"`
+	Overdue          []Overdue `json:"overdue"` // rentals not returned on time, right now (any period)
 }
 
 // Overdue: a rental that wasn't returned on time.
@@ -569,9 +568,10 @@ func (r Repo) PayCharge(ctx context.Context, businessID string, rec Recurring, d
 	err := r.DB.QueryRow(ctx, `insert into public.expenses (business_id, spent_on, category, amount, description, created_by, recurring_id, due_on)
 		select $1, $2, $3, $4, $5, nullif($6, '')::uuid, $7, $8
 		where not exists (select 1 from public.recurring_skips where recurring_id = $7 and due_on = $8)
+		on conflict (recurring_id, due_on) where recurring_id is not null do nothing
 		returning id::text, created_at`,
 		businessID, spentOn, rec.Category, amount, rec.Description, actor, rec.ID, due).Scan(&e.ID, &e.CreatedAt)
-	if errors.Is(err, pgx.ErrNoRows) || isUnique(err) {
+	if errors.Is(err, pgx.ErrNoRows) { // skipped, or already paid (the conflict inserts nothing)
 		return e, ErrAnswered
 	}
 	return e, err
@@ -586,9 +586,4 @@ func (r Repo) SkipCharge(ctx context.Context, businessID string, rec Recurring, 
 		return ErrAnswered
 	}
 	return err
-}
-
-func isUnique(err error) bool {
-	var pgErr *pgconn.PgError
-	return errors.As(err, &pgErr) && pgErr.Code == "23505"
 }

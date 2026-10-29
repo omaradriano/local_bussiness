@@ -1104,7 +1104,9 @@ func (fakeFinances) PayCharge(_ context.Context, _ string, r finances.Recurring,
 	}
 	return finances.Expense{ID: bookingID, SpentOn: spentOn, Category: r.Category, Amount: amount, RecurringID: &r.ID}, nil
 }
-func (fakeFinances) SkipCharge(context.Context, string, finances.Recurring, finances.Day) error { return nil }
+func (fakeFinances) SkipCharge(context.Context, string, finances.Recurring, finances.Day) error {
+	return nil
+}
 
 func TestFinanceRoutes(t *testing.T) {
 	base := "/v1/b/" + bizA + "/finances"
