@@ -107,6 +107,47 @@ func TestIntegrationSummary(t *testing.T) {
 	if len(s.Overdue) != 1 || s.Overdue[0].BookingID != rental || s.Overdue[0].Customer != "Ana" || s.Overdue[0].Item != "Rotomartillo" || s.Overdue[0].DaysLate != 6 {
 		t.Fatalf("overdue: %+v", s.Overdue)
 	}
+	// Recurring rent from 1 Oct; today is 10 Dec: Oct, Nov and Dec are due.
+	rent, err := r.AddRecurring(ctx, biz, Recurring{Description: "Renta del local", Category: "rent", Amount: 800000, Frequency: "monthly", StartsOn: d("2026-10-01")}, "")
+	if err != nil {
+		t.Fatal(err)
+	}
+	oct, err := r.PayCharge(ctx, biz, rent, d("2026-10-01"), d("2026-10-02"), 812000, "")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := r.SkipCharge(ctx, biz, rent, d("2026-11-01")); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := r.PayCharge(ctx, biz, rent, d("2026-10-01"), d("2026-10-02"), 1, ""); err != ErrAnswered {
+		t.Fatalf("paid twice: %v", err)
+	}
+	if _, err := r.PayCharge(ctx, biz, rent, d("2026-11-01"), d("2026-11-01"), 1, ""); err != ErrAnswered {
+		t.Fatalf("paid a skipped one: %v", err)
+	}
+	if err := r.SkipCharge(ctx, biz, rent, d("2026-10-01")); err != ErrAnswered {
+		t.Fatalf("skipped a paid one: %v", err)
+	}
+	list, err := r.Recurring(ctx, biz, d("2026-12-10"))
+	if err != nil || len(list) != 1 || len(list[0].Pending) != 1 || !list[0].Pending[0].Equal(d("2026-12-01")) || !list[0].NextDue.Equal(d("2027-01-01")) {
+		t.Fatalf("recurring: %+v %v", list, err)
+	}
+	// The confirmed charge is an October expense with its real amount; December's pending one shows in the summary.
+	octSummary, err := r.Summary(ctx, biz, d("2026-10-01"), d("2026-10-31"), now)
+	if err != nil || part(octSummary.Expenses, "rent") != 812000 || octSummary.PendingRecurring != 1 {
+		t.Fatalf("october: %+v pending %d %v", octSummary.Expenses, octSummary.PendingRecurring, err)
+	}
+	// Deleting the expense asks for that charge again.
+	if err := r.DeleteExpense(ctx, biz, oct.ID); err != nil {
+		t.Fatal(err)
+	}
+	if list, _ := r.Recurring(ctx, biz, d("2026-12-10")); len(list[0].Pending) != 2 {
+		t.Fatalf("pending after delete: %+v", list[0].Pending)
+	}
+	// Stopping it keeps what was paid (nothing here) and drops it from the list.
+	if err := r.DeleteRecurring(ctx, biz, rent.ID); err != nil {
+		t.Fatal(err)
+	}
 	if err := r.DeleteExpense(ctx, other, "00000000-0000-0000-0000-000000000000"); err != ErrNotFound {
 		t.Fatalf("delete missing: %v", err)
 	}

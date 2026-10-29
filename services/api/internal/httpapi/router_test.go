@@ -1083,6 +1083,29 @@ func (fakeFinances) SetPay(_ context.Context, _ string, p finances.Pay) (finance
 	return p, nil
 }
 
+func (fakeFinances) Recurring(context.Context, string, finances.Day) ([]finances.RecurringStatus, error) {
+	return []finances.RecurringStatus{}, nil
+}
+func (fakeFinances) GetRecurring(_ context.Context, _, id string) (finances.Recurring, error) {
+	if id != itemID {
+		return finances.Recurring{}, finances.ErrNotFound
+	}
+	return finances.Recurring{ID: id, Description: "Renta", Category: "rent", Amount: 800000, Frequency: "monthly",
+		StartsOn: time.Date(2026, 8, 1, 0, 0, 0, 0, time.UTC)}, nil
+}
+func (fakeFinances) AddRecurring(_ context.Context, _ string, r finances.Recurring, _ string) (finances.Recurring, error) {
+	r.ID = itemID
+	return r, nil
+}
+func (fakeFinances) DeleteRecurring(context.Context, string, string) error { return nil }
+func (fakeFinances) PayCharge(_ context.Context, _ string, r finances.Recurring, due, spentOn finances.Day, amount int64, _ string) (finances.Expense, error) {
+	if due.Month() == time.September { // already answered
+		return finances.Expense{}, finances.ErrAnswered
+	}
+	return finances.Expense{ID: bookingID, SpentOn: spentOn, Category: r.Category, Amount: amount, RecurringID: &r.ID}, nil
+}
+func (fakeFinances) SkipCharge(context.Context, string, finances.Recurring, finances.Day) error { return nil }
+
 func TestFinanceRoutes(t *testing.T) {
 	base := "/v1/b/" + bizA + "/finances"
 	cases := []struct {
@@ -1102,6 +1125,18 @@ func TestFinanceRoutes(t *testing.T) {
 		{"compra a plazos", http.MethodPost, base + "/plans", "ok", `{"description":"Camioneta","category":"asset","purchased_on":"2026-11-01","down_payment":5000000,"installment_amount":800000,"installments":24,"first_due":"2026-12-01"}`, http.StatusCreated, `"installments":24`},
 		{"primer pago antes de la compra", http.MethodPost, base + "/plans", "ok", `{"description":"Camioneta","category":"asset","purchased_on":"2026-11-01","installment_amount":800000,"installments":24,"first_due":"2026-10-01"}`, http.StatusUnprocessableEntity, `"first_due"`},
 		{"sueldo y comisión", http.MethodPut, base + "/pay/" + stepID, "ok", `{"salary":1200000,"salary_period":"monthly","commission_percent":40}`, http.StatusOK, `"commission_percent":40`},
+		{"gasto recurrente", http.MethodPost, base + "/recurring", "ok", `{"description":"Renta del local","category":"rent","amount":800000,"frequency":"monthly","starts_on":"2026-08-01"}`, http.StatusCreated, `"frequency":"monthly"`},
+		{"recurrente sin frecuencia", http.MethodPost, base + "/recurring", "ok", `{"description":"Renta","category":"rent","amount":800000,"starts_on":"2026-08-01"}`, http.StatusUnprocessableEntity, `"frequency"`},
+		{"recurrentes", http.MethodGet, base + "/recurring", "ok", "", http.StatusOK, `"recurring":[]`},
+		{"confirmar cobro con monto real", http.MethodPost, base + "/recurring/" + itemID + "/charges", "ok", `{"due_on":"2026-10-01","amount":812000}`, http.StatusCreated, `"amount":812000`},
+		{"pagar por adelantado el siguiente", http.MethodPost, base + "/recurring/" + itemID + "/charges", "ok", `{"due_on":"2026-12-01","amount":800000,"spent_on":"2026-11-28"}`, http.StatusCreated, `"spent_on":"2026-11-28`},
+		{"fecha que no es cobro", http.MethodPost, base + "/recurring/" + itemID + "/charges", "ok", `{"due_on":"2026-10-02","amount":800000}`, http.StatusUnprocessableEntity, `"due_on"`},
+		{"cobro lejano", http.MethodPost, base + "/recurring/" + itemID + "/charges", "ok", `{"due_on":"2027-01-01","amount":800000}`, http.StatusUnprocessableEntity, `"due_on"`},
+		{"cobro en cero", http.MethodPost, base + "/recurring/" + itemID + "/charges", "ok", `{"due_on":"2026-10-01","amount":0}`, http.StatusUnprocessableEntity, `"amount"`},
+		{"cobro ya contestado", http.MethodPost, base + "/recurring/" + itemID + "/charges", "ok", `{"due_on":"2026-09-01","amount":800000}`, http.StatusConflict, `"already_answered"`},
+		{"no se pagó", http.MethodPost, base + "/recurring/" + itemID + "/skips", "ok", `{"due_on":"2026-10-01"}`, http.StatusNoContent, ""},
+		{"recurrente ajeno", http.MethodPost, base + "/recurring/" + stepID + "/skips", "ok", `{"due_on":"2026-10-01"}`, http.StatusNotFound, `"not_found"`},
+		{"dejar de pagar", http.MethodDelete, base + "/recurring/" + itemID, "ok", "", http.StatusNoContent, ""},
 		{"comisión > 100", http.MethodPut, base + "/pay/" + stepID, "ok", `{"salary":0,"salary_period":"monthly","commission_percent":140}`, http.StatusUnprocessableEntity, `"commission_percent"`},
 	}
 	for _, tc := range cases {

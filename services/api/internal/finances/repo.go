@@ -10,6 +10,7 @@ import (
 	"unicode/utf8"
 
 	"github.com/jackc/pgx/v5"
+	"github.com/jackc/pgx/v5/pgconn"
 
 	"github.com/omaradriano/local_bussiness/services/api/internal/store"
 )
@@ -33,6 +34,7 @@ type Expense struct {
 	Amount      int64     `json:"amount"`
 	Description *string   `json:"description"`
 	CreatedAt   time.Time `json:"created_at"`
+	RecurringID *string   `json:"recurring_id"` // a confirmed charge of a recurring expense
 }
 
 func (e Expense) Validate() error {
@@ -111,7 +113,7 @@ func (p Pay) Validate() error {
 type Repo struct{ DB store.DB }
 
 func (r Repo) Expenses(ctx context.Context, businessID string, from, to Day) ([]Expense, error) {
-	rows, err := r.DB.Query(ctx, `select id::text, spent_on, category, amount, description, created_at from public.expenses
+	rows, err := r.DB.Query(ctx, `select id::text, spent_on, category, amount, description, created_at, recurring_id::text from public.expenses
 		where business_id = $1 and spent_on between $2 and $3 order by spent_on desc, created_at desc`, businessID, from, to)
 	if err != nil {
 		return nil, err
@@ -242,6 +244,8 @@ type Summary struct {
 	Plans    []PlanStatus `json:"plans"`
 	Payroll  []PayLine    `json:"payroll"`
 	Bookings []Count      `json:"bookings"` // bookings starting in the period, by status
+	// Charges of recurring expenses waiting for the owner to confirm (not counted until then).
+	PendingRecurring int `json:"pending_recurring"`
 	Overdue  []Overdue    `json:"overdue"`  // rentals not returned on time, right now (any period)
 }
 
@@ -423,6 +427,14 @@ func (r Repo) Summary(ctx context.Context, businessID string, from, to Day, now 
 	}
 	out.Bookings = counts(byStatus)
 
+	recurring, err := r.Recurring(ctx, businessID, today)
+	if err != nil {
+		return out, err
+	}
+	for _, rs := range recurring {
+		out.PendingRecurring += len(rs.Pending)
+	}
+
 	rows, err = r.DB.Query(ctx, `
 		select b.id::text, c.name, coalesce((select string_agg(ci.name, ', ' order by ci.name) from public.booking_items bi
 			join public.catalog_items ci on ci.id = bi.item_id where bi.booking_id = b.id), ''), b.ends_at
@@ -463,4 +475,120 @@ func (r Repo) Today(ctx context.Context, businessID string, now time.Time) (Day,
 	}
 	ln := now.In(loc)
 	return time.Date(ln.Year(), ln.Month(), ln.Day(), 0, 0, 0, 0, time.UTC), nil
+}
+
+// ---------------------------------------------------------------- recurring
+
+// RecurringStatus: a recurring expense with its next charge and the ones waiting for an answer.
+type RecurringStatus struct {
+	Recurring
+	NextDue *Day  `json:"next_due"`
+	Pending []Day `json:"pending"` // oldest first
+}
+
+var ErrAnswered = errors.New("charge already answered")
+
+const recurringCols = `id::text, description, category, amount, frequency, starts_on, ends_on`
+
+func (r Repo) Recurring(ctx context.Context, businessID string, today Day) ([]RecurringStatus, error) {
+	rows, err := r.DB.Query(ctx, `select `+recurringCols+` from public.recurring_expenses where business_id = $1 order by created_at`, businessID)
+	if err != nil {
+		return nil, err
+	}
+	list, err := pgx.CollectRows(rows, pgx.RowToStructByPos[Recurring])
+	if err != nil {
+		return nil, err
+	}
+	// Charges already answered (paid = an expense, or «No se pagó»).
+	answered := map[string]map[string]bool{}
+	rows, err = r.DB.Query(ctx, `
+		select recurring_id::text, due_on from public.expenses where business_id = $1 and recurring_id is not null
+		union all select recurring_id::text, due_on from public.recurring_skips where business_id = $1`, businessID)
+	if err != nil {
+		return nil, err
+	}
+	for rows.Next() {
+		var id string
+		var due Day
+		if err := rows.Scan(&id, &due); err != nil {
+			rows.Close()
+			return nil, err
+		}
+		if answered[id] == nil {
+			answered[id] = map[string]bool{}
+		}
+		answered[id][due.Format("2006-01-02")] = true
+	}
+	rows.Close()
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	out := make([]RecurringStatus, 0, len(list))
+	for _, rec := range list {
+		pending := rec.Pending(today, answered[rec.ID])
+		if pending == nil {
+			pending = []Day{}
+		}
+		out = append(out, RecurringStatus{Recurring: rec, NextDue: rec.NextDue(today), Pending: pending})
+	}
+	return out, nil
+}
+
+func (r Repo) GetRecurring(ctx context.Context, businessID, id string) (Recurring, error) {
+	rows, err := r.DB.Query(ctx, `select `+recurringCols+` from public.recurring_expenses where business_id = $1 and id = $2`, businessID, id)
+	if err != nil {
+		return Recurring{}, err
+	}
+	rec, err := pgx.CollectExactlyOneRow(rows, pgx.RowToStructByPos[Recurring])
+	if errors.Is(err, pgx.ErrNoRows) {
+		return rec, ErrNotFound
+	}
+	return rec, err
+}
+
+func (r Repo) AddRecurring(ctx context.Context, businessID string, rec Recurring, actor string) (Recurring, error) {
+	rec.Description = strings.TrimSpace(rec.Description)
+	err := r.DB.QueryRow(ctx, `insert into public.recurring_expenses (business_id, description, category, amount, frequency, starts_on, ends_on, created_by)
+		values ($1, $2, $3, $4, $5, $6, $7, nullif($8, '')::uuid) returning id::text`,
+		businessID, rec.Description, rec.Category, rec.Amount, rec.Frequency, rec.StartsOn, rec.EndsOn, actor).Scan(&rec.ID)
+	return rec, err
+}
+
+// DeleteRecurring stops it; the charges already confirmed stay as expenses.
+func (r Repo) DeleteRecurring(ctx context.Context, businessID, id string) error {
+	tag, err := r.DB.Exec(ctx, `delete from public.recurring_expenses where business_id = $1 and id = $2`, businessID, id)
+	if err == nil && tag.RowsAffected() == 0 {
+		return ErrNotFound
+	}
+	return err
+}
+
+// PayCharge confirms a charge with what was really paid: it becomes an expense on spentOn.
+func (r Repo) PayCharge(ctx context.Context, businessID string, rec Recurring, due, spentOn Day, amount int64, actor string) (Expense, error) {
+	e := Expense{SpentOn: spentOn, Category: rec.Category, Amount: amount, Description: &rec.Description, RecurringID: &rec.ID}
+	err := r.DB.QueryRow(ctx, `insert into public.expenses (business_id, spent_on, category, amount, description, created_by, recurring_id, due_on)
+		select $1, $2, $3, $4, $5, nullif($6, '')::uuid, $7, $8
+		where not exists (select 1 from public.recurring_skips where recurring_id = $7 and due_on = $8)
+		returning id::text, created_at`,
+		businessID, spentOn, rec.Category, amount, rec.Description, actor, rec.ID, due).Scan(&e.ID, &e.CreatedAt)
+	if errors.Is(err, pgx.ErrNoRows) || isUnique(err) {
+		return e, ErrAnswered
+	}
+	return e, err
+}
+
+// SkipCharge records that a charge wasn't paid.
+func (r Repo) SkipCharge(ctx context.Context, businessID string, rec Recurring, due Day) error {
+	tag, err := r.DB.Exec(ctx, `insert into public.recurring_skips (business_id, recurring_id, due_on)
+		select $1, $2, $3 where not exists (select 1 from public.expenses where recurring_id = $2 and due_on = $3)
+		on conflict do nothing`, businessID, rec.ID, due)
+	if err == nil && tag.RowsAffected() == 0 {
+		return ErrAnswered
+	}
+	return err
+}
+
+func isUnique(err error) bool {
+	var pgErr *pgconn.PgError
+	return errors.As(err, &pgErr) && pgErr.Code == "23505"
 }

@@ -24,6 +24,12 @@ type FinancesRepo interface {
 	DeletePlan(ctx context.Context, businessID, id string) error
 	Pays(ctx context.Context, businessID string) ([]finances.Pay, error)
 	SetPay(ctx context.Context, businessID string, p finances.Pay) (finances.Pay, error)
+	Recurring(ctx context.Context, businessID string, today finances.Day) ([]finances.RecurringStatus, error)
+	GetRecurring(ctx context.Context, businessID, id string) (finances.Recurring, error)
+	AddRecurring(ctx context.Context, businessID string, r finances.Recurring, actor string) (finances.Recurring, error)
+	DeleteRecurring(ctx context.Context, businessID, id string) error
+	PayCharge(ctx context.Context, businessID string, r finances.Recurring, due, spentOn finances.Day, amount int64, actor string) (finances.Expense, error)
+	SkipCharge(ctx context.Context, businessID string, r finances.Recurring, due finances.Day) error
 }
 
 func writeFinance(w http.ResponseWriter, r *http.Request, status int, v any, err error) {
@@ -33,6 +39,8 @@ func writeFinance(w http.ResponseWriter, r *http.Request, status int, v any, err
 		invalid(w, "Revisa los datos.", bad)
 	case errors.Is(err, finances.ErrNotFound):
 		notFound(w, "No existe.")
+	case errors.Is(err, finances.ErrAnswered):
+		apierr.Write(w, http.StatusConflict, "already_answered", "Ese cobro ya se registró.")
 	case err != nil:
 		internalError(w, r, "finances", err)
 	case v == nil:
@@ -144,6 +152,8 @@ func mountFinances(r chi.Router, d Deps) {
 			writeFinance(w, r, 0, nil, d.Finances.DeletePlan(r.Context(), m.BusinessID, chi.URLParam(r, "planId")))
 		})
 
+		mountRecurring(r, d)
+
 		r.Get("/pay", func(w http.ResponseWriter, r *http.Request) {
 			m, _ := auth.MemberFrom(r.Context())
 			list, err := d.Finances.Pays(r.Context(), m.BusinessID)
@@ -162,6 +172,128 @@ func mountFinances(r chi.Router, d Deps) {
 			}
 			saved, err := d.Finances.SetPay(r.Context(), m.BusinessID, p)
 			writeFinance(w, r, http.StatusOK, saved, err)
+		})
+	})
+}
+
+// mountRecurring: recurring expenses and the answer to each charge (paid with its real amount, or not paid).
+func mountRecurring(r chi.Router, d Deps) {
+	today := func(w http.ResponseWriter, r *http.Request) (finances.Day, bool) {
+		m, _ := auth.MemberFrom(r.Context())
+		day, err := d.Finances.Today(r.Context(), m.BusinessID, d.now())
+		if err != nil {
+			internalError(w, r, "today", err)
+			return day, false
+		}
+		return day, true
+	}
+
+	r.Get("/recurring", func(w http.ResponseWriter, r *http.Request) {
+		m, _ := auth.MemberFrom(r.Context())
+		if day, ok := today(w, r); ok {
+			list, err := d.Finances.Recurring(r.Context(), m.BusinessID, day)
+			writeFinance(w, r, http.StatusOK, map[string]any{"recurring": list}, err)
+		}
+	})
+	r.Post("/recurring", func(w http.ResponseWriter, r *http.Request) {
+		m, _ := auth.MemberFrom(r.Context())
+		var body struct {
+			Description string `json:"description"`
+			Category    string `json:"category"`
+			Amount      int64  `json:"amount"`
+			Frequency   string `json:"frequency"`
+			StartsOn    string `json:"starts_on"`
+			EndsOn      string `json:"ends_on"`
+		}
+		if !decode(w, r, &body) {
+			return
+		}
+		start, _ := finances.ParseDay(body.StartsOn)
+		rec := finances.Recurring{Description: body.Description, Category: body.Category, Amount: body.Amount, Frequency: body.Frequency, StartsOn: start}
+		if body.EndsOn != "" {
+			end, ok := finances.ParseDay(body.EndsOn)
+			if !ok {
+				invalid(w, "Revisa los datos.", map[string]string{"ends_on": "Fecha inválida."})
+				return
+			}
+			rec.EndsOn = &end
+		}
+		if err := rec.Validate(); err != nil {
+			writeFinance(w, r, 0, nil, err)
+			return
+		}
+		saved, err := d.Finances.AddRecurring(r.Context(), m.BusinessID, rec, m.UserID)
+		writeFinance(w, r, http.StatusCreated, saved, err)
+	})
+
+	r.Route("/recurring/{recurringId}", func(r chi.Router) {
+		r.Use(requireUUIDParam("recurringId", "El gasto recurrente no existe."))
+		r.Delete("/", func(w http.ResponseWriter, r *http.Request) {
+			m, _ := auth.MemberFrom(r.Context())
+			writeFinance(w, r, 0, nil, d.Finances.DeleteRecurring(r.Context(), m.BusinessID, chi.URLParam(r, "recurringId")))
+		})
+
+		// charge reads the recurring expense and checks due_on is one of its charges, up to the next one
+		// (paying ahead is fine; further than that is a mistake).
+		charge := func(w http.ResponseWriter, r *http.Request, dueOn string) (finances.Recurring, finances.Day, bool) {
+			m, _ := auth.MemberFrom(r.Context())
+			rec, err := d.Finances.GetRecurring(r.Context(), m.BusinessID, chi.URLParam(r, "recurringId"))
+			if err != nil {
+				writeFinance(w, r, 0, nil, err)
+				return rec, finances.Day{}, false
+			}
+			day, ok := today(w, r)
+			if !ok {
+				return rec, day, false
+			}
+			due, ok := finances.ParseDay(dueOn)
+			next := rec.NextDue(day)
+			if !ok || !rec.IsDue(due) || (due.After(day) && (next == nil || due.After(*next))) {
+				invalid(w, "Ese día no hay cobro de este gasto.", map[string]string{"due_on": "Ese día no hay cobro de este gasto."})
+				return rec, due, false
+			}
+			return rec, due, true
+		}
+		r.Post("/charges", func(w http.ResponseWriter, r *http.Request) {
+			m, _ := auth.MemberFrom(r.Context())
+			var body struct {
+				DueOn   string `json:"due_on"`
+				Amount  int64  `json:"amount"`
+				SpentOn string `json:"spent_on"` // when it was paid; the charge's date by default
+			}
+			if !decode(w, r, &body) {
+				return
+			}
+			rec, due, ok := charge(w, r, body.DueOn)
+			if !ok {
+				return
+			}
+			spent := due
+			if body.SpentOn != "" {
+				if spent, ok = finances.ParseDay(body.SpentOn); !ok {
+					invalid(w, "Revisa los datos.", map[string]string{"spent_on": "Fecha inválida."})
+					return
+				}
+			}
+			// Same rules as any expense (amount, date).
+			if err := (finances.Expense{SpentOn: spent, Category: rec.Category, Amount: body.Amount}).Validate(); err != nil {
+				writeFinance(w, r, 0, nil, err)
+				return
+			}
+			saved, err := d.Finances.PayCharge(r.Context(), m.BusinessID, rec, due, spent, body.Amount, m.UserID)
+			writeFinance(w, r, http.StatusCreated, saved, err)
+		})
+		r.Post("/skips", func(w http.ResponseWriter, r *http.Request) {
+			m, _ := auth.MemberFrom(r.Context())
+			var body struct {
+				DueOn string `json:"due_on"`
+			}
+			if !decode(w, r, &body) {
+				return
+			}
+			if rec, due, ok := charge(w, r, body.DueOn); ok {
+				writeFinance(w, r, 0, nil, d.Finances.SkipCharge(r.Context(), m.BusinessID, rec, due))
+			}
 		})
 	})
 }

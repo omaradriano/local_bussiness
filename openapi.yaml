@@ -826,6 +826,108 @@ paths:
         "204": { description: Borrado }
         "404": { $ref: "#/components/responses/Error" }
 
+  /v1/b/{businessId}/finances/recurring:
+    parameters:
+      - $ref: "#/components/parameters/BusinessId"
+    get:
+      operationId: listRecurring
+      summary: Gastos recurrentes con su próximo cobro y los cobros por confirmar
+      responses:
+        "200":
+          description: OK
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [recurring]
+                properties:
+                  recurring: { type: array, items: { $ref: "#/components/schemas/RecurringExpense" } }
+    post:
+      operationId: addRecurring
+      summary: Gasto que se repite (renta, internet, luz); cada cobro se confirma con su monto real
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [description, category, amount, frequency, starts_on]
+              properties:
+                description: { type: string, maxLength: 120 }
+                category: { $ref: "#/components/schemas/ExpenseCategory" }
+                amount: { type: integer, minimum: 1, description: "Monto aproximado (centavos)" }
+                frequency: { $ref: "#/components/schemas/Frequency" }
+                starts_on: { type: string, format: date }
+                ends_on: { type: string, format: date }
+      responses:
+        "201":
+          description: Creado
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/RecurringExpense" }
+        "422": { $ref: "#/components/responses/Error" }
+
+  /v1/b/{businessId}/finances/recurring/{recurringId}:
+    parameters:
+      - $ref: "#/components/parameters/BusinessId"
+      - { name: recurringId, in: path, required: true, schema: { type: string, format: uuid } }
+    delete:
+      operationId: deleteRecurring
+      summary: Deja de pagarse; los cobros confirmados se quedan como gastos
+      responses:
+        "204": { description: Borrado }
+        "404": { $ref: "#/components/responses/Error" }
+
+  /v1/b/{businessId}/finances/recurring/{recurringId}/charges:
+    parameters:
+      - $ref: "#/components/parameters/BusinessId"
+      - { name: recurringId, in: path, required: true, schema: { type: string, format: uuid } }
+    post:
+      operationId: payRecurringCharge
+      summary: Confirma un cobro con lo que se pagó; se vuelve un gasto
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [due_on, amount]
+              properties:
+                due_on: { type: string, format: date, description: "Fecha del cobro (pasado o el siguiente)" }
+                amount: { type: integer, minimum: 1 }
+                spent_on: { type: string, format: date, description: "Cuándo se pagó; por defecto la fecha del cobro" }
+      responses:
+        "201":
+          description: Creado
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Expense" }
+        "404": { $ref: "#/components/responses/Error" }
+        "409": { $ref: "#/components/responses/Error" }
+        "422": { $ref: "#/components/responses/Error" }
+
+  /v1/b/{businessId}/finances/recurring/{recurringId}/skips:
+    parameters:
+      - $ref: "#/components/parameters/BusinessId"
+      - { name: recurringId, in: path, required: true, schema: { type: string, format: uuid } }
+    post:
+      operationId: skipRecurringCharge
+      summary: Ese cobro no se pagó (deja de pedirse)
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [due_on]
+              properties:
+                due_on: { type: string, format: date }
+      responses:
+        "204": { description: Registrado }
+        "404": { $ref: "#/components/responses/Error" }
+        "409": { $ref: "#/components/responses/Error" }
+        "422": { $ref: "#/components/responses/Error" }
+
   /v1/b/{businessId}/finances/pay:
     parameters:
       - $ref: "#/components/parameters/BusinessId"
@@ -1793,7 +1895,7 @@ components:
 
     Expense:
       type: object
-      required: [id, spent_on, category, amount, description, created_at]
+      required: [id, spent_on, category, amount, description, created_at, recurring_id]
       properties:
         id: { type: string, format: uuid }
         spent_on: { type: string, description: "Fecha (medianoche UTC); usar los primeros 10 caracteres" }
@@ -1801,6 +1903,25 @@ components:
         amount: { type: integer }
         description: { type: [string, "null"] }
         created_at: { type: string, format: date-time }
+        recurring_id: { type: [string, "null"], format: uuid, description: "Cobro confirmado de un gasto recurrente" }
+
+    Frequency:
+      type: string
+      enum: [weekly, biweekly, monthly, yearly]
+
+    RecurringExpense:
+      type: object
+      required: [id, description, category, amount, frequency, starts_on, ends_on, next_due, pending]
+      properties:
+        id: { type: string, format: uuid }
+        description: { type: string }
+        category: { $ref: "#/components/schemas/ExpenseCategory" }
+        amount: { type: integer, description: "Monto aproximado" }
+        frequency: { $ref: "#/components/schemas/Frequency" }
+        starts_on: { type: string }
+        ends_on: { type: [string, "null"] }
+        next_due: { type: [string, "null"], description: "Próximo cobro después de hoy" }
+        pending: { type: array, items: { type: string }, description: "Cobros hasta hoy sin confirmar (último año), el más antiguo primero" }
 
     ExpensePlan:
       type: object
@@ -1842,10 +1963,11 @@ components:
 
     FinanceSummary:
       type: object
-      required: [from, to, income, expenses, profit, plans, payroll, bookings, overdue]
+      required: [from, to, income, expenses, profit, plans, payroll, bookings, overdue, pending_recurring]
       properties:
         from: { type: string }
         to: { type: string }
+        pending_recurring: { type: integer, description: "Cobros de gastos recurrentes por confirmar (no cuentan hasta confirmarse)" }
         bookings:
           type: array
           description: "Reservas que empiezan en el periodo, por estado (en orden del ciclo de vida, sin ceros)"
