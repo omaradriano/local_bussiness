@@ -124,6 +124,25 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/v1/admin/businesses/{businessId}/plan": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                businessId: components["parameters"]["BusinessId"];
+            };
+            cookie?: never;
+        };
+        get?: never;
+        /** Asigna el plan a la cuenta del dueño del negocio (mientras no hay cobros) */
+        put: operations["adminSetPlan"];
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/v1/admin/businesses/{businessId}/features/{feature}": {
         parameters: {
             query?: never;
@@ -1642,6 +1661,22 @@ export interface components {
             /** Format: date-time */
             created_at: string;
             features: components["schemas"]["FeatureState"][];
+            account: components["schemas"]["AccountPlan"];
+        };
+        /** @enum {string} */
+        PlanKey: "trial" | "lite" | "pro" | "business";
+        /** @description Plan de la cuenta del dueño (cubre todos sus negocios). Vencida = solo lectura (las escrituras responden 403 plan_expired) */
+        AccountPlan: {
+            plan: components["schemas"]["PlanKey"];
+            /** @enum {string} */
+            status: "trial" | "active" | "expired";
+            /**
+             * Format: date-time
+             * @description null = sin vencimiento (piloto o cortesía)
+             */
+            ends_at: string | null;
+            /** @description Días que faltan, contando el empezado; -1 sin vencimiento */
+            days_left: number;
         };
         DeliveryZone: {
             name: string;
@@ -1952,6 +1987,7 @@ export interface components {
             name: string;
             vertical: components["schemas"]["Vertical"];
             role: components["schemas"]["Role"];
+            account: components["schemas"]["AccountPlan"];
             /** @description Funciones activas (disponibles y encendidas) */
             features: components["schemas"]["Feature"][];
         };
@@ -2150,6 +2186,43 @@ export interface operations {
                 };
             };
             403: components["responses"]["Error"];
+        };
+    };
+    adminSetPlan: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                businessId: components["parameters"]["BusinessId"];
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": {
+                    plan: components["schemas"]["PlanKey"];
+                    /**
+                     * Format: date
+                     * @description Último día del plan; vacío = sin vencimiento (una prueba sin fecha dura lo normal desde hoy)
+                     */
+                    ends_at?: string;
+                    note?: string;
+                };
+            };
+        };
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["AccountPlan"];
+                };
+            };
+            403: components["responses"]["Error"];
+            404: components["responses"]["Error"];
+            422: components["responses"]["Error"];
         };
     };
     adminSetFeature: {

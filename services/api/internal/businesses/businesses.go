@@ -18,6 +18,7 @@ import (
 	"github.com/jackc/pgx/v5/pgconn"
 
 	"github.com/omaradriano/local_bussiness/services/api/internal/catalog"
+	"github.com/omaradriano/local_bussiness/services/api/internal/plans"
 )
 
 // Giros: each one has a template in templates/<giro>.json with its engine (kind), the features the
@@ -206,6 +207,11 @@ func Create(ctx context.Context, db Beginner, userID string, in Input) (Business
 	if _, err := tx.Exec(ctx,
 		`insert into public.business_members (business_id, user_id, role) values ($1, $2, 'owner')`,
 		b.ID, userID); err != nil {
+		return Business{}, err
+	}
+	// A new owner starts their Pro trial; one who already has an account keeps their plan.
+	if _, err := tx.Exec(ctx, `insert into public.account_plans (user_id, plan, ends_at)
+		values ($1, 'trial', now() + make_interval(days => $2)) on conflict do nothing`, userID, plans.TrialDays); err != nil {
 		return Business{}, err
 	}
 

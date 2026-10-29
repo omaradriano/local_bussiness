@@ -5,7 +5,7 @@ import { useEffect, useState } from 'react';
 import { ActivityIndicator, StyleSheet, View } from 'react-native';
 import { api } from '../../../../lib/api';
 import { errorText } from '../../../../lib/errors';
-import { Notice, Screen, Segmented, Text, radius, useToast, useUI } from '../../../../ui';
+import { Button, Field, Group, Notice, Screen, Segmented, Text, radius, useToast, useUI } from '../../../../ui';
 
 type AdminBusiness = components['schemas']['AdminBusiness'];
 type FeatureState = AdminBusiness['features'][number];
@@ -49,6 +49,7 @@ export default function PlatformBusiness() {
       <Stack.Screen options={{ title: b.name }} />
       <Text variant="footnote" color="labelSecondary">{verticalMap(b.vertical).label} · /{b.slug}</Text>
       <Text variant="largeTitle" accessibilityRole="header" style={{ marginBottom: 8 }}>{b.name}</Text>
+      <AccountPlan businessId={businessId} account={b.account} onSaved={(account) => setB({ ...b, account })} />
       <Text variant="subhead" color="labelSecondary" style={{ marginBottom: 20 }}>{t.featuresHint}</Text>
       <View style={{ backgroundColor: ui.surface, borderRadius: radius.sm, overflow: 'hidden' }}>
         {b.features.map((f, i) => (
@@ -71,5 +72,48 @@ export default function PlatformBusiness() {
         ))}
       </View>
     </Screen>
+  );
+}
+
+type Account = AdminBusiness['account'];
+const PLANS: Account['plan'][] = ['trial', 'lite', 'pro', 'business'];
+const pa = strings.plans.admin;
+// ends_at is the instant after the last day: show that last day.
+const dayOf = (iso: string) => new Date(new Date(iso).getTime() - 1).toLocaleDateString('es-MX', { timeZone: 'UTC', day: 'numeric', month: 'long', year: 'numeric' });
+
+/** The plan of the owner's account (all their businesses), assigned by hand while there's no billing. */
+function AccountPlan({ businessId, account, onSaved }: { businessId: string; account: Account; onSaved: (a: Account) => void }) {
+  const toast = useToast();
+  const ui = useUI();
+  const [plan, setPlan] = useState(account.plan);
+  // ends_at is the instant after the last day: show that last day.
+  const [endsAt, setEndsAt] = useState(account.ends_at ? new Date(new Date(account.ends_at).getTime() - 1).toISOString().slice(0, 10) : '');
+  const [note, setNote] = useState('');
+  const [errors, setErrors] = useState<Record<string, string>>({});
+  const [busy, setBusy] = useState(false);
+
+  async function save() {
+    setBusy(true);
+    const { data, error, response } = await api.PUT('/v1/admin/businesses/{businessId}/plan', {
+      params: { path: { businessId } }, body: { plan, note, ...(endsAt ? { ends_at: endsAt } : {}) },
+    });
+    setBusy(false);
+    if (!data) { setErrors((error?.details as Record<string, string>) ?? {}); return toast(errorText(error, response.status), 'error'); }
+    setErrors({});
+    onSaved(data);
+    toast(pa.saved);
+  }
+
+  const current = `${strings.plans.names[account.plan]} · ${pa.status[account.status]} · ${account.ends_at ? pa.until(dayOf(account.ends_at)) : pa.noEnd}`;
+  return (
+    <Group label={pa.title} padded footer={pa.hint}>
+      <Text variant="subhead" style={{ color: account.status === 'expired' ? ui.warning : ui.labelSecondary, marginBottom: 12 }}>{current}</Text>
+      <View style={{ marginBottom: 16 }}>
+        <Segmented options={PLANS.map((p) => ({ value: p, label: strings.plans.names[p] }))} value={plan} onChange={setPlan} />
+      </View>
+      <Field label={pa.endsAt} value={endsAt} onChangeText={setEndsAt} error={errors.ends_at} />
+      <Field label={pa.note} value={note} onChangeText={setNote} error={errors.note} />
+      <Button variant="primary" busy={busy} onPress={save}>{pa.save}</Button>
+    </Group>
   );
 }

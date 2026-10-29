@@ -21,6 +21,7 @@ import (
 	"github.com/omaradriano/local_bussiness/services/api/internal/files"
 	"github.com/omaradriano/local_bussiness/services/api/internal/finances"
 	"github.com/omaradriano/local_bussiness/services/api/internal/media"
+	"github.com/omaradriano/local_bussiness/services/api/internal/plans"
 	"github.com/omaradriano/local_bussiness/services/api/internal/platform"
 	"github.com/omaradriano/local_bussiness/services/api/internal/products"
 	"github.com/omaradriano/local_bussiness/services/api/internal/settings"
@@ -35,6 +36,9 @@ const (
 	itemID    = "cccccccc-cccc-cccc-cccc-cccccccccccc"
 	bizA      = "aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa"
 	bizB      = "bbbbbbbb-bbbb-bbbb-bbbb-bbbbbbbbbbbb"
+	// The owner's other business, whose account ran out (read-only); expiredUser's own trial ended.
+	bizExpired  = "eeeeeeee-eeee-eeee-eeee-eeeeeeeeeeee"
+	expiredUser = "33333333-3333-3333-3333-333333333333"
 )
 
 type fakeStore struct{}
@@ -45,6 +49,9 @@ func (fakeStore) Role(_ context.Context, businessID, userID string) (string, err
 	}
 	if businessID == bizA && userID == staffUser {
 		return "staff", nil
+	}
+	if businessID == bizExpired && userID == user {
+		return "owner", nil
 	}
 	return "", nil
 }
@@ -65,7 +72,7 @@ func (fakeStore) IsPlatformAdmin(_ context.Context, userID string) (bool, error)
 // fakeAuth: "Bearer ok" is the owner of bizA, "Bearer staff" its employee; anything else is 401.
 func fakeAuth(next http.Handler) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		id := map[string]string{"Bearer ok": user, "Bearer staff": staffUser}[r.Header.Get("Authorization")]
+		id := map[string]string{"Bearer ok": user, "Bearer staff": staffUser, "Bearer vencido": expiredUser}[r.Header.Get("Authorization")]
 		if id == "" {
 			apierr.Write(w, http.StatusUnauthorized, "unauthorized", "x")
 			return
@@ -164,6 +171,7 @@ func doBody(method, path, token string, body io.Reader, headers ...string) *http
 		Platform:       fakePlatform{},
 		Finances:       fakeFinances{},
 		Products:       fakeProducts{},
+		Plans:          fakePlans{},
 		Now:            func() time.Time { return fixedNow },
 		Photos:         &Photos{Media: fakeMedia{}, Files: fakeFiles{}, EnqueueImage: fakeEnqueue, CDNBase: "https://cdn.test"},
 		AllowedOrigins: []string{"http://localhost:8082", "https://local-bussiness-staging-*.vercel.app"},
@@ -483,7 +491,7 @@ func TestPhotosDisabledAnswers503(t *testing.T) {
 	req := httptest.NewRequest(http.MethodPost, "/v1/b/"+bizA+"/catalog/"+itemID+"/images/", strings.NewReader(`{}`))
 	req.Header.Set("Authorization", "Bearer ok")
 	rec := httptest.NewRecorder()
-	NewRouter(Deps{Authenticate: fakeAuth, Store: fakeStore{}, Catalog: fakeCatalog{}}).ServeHTTP(rec, req)
+	NewRouter(Deps{Authenticate: fakeAuth, Store: fakeStore{}, Catalog: fakeCatalog{}, Plans: fakePlans{}}).ServeHTTP(rec, req)
 	if rec.Code != http.StatusServiceUnavailable {
 		t.Fatalf("got %d %s", rec.Code, rec.Body)
 	}
@@ -1294,5 +1302,62 @@ func TestPublicPrivacyNoticeNeedsNoSession(t *testing.T) {
 	// The rest of /v1 still requires a session.
 	if rec := do(http.MethodGet, "/v1/me", ""); rec.Code != http.StatusUnauthorized {
 		t.Fatalf("me without session: %d", rec.Code)
+	}
+}
+
+type fakePlans struct{}
+
+func ended() plans.Account {
+	end := fixedNow.AddDate(0, 0, -1)
+	return plans.Account{Plan: plans.Trial, EndsAt: &end}
+}
+func (fakePlans) ForUser(_ context.Context, userID string) (plans.Account, bool, error) {
+	switch userID {
+	case user:
+		return plans.Account{Plan: plans.Pro}, true, nil
+	case expiredUser:
+		return ended(), true, nil
+	}
+	return plans.Account{}, false, nil // never opened a business
+}
+func (fakePlans) ForBusiness(_ context.Context, businessID string) (plans.Account, error) {
+	if businessID == bizExpired {
+		return ended(), nil
+	}
+	return plans.Account{Plan: plans.Pro}, nil
+}
+func (fakePlans) OwnerOf(_ context.Context, businessID string) (string, error) {
+	if businessID != bizA {
+		return "", plans.ErrNoOwner
+	}
+	return user, nil
+}
+func (fakePlans) Set(context.Context, string, plans.Account, string) error { return nil }
+
+func TestPlans(t *testing.T) {
+	cases := []struct {
+		name, method, path, token, body string
+		code                            int
+		want                            string
+	}{
+		{"cuenta vencida: se puede consultar", http.MethodGet, "/v1/b/" + bizExpired + "/catalog", "ok", "", http.StatusOK, `"items"`},
+		{"cuenta vencida: no se registra nada", http.MethodPost, "/v1/b/" + bizExpired + "/catalog", "ok", `{"kind":"service","name":"Corte","price":1}`, http.StatusForbidden, `"plan_expired"`},
+		{"cuenta vigente sí registra", http.MethodPost, "/v1/b/" + bizA + "/finances/expenses", "ok", `{"spent_on":"2026-11-03","category":"transport","amount":50000}`, http.StatusCreated, `"amount":50000`},
+		{"vencido no abre otro negocio", http.MethodPost, "/v1/businesses", "vencido", `{"name":"Otra","slug":"otra-x","vertical":"tool_rental"}`, http.StatusForbidden, `"plan_expired"`},
+		{"me trae el plan de cada negocio", http.MethodGet, "/v1/me", "ok", "", http.StatusOK, `"account":{"plan":"pro","status":"active","ends_at":null,"days_left":-1}`},
+		{"superadmin asigna Lite hasta una fecha", http.MethodPut, "/v1/admin/businesses/" + bizA + "/plan", "ok", `{"plan":"lite","ends_at":"2026-12-31","note":"Piloto"}`, http.StatusOK, `"plan":"lite","status":"active","ends_at":"2027-01-01T00:00:00Z"`},
+		{"superadmin reinicia la prueba", http.MethodPut, "/v1/admin/businesses/" + bizA + "/plan", "ok", `{"plan":"trial"}`, http.StatusOK, `"status":"trial","ends_at":"2026-11-15T18:00:00Z","days_left":14`},
+		{"plan gratis no existe", http.MethodPut, "/v1/admin/businesses/" + bizA + "/plan", "ok", `{"plan":"free"}`, http.StatusUnprocessableEntity, `"plan"`},
+		{"fecha inválida", http.MethodPut, "/v1/admin/businesses/" + bizA + "/plan", "ok", `{"plan":"pro","ends_at":"mañana"}`, http.StatusUnprocessableEntity, `"ends_at"`},
+		{"negocio sin dueño", http.MethodPut, "/v1/admin/businesses/" + bizB + "/plan", "ok", `{"plan":"pro"}`, http.StatusNotFound, `"not_found"`},
+		{"solo superadmin asigna planes", http.MethodPut, "/v1/admin/businesses/" + bizA + "/plan", "staff", `{"plan":"business"}`, http.StatusForbidden, `"forbidden"`},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			rec := doBody(tc.method, tc.path, tc.token, strings.NewReader(tc.body))
+			if rec.Code != tc.code || !strings.Contains(rec.Body.String(), tc.want) {
+				t.Fatalf("got %d %s", rec.Code, rec.Body)
+			}
+		})
 	}
 }

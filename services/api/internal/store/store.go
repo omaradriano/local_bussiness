@@ -11,6 +11,8 @@ import (
 	"github.com/jackc/pgx/v5"
 	"github.com/jackc/pgx/v5/pgconn"
 	"github.com/jackc/pgx/v5/pgxpool"
+
+	"github.com/omaradriano/local_bussiness/services/api/internal/plans"
 )
 
 // DB is satisfied by *pgxpool.Pool and pgx.Tx (tests run inside a rolled-back transaction).
@@ -70,6 +72,9 @@ type Membership struct {
 	Vertical   string   `json:"vertical"`
 	Role       string   `json:"role"`
 	Features   []string `json:"features"` // active features; filled by the caller from the two below
+
+	// Plan of the owner's account (filled by the caller): the app shows the trial and read-only state.
+	Account *plans.View `json:"account" db:"-"`
 
 	Grants   []byte `json:"-"` // businesses.feature_grants
 	Settings []byte `json:"-"` // businesses.settings (owner's feature choices)

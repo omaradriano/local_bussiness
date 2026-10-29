@@ -9,6 +9,7 @@ import (
 	"strconv"
 	"strings"
 	"time"
+	"unicode/utf8"
 
 	"github.com/go-chi/chi/v5"
 	"github.com/go-chi/chi/v5/middleware"
@@ -23,6 +24,7 @@ import (
 	"github.com/omaradriano/local_bussiness/services/api/internal/features"
 	"github.com/omaradriano/local_bussiness/services/api/internal/files"
 	"github.com/omaradriano/local_bussiness/services/api/internal/media"
+	"github.com/omaradriano/local_bussiness/services/api/internal/plans"
 	"github.com/omaradriano/local_bussiness/services/api/internal/platform"
 	"github.com/omaradriano/local_bussiness/services/api/internal/settings"
 	"github.com/omaradriano/local_bussiness/services/api/internal/staff"
@@ -51,7 +53,45 @@ type Deps struct {
 	Platform       PlatformRepo
 	Finances       FinancesRepo
 	Products       ProductsRepo
+	Plans          PlansRepo
 	Now            func() time.Time // injectable clock; nil = time.Now
+}
+
+type PlansRepo interface {
+	ForUser(ctx context.Context, userID string) (plans.Account, bool, error)
+	ForBusiness(ctx context.Context, businessID string) (plans.Account, error)
+	OwnerOf(ctx context.Context, businessID string) (string, error)
+	Set(ctx context.Context, userID string, a plans.Account, note string) error
+}
+
+// planExpired: what an expired account gets when it tries to change something.
+func planExpired(w http.ResponseWriter, a plans.Account) {
+	msg := "Tu periodo de prueba terminó. Puedes consultar tu información; para seguir registrando, elige un plan."
+	if a.Plan != plans.Trial {
+		msg = "Tu plan venció. Puedes consultar tu información; para seguir registrando, renueva tu plan."
+	}
+	apierr.Write(w, http.StatusForbidden, "plan_expired", msg)
+}
+
+// requireWritable: a business whose owner's account expired is read-only (reading and exporting still work).
+func (d Deps) requireWritable(next http.Handler) http.Handler {
+	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.Method == http.MethodGet || r.Method == http.MethodHead || r.Method == http.MethodOptions {
+			next.ServeHTTP(w, r)
+			return
+		}
+		m, _ := auth.MemberFrom(r.Context())
+		a, err := d.Plans.ForBusiness(r.Context(), m.BusinessID)
+		if err != nil {
+			internalError(w, r, "account plan", err)
+			return
+		}
+		if !a.Writable(d.now()) {
+			planExpired(w, a)
+			return
+		}
+		next.ServeHTTP(w, r)
+	})
 }
 
 type PlatformRepo interface {
@@ -222,6 +262,13 @@ func NewRouter(d Deps) http.Handler {
 				}
 				_ = json.Unmarshal(m.Settings, &s)
 				ms[i].Features = features.Active(m.Vertical, features.Parse(m.Grants), s.Features)
+				a, err := d.Plans.ForBusiness(r.Context(), m.BusinessID)
+				if err != nil {
+					internalError(w, r, "account plan", err)
+					return
+				}
+				v := a.View(d.now())
+				ms[i].Account = &v
 			}
 			admin, err := d.Store.IsPlatformAdmin(r.Context(), user)
 			if err != nil {
@@ -274,6 +321,52 @@ func NewRouter(d Deps) http.Handler {
 				default:
 					apierr.JSON(w, http.StatusOK, v)
 				}
+			})
+			// Plan of the business owner's account (covers all their businesses). A date ends_at lasts
+			// that whole day; a trial without one gets the usual length from now.
+			r.With(requireUUIDParam("businessId", "El negocio no existe.")).Put("/businesses/{businessId}/plan", func(w http.ResponseWriter, r *http.Request) {
+				var body struct {
+					Plan   string `json:"plan"`
+					EndsAt string `json:"ends_at"` // YYYY-MM-DD; empty = no end
+					Note   string `json:"note"`
+				}
+				if !decode(w, r, &body) {
+					return
+				}
+				if !plans.Valid(body.Plan) {
+					invalid(w, "Elige un plan.", map[string]string{"plan": "Plan desconocido."})
+					return
+				}
+				a := plans.Account{Plan: body.Plan}
+				switch {
+				case body.EndsAt != "":
+					day, err := time.Parse("2006-01-02", body.EndsAt)
+					if err != nil {
+						invalid(w, "Revisa la fecha.", map[string]string{"ends_at": "Fecha inválida."})
+						return
+					}
+					end := day.AddDate(0, 0, 1)
+					a.EndsAt = &end
+				case body.Plan == plans.Trial:
+					a = plans.NewTrial(d.now())
+				}
+				if utf8.RuneCountInString(body.Note) > 200 {
+					invalid(w, "La nota es muy larga.", map[string]string{"note": "Máximo 200 caracteres."})
+					return
+				}
+				owner, err := d.Plans.OwnerOf(r.Context(), chi.URLParam(r, "businessId"))
+				if errors.Is(err, plans.ErrNoOwner) {
+					notFound(w, "El negocio no existe.")
+					return
+				}
+				if err == nil {
+					err = d.Plans.Set(r.Context(), owner, a, body.Note)
+				}
+				if err != nil {
+					internalError(w, r, "set plan", err)
+					return
+				}
+				apierr.JSON(w, http.StatusOK, a.View(d.now()))
 			})
 			r.Get("/businesses", func(w http.ResponseWriter, r *http.Request) {
 				list, err := d.Platform.Businesses(r.Context())
@@ -345,6 +438,14 @@ func NewRouter(d Deps) http.Handler {
 				invalid(w, "Ese giro todavía no está disponible.", map[string]string{"vertical": "Ese giro todavía no está disponible."})
 				return
 			}
+			// An owner whose account expired can't open more businesses (a new owner gets a trial).
+			if acct, ok, err := d.Plans.ForUser(r.Context(), user); err != nil {
+				internalError(w, r, "account plan", err)
+				return
+			} else if ok && !acct.Writable(d.now()) {
+				planExpired(w, acct)
+				return
+			}
 			b, err := d.CreateBusiness(r.Context(), user, in)
 			if errors.Is(err, businesses.ErrSlugTaken) {
 				apierr.JSON(w, http.StatusConflict, apierr.Error{Code: "slug_taken", Message: "Esa dirección ya está en uso; elige otra.",
@@ -359,7 +460,7 @@ func NewRouter(d Deps) http.Handler {
 		})
 
 		r.Route("/b/{businessId}", func(r chi.Router) {
-			r.Use(auth.RequireMember(d.Store))
+			r.Use(auth.RequireMember(d.Store), d.requireWritable)
 			r.Get("/", func(w http.ResponseWriter, r *http.Request) {
 				m, _ := auth.MemberFrom(r.Context())
 				apierr.JSON(w, http.StatusOK, map[string]string{"business_id": m.BusinessID, "role": m.Role})

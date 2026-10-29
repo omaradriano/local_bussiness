@@ -122,6 +122,7 @@ export function AdminSidebar() {
       contentContainerStyle={{ paddingTop: insets.top + 16, paddingBottom: 24, paddingHorizontal: 12, gap: 20 }}>
       <View style={{ gap: 12, paddingHorizontal: 8 }}>
         <Text variant="headline" numberOfLines={2}>{nav.business.name}</Text>
+        <PlanLine account={nav.business.account} />
         <View ref={nav.add.anchor} collapsable={false}>
         <PressableScale accessibilityRole="button" onPress={nav.add.onPress}
           style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 6, paddingVertical: 9, borderRadius: radius.full, backgroundColor: ui.accent }}>
@@ -155,5 +156,17 @@ function SideLink({ section, active, onPress }: { section: Section; active: bool
       <Ionicons name={section.icon} size={18} color={active ? ui.accent : ui.gray} />
       <Text variant="subhead" style={{ color: active ? ui.accent : ui.label, fontWeight: active ? '600' : '400' }}>{section.label}</Text>
     </PressableScale>
+  );
+}
+
+/** Under the business name in the sidebar: the trial's days left, or read-only. */
+function PlanLine({ account }: { account: { plan: string; status: string; days_left: number } }) {
+  const ui = useUI();
+  if (account.status === 'active') return null;
+  const expired = account.status === 'expired';
+  return (
+    <Text variant="footnote" style={{ color: expired ? ui.warning : ui.labelSecondary, marginTop: -6 }}>
+      {expired ? strings.plans.readOnly : strings.plans.trialLeft(account.days_left)}
+    </Text>
   );
 }
