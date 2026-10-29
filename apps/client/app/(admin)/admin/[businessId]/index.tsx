@@ -38,6 +38,9 @@ export default function BusinessHome() {
         {has('staff') && (
           <Cell icon="person" tint={ui.success} label={s.sections.staff} onPress={go('/admin/[businessId]/staff')} />
         )}
+        {business.role === 'owner' ? (
+          <Cell icon="stats-chart" tint={ui.success} label={strings.finances.title} sublabel={strings.finances.hint} onPress={go('/admin/[businessId]/finances')} />
+        ) : null}
         <Cell icon="time" tint={ui.gray} label={s.sections.hours} sublabel={s.hints.hours} onPress={go('/admin/[businessId]/hours')} />
         {business.role === 'owner' ? (
           <Cell icon="settings" tint={ui.gray} label={s.sections.settings} sublabel={texts.home.settings} onPress={go('/admin/[businessId]/settings')} />

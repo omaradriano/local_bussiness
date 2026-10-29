@@ -49,6 +49,7 @@ type Deps struct {
 	Settings       SettingsRepo
 	Customers      CustomersRepo
 	Platform       PlatformRepo
+	Finances       FinancesRepo
 	Now            func() time.Time // injectable clock; nil = time.Now
 }
 
@@ -380,6 +381,7 @@ func NewRouter(d Deps) http.Handler {
 
 			mountImages(r, d.Photos)
 			mountCustomers(r, d)
+			mountFinances(r, d)
 
 			r.Get("/settings", func(w http.ResponseWriter, r *http.Request) {
 				m, _ := auth.MemberFrom(r.Context())

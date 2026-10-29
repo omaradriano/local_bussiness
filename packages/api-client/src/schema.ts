@@ -410,6 +410,137 @@ export interface paths {
         patch: operations["updateDocumentType"];
         trace?: never;
     };
+    "/v1/b/{businessId}/finances/summary": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                businessId: components["parameters"]["BusinessId"];
+            };
+            cookie?: never;
+        };
+        /** Ingresos (lo cobrado), gastos (con sueldos, comisiones y mensualidades) y ganancia del periodo (solo dueño) */
+        get: operations["financeSummary"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/b/{businessId}/finances/expenses": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                businessId: components["parameters"]["BusinessId"];
+            };
+            cookie?: never;
+        };
+        get: operations["listExpenses"];
+        put?: never;
+        post: operations["addExpense"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/b/{businessId}/finances/expenses/{expenseId}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                businessId: components["parameters"]["BusinessId"];
+                expenseId: string;
+            };
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post?: never;
+        delete: operations["deleteExpense"];
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/b/{businessId}/finances/plans": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                businessId: components["parameters"]["BusinessId"];
+            };
+            cookie?: never;
+        };
+        get: operations["listPlans"];
+        put?: never;
+        /** Compra a plazos; cada mensualidad cuenta como gasto en su fecha */
+        post: operations["addPlan"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/b/{businessId}/finances/plans/{planId}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                businessId: components["parameters"]["BusinessId"];
+                planId: string;
+            };
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post?: never;
+        delete: operations["deletePlan"];
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/b/{businessId}/finances/pay": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                businessId: components["parameters"]["BusinessId"];
+            };
+            cookie?: never;
+        };
+        get: operations["listPay"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/b/{businessId}/finances/pay/{staffId}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                businessId: components["parameters"]["BusinessId"];
+                staffId: string;
+            };
+            cookie?: never;
+        };
+        get?: never;
+        put: operations["setPay"];
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/v1/b/{businessId}/inventory": {
         parameters: {
             query?: never;
@@ -1029,6 +1160,71 @@ export interface components {
                 key: string;
                 /** Format: date-time */
                 created_at: string;
+            }[];
+        };
+        /** @enum {string} */
+        ExpenseCategory: "transport" | "maintenance" | "rent" | "utilities" | "supplies" | "asset" | "advertising" | "taxes" | "payroll" | "other";
+        Expense: {
+            /** Format: uuid */
+            id: string;
+            /** @description Fecha (medianoche UTC); usar los primeros 10 caracteres */
+            spent_on: string;
+            category: components["schemas"]["ExpenseCategory"];
+            amount: number;
+            description: string | null;
+            /** Format: date-time */
+            created_at: string;
+        };
+        ExpensePlan: {
+            /** Format: uuid */
+            id: string;
+            description: string;
+            category: components["schemas"]["ExpenseCategory"];
+            purchased_on: string;
+            down_payment: number;
+            installment_amount: number;
+            installments: number;
+            first_due: string;
+        };
+        StaffPay: {
+            /** Format: uuid */
+            staff_id: string;
+            name: string;
+            active: boolean;
+            salary: number;
+            /** @enum {string} */
+            salary_period: "weekly" | "biweekly" | "monthly";
+            commission_percent: number;
+        };
+        FinancePart: {
+            /** @description Ingresos: bookings | fees | products. Gastos: una categoría, payroll o commissions */
+            key: string;
+            amount: number;
+        };
+        FinanceSide: {
+            total: number;
+            parts: components["schemas"]["FinancePart"][];
+        };
+        FinanceSummary: {
+            from: string;
+            to: string;
+            income: components["schemas"]["FinanceSide"];
+            expenses: components["schemas"]["FinanceSide"];
+            profit: number;
+            plans: (components["schemas"]["ExpensePlan"] & {
+                paid: number;
+                remaining: number;
+                next_due: string | null;
+                in_period: number;
+                /** @enum {string} */
+                status: "active" | "finished";
+            })[];
+            payroll: {
+                /** Format: uuid */
+                staff_id: string;
+                name: string;
+                salary: number;
+                commission: number;
             }[];
         };
         /** @enum {string} */
@@ -2119,6 +2315,257 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["DocumentType"];
+                };
+            };
+            404: components["responses"]["Error"];
+            422: components["responses"]["Error"];
+        };
+    };
+    financeSummary: {
+        parameters: {
+            query?: {
+                /** @description Por defecto, el mes actual */
+                from?: string;
+                to?: string;
+            };
+            header?: never;
+            path: {
+                businessId: components["parameters"]["BusinessId"];
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["FinanceSummary"];
+                };
+            };
+            403: components["responses"]["Error"];
+            422: components["responses"]["Error"];
+        };
+    };
+    listExpenses: {
+        parameters: {
+            query?: {
+                from?: string;
+                to?: string;
+            };
+            header?: never;
+            path: {
+                businessId: components["parameters"]["BusinessId"];
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        expenses: components["schemas"]["Expense"][];
+                    };
+                };
+            };
+        };
+    };
+    addExpense: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                businessId: components["parameters"]["BusinessId"];
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": {
+                    /** Format: date */
+                    spent_on: string;
+                    category: components["schemas"]["ExpenseCategory"];
+                    amount: number;
+                    description?: string;
+                };
+            };
+        };
+        responses: {
+            /** @description Creado */
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Expense"];
+                };
+            };
+            422: components["responses"]["Error"];
+        };
+    };
+    deleteExpense: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                businessId: components["parameters"]["BusinessId"];
+                expenseId: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Borrado */
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            404: components["responses"]["Error"];
+        };
+    };
+    listPlans: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                businessId: components["parameters"]["BusinessId"];
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        plans: components["schemas"]["ExpensePlan"][];
+                    };
+                };
+            };
+        };
+    };
+    addPlan: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                businessId: components["parameters"]["BusinessId"];
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": {
+                    description: string;
+                    category: components["schemas"]["ExpenseCategory"];
+                    /** Format: date */
+                    purchased_on: string;
+                    down_payment?: number;
+                    installment_amount: number;
+                    installments: number;
+                    /** Format: date */
+                    first_due: string;
+                };
+            };
+        };
+        responses: {
+            /** @description Creado */
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ExpensePlan"];
+                };
+            };
+            422: components["responses"]["Error"];
+        };
+    };
+    deletePlan: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                businessId: components["parameters"]["BusinessId"];
+                planId: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Borrado */
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            404: components["responses"]["Error"];
+        };
+    };
+    listPay: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                businessId: components["parameters"]["BusinessId"];
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        pay: components["schemas"]["StaffPay"][];
+                    };
+                };
+            };
+        };
+    };
+    setPay: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                businessId: components["parameters"]["BusinessId"];
+                staffId: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": {
+                    salary: number;
+                    /** @enum {string} */
+                    salary_period: "weekly" | "biweekly" | "monthly";
+                    commission_percent: number;
+                };
+            };
+        };
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["StaffPay"];
                 };
             };
             404: components["responses"]["Error"];

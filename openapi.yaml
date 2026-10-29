@@ -538,6 +538,167 @@ paths:
         "404": { $ref: "#/components/responses/Error" }
         "422": { $ref: "#/components/responses/Error" }
 
+  /v1/b/{businessId}/finances/summary:
+    parameters:
+      - $ref: "#/components/parameters/BusinessId"
+    get:
+      operationId: financeSummary
+      summary: Ingresos (lo cobrado), gastos (con sueldos, comisiones y mensualidades) y ganancia del periodo (solo dueño)
+      parameters:
+        - { name: from, in: query, schema: { type: string, format: date }, description: "Por defecto, el mes actual" }
+        - { name: to, in: query, schema: { type: string, format: date } }
+      responses:
+        "200":
+          description: OK
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/FinanceSummary" }
+        "403": { $ref: "#/components/responses/Error" }
+        "422": { $ref: "#/components/responses/Error" }
+
+  /v1/b/{businessId}/finances/expenses:
+    parameters:
+      - $ref: "#/components/parameters/BusinessId"
+    get:
+      operationId: listExpenses
+      parameters:
+        - { name: from, in: query, schema: { type: string, format: date } }
+        - { name: to, in: query, schema: { type: string, format: date } }
+      responses:
+        "200":
+          description: OK
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [expenses]
+                properties:
+                  expenses: { type: array, items: { $ref: "#/components/schemas/Expense" } }
+    post:
+      operationId: addExpense
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [spent_on, category, amount]
+              properties:
+                spent_on: { type: string, format: date }
+                category: { $ref: "#/components/schemas/ExpenseCategory" }
+                amount: { type: integer, minimum: 1 }
+                description: { type: string, maxLength: 200 }
+      responses:
+        "201":
+          description: Creado
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Expense" }
+        "422": { $ref: "#/components/responses/Error" }
+
+  /v1/b/{businessId}/finances/expenses/{expenseId}:
+    parameters:
+      - $ref: "#/components/parameters/BusinessId"
+      - { name: expenseId, in: path, required: true, schema: { type: string, format: uuid } }
+    delete:
+      operationId: deleteExpense
+      responses:
+        "204": { description: Borrado }
+        "404": { $ref: "#/components/responses/Error" }
+
+  /v1/b/{businessId}/finances/plans:
+    parameters:
+      - $ref: "#/components/parameters/BusinessId"
+    get:
+      operationId: listPlans
+      responses:
+        "200":
+          description: OK
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [plans]
+                properties:
+                  plans: { type: array, items: { $ref: "#/components/schemas/ExpensePlan" } }
+    post:
+      operationId: addPlan
+      summary: Compra a plazos; cada mensualidad cuenta como gasto en su fecha
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [description, category, purchased_on, installment_amount, installments, first_due]
+              properties:
+                description: { type: string, maxLength: 120 }
+                category: { $ref: "#/components/schemas/ExpenseCategory" }
+                purchased_on: { type: string, format: date }
+                down_payment: { type: integer, minimum: 0 }
+                installment_amount: { type: integer, minimum: 1 }
+                installments: { type: integer, minimum: 1, maximum: 360 }
+                first_due: { type: string, format: date }
+      responses:
+        "201":
+          description: Creado
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/ExpensePlan" }
+        "422": { $ref: "#/components/responses/Error" }
+
+  /v1/b/{businessId}/finances/plans/{planId}:
+    parameters:
+      - $ref: "#/components/parameters/BusinessId"
+      - { name: planId, in: path, required: true, schema: { type: string, format: uuid } }
+    delete:
+      operationId: deletePlan
+      responses:
+        "204": { description: Borrado }
+        "404": { $ref: "#/components/responses/Error" }
+
+  /v1/b/{businessId}/finances/pay:
+    parameters:
+      - $ref: "#/components/parameters/BusinessId"
+    get:
+      operationId: listPay
+      responses:
+        "200":
+          description: OK
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [pay]
+                properties:
+                  pay: { type: array, items: { $ref: "#/components/schemas/StaffPay" } }
+
+  /v1/b/{businessId}/finances/pay/{staffId}:
+    parameters:
+      - $ref: "#/components/parameters/BusinessId"
+      - { name: staffId, in: path, required: true, schema: { type: string, format: uuid } }
+    put:
+      operationId: setPay
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [salary, salary_period, commission_percent]
+              properties:
+                salary: { type: integer, minimum: 0 }
+                salary_period: { type: string, enum: [weekly, biweekly, monthly] }
+                commission_percent: { type: number, minimum: 0, maximum: 100 }
+      responses:
+        "200":
+          description: OK
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/StaffPay" }
+        "404": { $ref: "#/components/responses/Error" }
+        "422": { $ref: "#/components/responses/Error" }
+
   /v1/b/{businessId}/inventory:
     parameters:
       - $ref: "#/components/parameters/BusinessId"
@@ -1371,6 +1532,92 @@ components:
               doc_type: { $ref: "#/components/schemas/DocType" }
               key: { type: string }
               created_at: { type: string, format: date-time }
+
+    ExpenseCategory:
+      type: string
+      enum: [transport, maintenance, rent, utilities, supplies, asset, advertising, taxes, payroll, other]
+
+    Expense:
+      type: object
+      required: [id, spent_on, category, amount, description, created_at]
+      properties:
+        id: { type: string, format: uuid }
+        spent_on: { type: string, description: "Fecha (medianoche UTC); usar los primeros 10 caracteres" }
+        category: { $ref: "#/components/schemas/ExpenseCategory" }
+        amount: { type: integer }
+        description: { type: [string, "null"] }
+        created_at: { type: string, format: date-time }
+
+    ExpensePlan:
+      type: object
+      required: [id, description, category, purchased_on, down_payment, installment_amount, installments, first_due]
+      properties:
+        id: { type: string, format: uuid }
+        description: { type: string }
+        category: { $ref: "#/components/schemas/ExpenseCategory" }
+        purchased_on: { type: string }
+        down_payment: { type: integer }
+        installment_amount: { type: integer }
+        installments: { type: integer }
+        first_due: { type: string }
+
+    StaffPay:
+      type: object
+      required: [staff_id, name, active, salary, salary_period, commission_percent]
+      properties:
+        staff_id: { type: string, format: uuid }
+        name: { type: string }
+        active: { type: boolean }
+        salary: { type: integer }
+        salary_period: { type: string, enum: [weekly, biweekly, monthly] }
+        commission_percent: { type: number }
+
+    FinancePart:
+      type: object
+      required: [key, amount]
+      properties:
+        key: { type: string, description: "Ingresos: bookings | fees | products. Gastos: una categoría, payroll o commissions" }
+        amount: { type: integer }
+
+    FinanceSide:
+      type: object
+      required: [total, parts]
+      properties:
+        total: { type: integer }
+        parts: { type: array, items: { $ref: "#/components/schemas/FinancePart" } }
+
+    FinanceSummary:
+      type: object
+      required: [from, to, income, expenses, profit, plans, payroll]
+      properties:
+        from: { type: string }
+        to: { type: string }
+        income: { $ref: "#/components/schemas/FinanceSide" }
+        expenses: { $ref: "#/components/schemas/FinanceSide" }
+        profit: { type: integer }
+        plans:
+          type: array
+          items:
+            allOf:
+              - $ref: "#/components/schemas/ExpensePlan"
+              - type: object
+                required: [paid, remaining, next_due, in_period, status]
+                properties:
+                  paid: { type: integer }
+                  remaining: { type: integer }
+                  next_due: { type: [string, "null"] }
+                  in_period: { type: integer }
+                  status: { type: string, enum: [active, finished] }
+        payroll:
+          type: array
+          items:
+            type: object
+            required: [staff_id, name, salary, commission]
+            properties:
+              staff_id: { type: string, format: uuid }
+              name: { type: string }
+              salary: { type: integer }
+              commission: { type: integer }
 
     Feature:
       type: string
