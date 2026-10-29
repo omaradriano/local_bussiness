@@ -14,3 +14,4 @@ export * from './period';
 export * from './install';
 export * from './privacy';
 export * from './plans';
+export * from './terms';

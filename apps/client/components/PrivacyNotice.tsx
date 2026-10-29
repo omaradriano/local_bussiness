@@ -3,12 +3,14 @@ import { Stack } from 'expo-router';
 import { View } from 'react-native';
 import { Screen, Text, useUI } from '../ui';
 
-/** A privacy notice: title and its sections, readable without a session. */
-export function PrivacyNotice({ title, sections, version }: { title: string; sections: NoticeSection[]; version: string }) {
+/** A legal page (privacy notice, terms): title and its sections, readable without a session. */
+export function PrivacyNotice({ title, sections, version, headerTitle = strings.privacy.title }: {
+  title: string; sections: NoticeSection[]; version: string; headerTitle?: string;
+}) {
   const ui = useUI();
   return (
     <Screen>
-      <Stack.Screen options={{ title: strings.privacy.title, headerShadowVisible: false, headerStyle: { backgroundColor: ui.bg },
+      <Stack.Screen options={{ title: headerTitle, headerShadowVisible: false, headerStyle: { backgroundColor: ui.bg },
         headerTitleStyle: { color: ui.label }, headerTintColor: ui.accent }} />
       <Text variant="largeTitle" accessibilityRole="header" style={{ marginBottom: 4 }}>{title}</Text>
       <Text variant="footnote" color="labelSecondary" style={{ marginBottom: 24 }}>{strings.privacy.version(version)}</Text>
