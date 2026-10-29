@@ -2,6 +2,7 @@ import { exportColumns, exportFileName, strings, term, todayISO, toCSV, type Exp
 import { useState } from 'react';
 import { Platform, View } from 'react-native';
 import { api } from '../lib/api';
+import { downloadText } from '../lib/download';
 import { errorText } from '../lib/errors';
 import { useBusiness } from '../lib/useMe';
 import { useTexts } from '../lib/useTexts';
@@ -40,12 +41,7 @@ export function ExportData({ businessId }: { businessId: string }) {
     if (!data) return toast(errorText(error, response.status), 'error');
     if (!data.rows.length) return toast(t.empty, 'info');
     const csv = toCSV(exportColumns(kind, texts, data.timezone), data.rows as never[]);
-    const url = URL.createObjectURL(new Blob([csv], { type: 'text/csv;charset=utf-8' }));
-    const a = document.createElement('a');
-    a.href = url;
-    a.download = exportFileName(business!.slug, DATED.includes(kind) ? `${label} ${period.from} ${period.to}` : label, todayISO());
-    a.click();
-    URL.revokeObjectURL(url);
+    downloadText(exportFileName(business!.slug, DATED.includes(kind) ? `${label} ${period.from} ${period.to}` : label, todayISO()), csv);
     toast(t.done);
   }
 

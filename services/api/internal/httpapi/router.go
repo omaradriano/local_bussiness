@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/json"
 	"errors"
+	"fmt"
 	"log/slog"
 	"net/http"
 	"strconv"
@@ -21,14 +22,17 @@ import (
 	"github.com/omaradriano/local_bussiness/services/api/internal/bookings"
 	"github.com/omaradriano/local_bussiness/services/api/internal/businesses"
 	"github.com/omaradriano/local_bussiness/services/api/internal/catalog"
+	"github.com/omaradriano/local_bussiness/services/api/internal/customers"
 	"github.com/omaradriano/local_bussiness/services/api/internal/exports"
 	"github.com/omaradriano/local_bussiness/services/api/internal/features"
 	"github.com/omaradriano/local_bussiness/services/api/internal/files"
 	"github.com/omaradriano/local_bussiness/services/api/internal/finances"
+	"github.com/omaradriano/local_bussiness/services/api/internal/imports"
 	"github.com/omaradriano/local_bussiness/services/api/internal/media"
 	"github.com/omaradriano/local_bussiness/services/api/internal/monitor"
 	"github.com/omaradriano/local_bussiness/services/api/internal/plans"
 	"github.com/omaradriano/local_bussiness/services/api/internal/platform"
+	"github.com/omaradriano/local_bussiness/services/api/internal/products"
 	"github.com/omaradriano/local_bussiness/services/api/internal/settings"
 	"github.com/omaradriano/local_bussiness/services/api/internal/staff"
 	"github.com/omaradriano/local_bussiness/services/api/internal/steps"
@@ -60,6 +64,7 @@ type Deps struct {
 	// DeleteBusiness removes a business, its rows and (by a job) its files; businesses.ErrNotFound if missing.
 	DeleteBusiness func(ctx context.Context, businessID string) error
 	Exports        ExportsRepo
+	Imports        ImportsRepo
 	Now            func() time.Time // injectable clock; nil = time.Now
 }
 
@@ -204,6 +209,28 @@ type ExportsRepo interface {
 	Rows(ctx context.Context, businessID, kind string, p *exports.Period) (any, error)
 }
 
+type ImportsRepo interface {
+	Customers(ctx context.Context, businessID string, rows []customers.Input, now time.Time, apply bool) (imports.Summary, error)
+	Catalog(ctx context.Context, businessID string, rows []imports.CatalogRow, apply bool) (imports.Summary, error)
+	Products(ctx context.Context, businessID string, rows []products.ProductInput, apply bool) (imports.Summary, error)
+}
+
+// importRows decodes {rows: [...]} with 1..MaxRows rows.
+func importRows[T any](w http.ResponseWriter, r *http.Request) ([]T, bool) {
+	var body struct {
+		Rows []T `json:"rows"`
+	}
+	if !decodeMax(w, r, &body, 2<<20) { // a file of up to MaxRows rows
+		return nil, false
+	}
+	if len(body.Rows) == 0 || len(body.Rows) > imports.MaxRows {
+		msg := fmt.Sprintf("El archivo debe tener de 1 a %d filas.", imports.MaxRows)
+		invalid(w, msg, map[string]string{"rows": msg})
+		return nil, false
+	}
+	return body.Rows, true
+}
+
 type PlatformRepo interface {
 	Businesses(ctx context.Context) ([]platform.Business, error)
 	SetGrant(ctx context.Context, id, feature string, grant *bool) (platform.Business, error)
@@ -309,8 +336,10 @@ func notFound(w http.ResponseWriter, what string) {
 }
 
 // decode reads a JSON body (max 16 KiB); on failure it has already written the 400.
-func decode(w http.ResponseWriter, r *http.Request, v any) bool {
-	if err := json.NewDecoder(http.MaxBytesReader(w, r.Body, 16<<10)).Decode(v); err != nil {
+func decode(w http.ResponseWriter, r *http.Request, v any) bool { return decodeMax(w, r, v, 16<<10) }
+
+func decodeMax(w http.ResponseWriter, r *http.Request, v any, max int64) bool {
+	if err := json.NewDecoder(http.MaxBytesReader(w, r.Body, max)).Decode(v); err != nil {
 		apierr.Write(w, http.StatusBadRequest, "invalid_json", "El cuerpo de la petición no es JSON válido.")
 		return false
 	}
@@ -629,6 +658,43 @@ func NewRouter(d Deps) http.Handler {
 					return
 				}
 				apierr.JSON(w, http.StatusOK, map[string]any{"timezone": tz, "rows": rows})
+			})
+
+			// Import rows the app parsed from a CSV: the plan row by row (create, update or error), and
+			// with ?apply=true the valid rows are saved in one transaction.
+			r.With(auth.RequireRole("owner")).Post("/import/{kind}", func(w http.ResponseWriter, r *http.Request) {
+				m, _ := auth.MemberFrom(r.Context())
+				apply := r.URL.Query().Get("apply") == "true"
+				var sum imports.Summary
+				var err error
+				switch chi.URLParam(r, "kind") {
+				case "customers":
+					rows, ok := importRows[customers.Input](w, r)
+					if !ok {
+						return
+					}
+					sum, err = d.Imports.Customers(r.Context(), m.BusinessID, rows, d.now(), apply)
+				case "catalog":
+					rows, ok := importRows[imports.CatalogRow](w, r)
+					if !ok {
+						return
+					}
+					sum, err = d.Imports.Catalog(r.Context(), m.BusinessID, rows, apply)
+				case "products":
+					rows, ok := importRows[products.ProductInput](w, r)
+					if !ok {
+						return
+					}
+					sum, err = d.Imports.Products(r.Context(), m.BusinessID, rows, apply)
+				default:
+					notFound(w, "No se puede importar eso.")
+					return
+				}
+				if err != nil {
+					internalError(w, r, "import", err)
+					return
+				}
+				apierr.JSON(w, http.StatusOK, sum)
 			})
 			r.Get("/", func(w http.ResponseWriter, r *http.Request) {
 				m, _ := auth.MemberFrom(r.Context())
