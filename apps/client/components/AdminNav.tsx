@@ -7,6 +7,7 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { signOut, useBusiness } from '../lib/useMe';
 import { useCurrentBusinessId, useTexts } from '../lib/useTexts';
 import { Cell, Group, PressableScale, Text, radius, useUI } from '../ui';
+import { useInstallAction } from './InstallApp';
 import { useNewAction } from './NewAction';
 
 const WIDE = 900; // from here the sections live in a sidebar instead of the ☰ menu
@@ -58,6 +59,7 @@ export function AdminNav() {
   const insets = useSafeAreaInsets();
   const ui = useUI();
   const [open, setOpen] = useState(false);
+  const install = useInstallAction();
   if (!nav || width >= WIDE) return null;
   const close = (then: () => void) => () => { setOpen(false); then(); };
 
@@ -84,6 +86,7 @@ export function AdminNav() {
                 </Group>
               ))}
               <Group separatorInset={58}>
+                {install.show && <Cell icon="download" tint={ui.success} label={install.label} onPress={close(install.onPress)} />}
                 <Cell icon="storefront" tint={ui.indigo} label={strings.nav.businesses} onPress={close(() => router.push('/admin'))} />
                 <Cell label={strings.admin.signOut} destructive onPress={close(signOut)} />
               </Group>
@@ -91,6 +94,7 @@ export function AdminNav() {
           </Pressable>
         </Pressable>
       </Modal>
+      {install.sheet}
     </View>
   );
 }
@@ -101,6 +105,7 @@ export function AdminSidebar() {
   const { width } = useWindowDimensions();
   const insets = useSafeAreaInsets();
   const ui = useUI();
+  const install = useInstallAction();
   if (!nav || width < WIDE) return null;
 
   return (
@@ -124,6 +129,8 @@ export function AdminSidebar() {
         </View>
       ))}
       <View style={{ gap: 2 }}>
+        {install.show && <SideLink section={{ path: 'install', label: install.label, icon: 'download' }} active={false} onPress={install.onPress} />}
+        {install.sheet}
         <SideLink section={{ path: '/admin', label: strings.nav.businesses, icon: 'storefront' }} active={false} onPress={() => router.push('/admin')} />
         <SideLink section={{ path: 'signout', label: strings.admin.signOut, icon: 'log-out' }} active={false} onPress={signOut} />
       </View>
