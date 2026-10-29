@@ -89,7 +89,7 @@ func TestIntegrationSummary(t *testing.T) {
 		($1, $2, 'service', 'confirmed', '2026-12-20T17:00:00Z', '2026-12-20T18:00:00Z', 0, 'admin')`, biz, cust)
 	// An overdue rental (due 5 Dec 15:00Z, now is 10 Dec 18:00Z: 6 started days), and another business's.
 	var item, rental string
-	if err := tx.QueryRow(ctx, `insert into public.catalog_items (business_id, kind, name, price, price_unit) values ($1, 'rental', 'Rotomartillo', 30000, 'day') returning id::text`, biz).Scan(&item); err != nil {
+	if err := tx.QueryRow(ctx, `insert into public.catalog_items (business_id, kind, name, price, price_unit, security_deposit, late_fee_per_day) values ($1, 'rental', 'Rotomartillo', 30000, 'day', 100000, 30000) returning id::text`, biz).Scan(&item); err != nil {
 		t.Fatal(err)
 	}
 	if err := tx.QueryRow(ctx, `insert into public.bookings (business_id, customer_id, kind, status, starts_at, ends_at, total, source)
