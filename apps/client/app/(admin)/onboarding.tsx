@@ -1,7 +1,9 @@
-import { slugify, strings, verticalMap, VERTICALS, type Vertical } from '@lb/shared';
+import type { components } from '@lb/api-client';
+import { slugify, strings, verticalMap, type Vertical } from '@lb/shared';
 import { Ionicons } from '@expo/vector-icons';
 import { router, Stack } from 'expo-router';
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
+import { ActivityIndicator } from 'react-native';
 import { api } from '../../lib/api';
 import { Button, Cell, Field, Group, Notice, Screen, Text, useUI } from '../../ui';
 
@@ -15,6 +17,11 @@ export default function Onboarding() {
   const [vertical, setVertical] = useState<Vertical | null>(null);
   const [errors, setErrors] = useState<Record<string, string>>({});
   const [busy, setBusy] = useState(false);
+  // Only the giros this user may open (the platform admin also gets the ones being tried out).
+  const [verticals, setVerticals] = useState<components['schemas']['VerticalAvailability'][] | null>(null);
+  useEffect(() => {
+    api.GET('/v1/verticals').then(({ data }) => setVerticals(data?.verticals ?? []));
+  }, []);
 
   function onName(v: string) {
     setName(v);
@@ -42,8 +49,9 @@ export default function Onboarding() {
           onChangeText={(v) => { setSlugEdited(true); setSlug(v.toLowerCase()); }} />
       </Group>
       <Group label={t.vertical} footer={errors.vertical ?? t.templateNote}>
-        {VERTICALS.map((v) => (
-          <Cell key={v} label={verticalMap(v).label} onPress={() => setVertical(v)}
+        {!verticals && <ActivityIndicator style={{ padding: 16 }} />}
+        {verticals?.map(({ vertical: v, status }) => (
+          <Cell key={v} label={verticalMap(v).label} sublabel={status === 'admin' ? t.testing : undefined} onPress={() => setVertical(v)}
             accessory={vertical === v ? <Ionicons name="checkmark" size={20} color={ui.accent} /> : undefined} />
         ))}
       </Group>

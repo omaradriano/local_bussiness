@@ -85,3 +85,41 @@ func TestIntegrationFeaturesPerBusiness(t *testing.T) {
 		t.Fatalf("list: %d %v", len(list), err)
 	}
 }
+
+func TestIntegrationVerticalStatus(t *testing.T) {
+	url := os.Getenv("TEST_DATABASE_URL")
+	if url == "" {
+		t.Skip("TEST_DATABASE_URL not set")
+	}
+	ctx := context.Background()
+	conn, err := pgx.Connect(ctx, url)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer conn.Close(ctx)
+	tx, err := conn.Begin(ctx)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer tx.Rollback(ctx)
+	p := Repo{DB: tx}
+
+	// Seeded by the migration: rentals and barbershops public, nails and flowers being tried out.
+	for vertical, want := range map[string]string{"tool_rental": Public, "barbershop": Public, "nails": AdminOnly, "flowers": AdminOnly} {
+		if got, err := p.VerticalStatus(ctx, vertical); err != nil || got != want {
+			t.Fatalf("%s: %q %v", vertical, got, err)
+		}
+	}
+	if _, err := p.SetVerticalStatus(ctx, "nails", Public); err != nil {
+		t.Fatal(err)
+	}
+	if got, _ := p.VerticalStatus(ctx, "nails"); got != Public {
+		t.Fatalf("after publishing: %q", got)
+	}
+	if _, err := p.SetVerticalStatus(ctx, "nails", "maybe"); !errors.Is(err, ErrBadStatus) {
+		t.Fatalf("bad status: %v", err)
+	}
+	if _, err := p.VerticalStatus(ctx, "limos"); !errors.Is(err, ErrUnknownVertical) {
+		t.Fatalf("unknown: %v", err)
+	}
+}

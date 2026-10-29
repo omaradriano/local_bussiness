@@ -54,6 +54,59 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/v1/verticals": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Giros con los que este usuario puede abrir un negocio (el superadmin también ve los de prueba) */
+        get: operations["listAvailableVerticals"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/admin/verticals": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Todos los giros con su estado (solo superadmin) */
+        get: operations["adminListVerticals"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/admin/verticals/{vertical}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                vertical: components["schemas"]["Vertical"];
+            };
+            cookie?: never;
+        };
+        get?: never;
+        /** Quién puede abrir negocios nuevos de un giro (los existentes siguen funcionando) */
+        put: operations["adminSetVerticalStatus"];
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/v1/admin/businesses": {
         parameters: {
             query?: never;
@@ -1234,6 +1287,15 @@ export interface components {
         Role: "owner" | "staff";
         /** @enum {string} */
         Vertical: "nails" | "flowers" | "tool_rental" | "barbershop";
+        /**
+         * @description public: cualquiera al registrarse · admin: solo el superadmin (para probar) · off: nadie
+         * @enum {string}
+         */
+        VerticalStatus: "public" | "admin" | "off";
+        VerticalAvailability: {
+            vertical: components["schemas"]["Vertical"];
+            status: components["schemas"]["VerticalStatus"];
+        };
         /** @enum {string} */
         ItemKind: "service" | "product" | "rental";
         /** @enum {string} */
@@ -1989,6 +2051,82 @@ export interface operations {
                 };
             };
             401: components["responses"]["Error"];
+        };
+    };
+    listAvailableVerticals: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        verticals: components["schemas"]["VerticalAvailability"][];
+                    };
+                };
+            };
+        };
+    };
+    adminListVerticals: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        verticals: components["schemas"]["VerticalAvailability"][];
+                    };
+                };
+            };
+            403: components["responses"]["Error"];
+        };
+    };
+    adminSetVerticalStatus: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                vertical: components["schemas"]["Vertical"];
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": {
+                    status: components["schemas"]["VerticalStatus"];
+                };
+            };
+        };
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["VerticalAvailability"];
+                };
+            };
+            403: components["responses"]["Error"];
+            404: components["responses"]["Error"];
+            422: components["responses"]["Error"];
         };
     };
     adminListBusinesses: {

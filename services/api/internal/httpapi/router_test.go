@@ -1008,6 +1008,59 @@ func TestCustomerRoutes(t *testing.T) {
 
 type fakePlatform struct{}
 
+// Giros in the fake: rentals open to everyone, nails and flowers only for the platform admin, barbershop off.
+var fakeVerticals = []platform.Vertical{{Vertical: "barbershop", Status: platform.Off}, {Vertical: "flowers", Status: platform.AdminOnly},
+	{Vertical: "nails", Status: platform.AdminOnly}, {Vertical: "tool_rental", Status: platform.Public}}
+
+func (fakePlatform) Verticals(context.Context) ([]platform.Vertical, error) {
+	return fakeVerticals, nil
+}
+func (fakePlatform) VerticalStatus(_ context.Context, vertical string) (string, error) {
+	for _, v := range fakeVerticals {
+		if v.Vertical == vertical {
+			return v.Status, nil
+		}
+	}
+	return "", platform.ErrUnknownVertical
+}
+func (fakePlatform) SetVerticalStatus(_ context.Context, vertical, status string) (platform.Vertical, error) {
+	if vertical == "limos" {
+		return platform.Vertical{}, platform.ErrUnknownVertical
+	}
+	if status == "maybe" {
+		return platform.Vertical{}, platform.ErrBadStatus
+	}
+	return platform.Vertical{Vertical: vertical, Status: status}, nil
+}
+
+func TestVerticalAvailability(t *testing.T) {
+	cases := []struct {
+		name, method, path, token, body string
+		code                            int
+		want, notWant                   string
+	}{
+		{"el cliente solo ve los públicos", http.MethodGet, "/v1/verticals", "staff", "", http.StatusOK, `"tool_rental"`, `"nails"`},
+		{"el superadmin ve también los de prueba", http.MethodGet, "/v1/verticals", "ok", "", http.StatusOK, `{"vertical":"nails","status":"admin"}`, `"barbershop"`},
+		{"cliente no abre un giro de prueba", http.MethodPost, "/v1/businesses", "staff", `{"name":"Uñas","slug":"unas-x","vertical":"nails"}`, http.StatusUnprocessableEntity, `"vertical"`, ""},
+		{"cliente abre un giro público", http.MethodPost, "/v1/businesses", "staff", `{"name":"Renta","slug":"renta-x","vertical":"tool_rental"}`, http.StatusCreated, `"role":"owner"`, ""},
+		{"nadie abre un giro apagado", http.MethodPost, "/v1/businesses", "ok", `{"name":"Barbería","slug":"barber-x","vertical":"barbershop"}`, http.StatusUnprocessableEntity, `"vertical"`, ""},
+		{"superadmin lista los giros", http.MethodGet, "/v1/admin/verticals", "ok", "", http.StatusOK, `{"vertical":"barbershop","status":"off"}`, ""},
+		{"superadmin publica un giro", http.MethodPut, "/v1/admin/verticals/nails", "ok", `{"status":"public"}`, http.StatusOK, `"status":"public"`, ""},
+		{"estado desconocido", http.MethodPut, "/v1/admin/verticals/nails", "ok", `{"status":"maybe"}`, http.StatusUnprocessableEntity, `"status"`, ""},
+		{"giro desconocido", http.MethodPut, "/v1/admin/verticals/limos", "ok", `{"status":"public"}`, http.StatusNotFound, `"not_found"`, ""},
+		{"solo el superadmin cambia giros", http.MethodPut, "/v1/admin/verticals/nails", "staff", `{"status":"public"}`, http.StatusForbidden, `"forbidden"`, ""},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			rec := doBody(tc.method, tc.path, tc.token, strings.NewReader(tc.body))
+			body := rec.Body.String()
+			if rec.Code != tc.code || !strings.Contains(body, tc.want) || (tc.notWant != "" && strings.Contains(body, tc.notWant)) {
+				t.Fatalf("got %d %s", rec.Code, body)
+			}
+		})
+	}
+}
+
 func (fakePlatform) Businesses(context.Context) ([]platform.Business, error) {
 	return []platform.Business{{ID: bizA, Name: "Uñas", Vertical: "nails"}}, nil
 }

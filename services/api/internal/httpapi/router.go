@@ -57,6 +57,9 @@ type Deps struct {
 type PlatformRepo interface {
 	Businesses(ctx context.Context) ([]platform.Business, error)
 	SetGrant(ctx context.Context, id, feature string, grant *bool) (platform.Business, error)
+	Verticals(ctx context.Context) ([]platform.Vertical, error)
+	VerticalStatus(ctx context.Context, vertical string) (string, error)
+	SetVerticalStatus(ctx context.Context, vertical, status string) (platform.Vertical, error)
 }
 
 type SettingsRepo interface {
@@ -245,6 +248,33 @@ func NewRouter(d Deps) http.Handler {
 					next.ServeHTTP(w, r)
 				})
 			})
+			r.Get("/verticals", func(w http.ResponseWriter, r *http.Request) {
+				list, err := d.Platform.Verticals(r.Context())
+				if err != nil {
+					internalError(w, r, "admin verticals", err)
+					return
+				}
+				apierr.JSON(w, http.StatusOK, map[string]any{"verticals": list})
+			})
+			r.Put("/verticals/{vertical}", func(w http.ResponseWriter, r *http.Request) {
+				var body struct {
+					Status string `json:"status"`
+				}
+				if !decode(w, r, &body) {
+					return
+				}
+				v, err := d.Platform.SetVerticalStatus(r.Context(), chi.URLParam(r, "vertical"), body.Status)
+				switch {
+				case errors.Is(err, platform.ErrUnknownVertical):
+					notFound(w, "Ese giro no existe.")
+				case errors.Is(err, platform.ErrBadStatus):
+					invalid(w, "Elige público, solo superadministrador o apagado.", map[string]string{"status": "Estado inválido."})
+				case err != nil:
+					internalError(w, r, "set vertical", err)
+				default:
+					apierr.JSON(w, http.StatusOK, v)
+				}
+			})
 			r.Get("/businesses", func(w http.ResponseWriter, r *http.Request) {
 				list, err := d.Platform.Businesses(r.Context())
 				if err != nil {
@@ -274,6 +304,22 @@ func NewRouter(d Deps) http.Handler {
 			})
 		})
 
+		// Giros this user can open a business of (platform_verticals; the platform admin also sees the ones being tried out).
+		r.Get("/verticals", func(w http.ResponseWriter, r *http.Request) {
+			user, _ := auth.UserID(r.Context())
+			admin, err := d.Store.IsPlatformAdmin(r.Context(), user)
+			if err != nil {
+				internalError(w, r, "platform admin", err)
+				return
+			}
+			list, err := d.Platform.Verticals(r.Context())
+			if err != nil {
+				internalError(w, r, "verticals", err)
+				return
+			}
+			apierr.JSON(w, http.StatusOK, map[string]any{"verticals": platform.AvailableFor(list, admin)})
+		})
+
 		r.Post("/businesses", func(w http.ResponseWriter, r *http.Request) {
 			user, _ := auth.UserID(r.Context())
 			var in businesses.Input
@@ -283,6 +329,20 @@ func NewRouter(d Deps) http.Handler {
 			in = in.Normalize()
 			if errs := in.Validate(); len(errs) > 0 {
 				invalid(w, "Revisa los datos del negocio.", errs)
+				return
+			}
+			status, err := d.Platform.VerticalStatus(r.Context(), in.Vertical)
+			if err != nil {
+				internalError(w, r, "vertical status", err)
+				return
+			}
+			admin, err := d.Store.IsPlatformAdmin(r.Context(), user)
+			if err != nil {
+				internalError(w, r, "platform admin", err)
+				return
+			}
+			if !platform.CanCreate(status, admin) {
+				invalid(w, "Ese giro todavía no está disponible.", map[string]string{"vertical": "Ese giro todavía no está disponible."})
 				return
 			}
 			b, err := d.CreateBusiness(r.Context(), user, in)

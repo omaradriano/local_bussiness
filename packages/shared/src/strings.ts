@@ -32,6 +32,7 @@ export const strings = {
     checkEmail: 'Te enviamos un correo para confirmar tu cuenta. Ábrelo y después inicia sesión.',
   },
   onboarding: {
+    testing: 'En prueba: solo el superadministrador lo ve',
     title: 'Registra tu negocio',
     name: 'Nombre del negocio',
     slug: 'Dirección de tu catálogo',
@@ -470,6 +471,12 @@ export const strings = {
     invalidDate: 'Escribe la fecha como AAAA-MM-DD.',
   },
   platform: {
+    verticals: {
+      title: 'Giros',
+      hint: 'Quién puede registrar un negocio nuevo de cada giro. Los negocios que ya existen siguen funcionando en cualquier estado.',
+      statuses: { public: 'Público', admin: 'Solo superadmin', off: 'Apagado' },
+      saved: (giro: string, status: string) => `${giro}: ${status.toLowerCase()}.`,
+    },
     title: 'Superadministrador',
     entry: 'Superadministrador',
     entryHint: 'Negocios de la plataforma y sus funciones',
