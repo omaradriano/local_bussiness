@@ -55,7 +55,7 @@ func TestPlanCatalog(t *testing.T) {
 			t.Fatalf("row %d: %+v (want %s)", i+2, p.Result, want[i])
 		}
 	}
-	if got[0].Item.Price != 18000 || got[0].Item.DurationMinutes == nil || got[1].Item.Kind != "service" || got[2].Result.Errors["plan"] == "" {
+	if got[0].Item.Price != 18000 || got[0].Item.Name != "Corte" || got[0].Item.DurationMinutes == nil || got[1].Item.Kind != "service" || got[2].Result.Errors["plan"] == "" {
 		t.Fatalf("plan: %+v %+v %+v", got[0].Item, got[1].Item, got[2].Result)
 	}
 }
@@ -69,7 +69,7 @@ func TestPlanProducts(t *testing.T) {
 		{Name: s("Gel"), Price: i64(-1)},
 	}
 	got := PlanProducts(rows, existing)
-	if got[0].Result.Action != Update || got[0].Product.Price != 16000 || got[0].Product.Stock != 3 ||
+	if got[0].Result.Action != Update || got[0].Product.Price != 16000 || got[0].Product.Stock != 3 || got[0].Product.Name != "Cera" ||
 		got[1].Result.Action != Create || got[1].Product.Stock != 10 || !got[1].Product.Active || got[2].Result.Action != Fail {
 		t.Fatalf("plan: %+v %+v %+v", got[0], got[1], got[2].Result)
 	}

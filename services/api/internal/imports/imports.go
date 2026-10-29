@@ -141,7 +141,11 @@ func PlanCatalog(rows []CatalogRow, existing []catalog.Item, kind string, limit 
 		if !update {
 			cur = catalog.Item{Kind: kind, Active: true, Price: -1} // a new item needs its price
 		}
+		// A match keeps its name (the file may just write it in another case).
 		name := strings.Join(strings.Fields(row.Name), " ")
+		if update {
+			name = cur.Name
+		}
 		it := cur.Apply(catalog.Patch{Name: &name, Description: row.Description, Price: row.Price, DurationMinutes: row.DurationMinutes,
 			PriceUnit: row.PriceUnit, SecurityDeposit: row.SecurityDeposit, LateFeePerDay: row.LateFeePerDay, Active: row.Active}).Normalize()
 		errs := it.Validate()
@@ -189,6 +193,9 @@ func PlanProducts(rows []products.ProductInput, existing []products.Product) []P
 		cur, update := byName[key]
 		if !update {
 			cur = products.Product{Active: true}
+		}
+		if update {
+			in.Name = &cur.Name // a match keeps its name
 		}
 		p := cur.Apply(in, !update)
 		errs := map[string]string{}
