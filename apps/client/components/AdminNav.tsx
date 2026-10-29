@@ -2,15 +2,18 @@ import { strings, term } from '@lb/shared';
 import { Ionicons } from '@expo/vector-icons';
 import { router, type Href } from 'expo-router';
 import { useState } from 'react';
-import { Modal, Pressable, ScrollView, StyleSheet, useWindowDimensions, View } from 'react-native';
+import { Modal, ScrollView, StyleSheet, useWindowDimensions, View } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { signOut, useBusiness } from '../lib/useMe';
 import { useCurrentBusinessId, useTexts } from '../lib/useTexts';
-import { Cell, Group, PressableScale, Text, radius, useUI } from '../ui';
+import { Cell, Group, PressableScale, Text, contentWidth, radius, useUI } from '../ui';
 import { useInstallAction } from './InstallApp';
 import { useNewAction } from './NewAction';
 
 const WIDE = 900; // from here the sections live in a sidebar instead of the ☰ menu
+
+// Tablets in portrait use the phone menu: keep it as wide as the screens' content.
+const centered = { width: '100%', maxWidth: contentWidth, alignSelf: 'center' } as const;
 
 type Section = { path: string; label: string; icon: keyof typeof Ionicons.glyphMap };
 type SectionGroup = { label: string; sections: Section[] };
@@ -68,31 +71,37 @@ export function AdminNav() {
       <PressableScale accessibilityRole="button" accessibilityLabel={strings.nav.menu} hitSlop={10} onPress={() => setOpen(true)} style={{ padding: 6 }}>
         <Ionicons name="menu" size={26} color={ui.accent} />
       </PressableScale>
-      <Modal visible={open} transparent animationType="fade" onRequestClose={() => setOpen(false)}>
-        <Pressable accessibilityLabel={strings.photos.close} onPress={() => setOpen(false)} style={{ flex: 1, backgroundColor: 'rgba(0,0,0,0.4)' }}>
-          {/* Stop taps inside the panel from closing it. */}
-          <Pressable onPress={() => {}} style={{ marginTop: insets.top + 8, marginHorizontal: 12, alignSelf: 'flex-end', width: '100%', maxWidth: 360,
-            backgroundColor: ui.bg, borderRadius: radius.lg, padding: 12, maxHeight: '90%' }}>
-            <ScrollView>
-              <Text variant="footnote" color="labelSecondary" style={{ marginHorizontal: 16, marginBottom: 8 }}>{nav.business.name.toUpperCase()}</Text>
-              <Group separatorInset={58}>
-                {nav.add.choices.map((c) => <Cell key={c.path} icon="add-circle" tint={ui.accent} label={c.label} onPress={close(() => nav.go(c.path))} />)}
+      {/* Full screen on phones: the whole width and height, below the notch and above the home bar. */}
+      <Modal visible={open} animationType="fade" presentationStyle="fullScreen" onRequestClose={() => setOpen(false)}>
+        <View style={{ flex: 1, backgroundColor: ui.bg, paddingTop: insets.top }}>
+          <View style={{ flexDirection: 'row', alignItems: 'center', gap: 12, paddingHorizontal: 16, paddingVertical: 10, ...centered }}>
+            <View style={{ flex: 1 }}>
+              <Text variant="footnote" color="labelSecondary">{strings.nav.menu.toUpperCase()}</Text>
+              <Text variant="title" accessibilityRole="header" numberOfLines={1}>{nav.business.name}</Text>
+            </View>
+            <PressableScale accessibilityRole="button" accessibilityLabel={strings.photos.close} hitSlop={10} onPress={() => setOpen(false)}
+              style={{ width: 36, height: 36, borderRadius: radius.full, backgroundColor: ui.fill, alignItems: 'center', justifyContent: 'center' }}>
+              <Ionicons name="close" size={22} color={ui.label} />
+            </PressableScale>
+          </View>
+          <ScrollView contentContainerStyle={{ paddingHorizontal: 16, paddingTop: 8, paddingBottom: insets.bottom + 24, ...centered }}>
+            <Group separatorInset={58}>
+              {nav.add.choices.map((c) => <Cell key={c.path} icon="add-circle" tint={ui.accent} label={c.label} onPress={close(() => nav.go(c.path))} />)}
+            </Group>
+            {nav.groups.map((g) => (
+              <Group key={g.label} label={g.label} separatorInset={58}>
+                {g.sections.map((sec) => (
+                  <Cell key={sec.path} icon={sec.icon} tint={nav.active(sec.path) ? ui.accent : ui.gray} label={sec.label} onPress={close(() => nav.go(sec.path))} />
+                ))}
               </Group>
-              {nav.groups.map((g) => (
-                <Group key={g.label} label={g.label} separatorInset={58}>
-                  {g.sections.map((sec) => (
-                    <Cell key={sec.path} icon={sec.icon} tint={nav.active(sec.path) ? ui.accent : ui.gray} label={sec.label} onPress={close(() => nav.go(sec.path))} />
-                  ))}
-                </Group>
-              ))}
-              <Group separatorInset={58}>
-                {install.show && <Cell icon="download" tint={ui.success} label={install.label} onPress={close(install.onPress)} />}
-                <Cell icon="storefront" tint={ui.indigo} label={strings.nav.businesses} onPress={close(() => router.push('/admin'))} />
-                <Cell label={strings.admin.signOut} destructive onPress={close(signOut)} />
-              </Group>
-            </ScrollView>
-          </Pressable>
-        </Pressable>
+            ))}
+            <Group separatorInset={58}>
+              {install.show && <Cell icon="download" tint={ui.success} label={install.label} onPress={close(install.onPress)} />}
+              <Cell icon="storefront" tint={ui.indigo} label={strings.nav.businesses} onPress={close(() => router.push('/admin'))} />
+              <Cell label={strings.admin.signOut} destructive onPress={close(signOut)} />
+            </Group>
+          </ScrollView>
+        </View>
       </Modal>
       {install.sheet}
     </View>
