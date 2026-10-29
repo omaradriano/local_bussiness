@@ -1,7 +1,7 @@
 // Visible UI text (es-MX) shared by every type of business. Text that changes with the type
 // ("Rentas" / "Citas" / "Pedidos", gendered states) lives in verticalTexts.ts.
 export const strings = {
-  appName: 'Local Bussiness',
+  appName: 'Mi negocio',
   common: {
     loading: 'Cargando…',
     retry: 'Reintentar',
