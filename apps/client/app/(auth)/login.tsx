@@ -4,6 +4,7 @@ import { useState } from 'react';
 import { Switch, View } from 'react-native';
 import { useSession } from '../../lib/session';
 import { supabase } from '../../lib/supabase';
+import { Welcome } from '../../components/Welcome';
 import { Button, Field, Screen, Text, useToast, useUI } from '../../ui';
 
 const t = strings.auth;
@@ -62,6 +63,7 @@ export default function Login() {
         <Button variant="plain" onPress={() => { setMode(mode === 'login' ? 'signup' : 'login'); }} style={{ marginTop: 8 }}>
           {mode === 'login' ? t.toSignUp : t.toLogin}
         </Button>
+        <Welcome />
       </View>
     </Screen>
   );
