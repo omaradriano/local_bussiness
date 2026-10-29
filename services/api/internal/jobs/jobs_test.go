@@ -8,6 +8,7 @@ import (
 	"image/color"
 	"image/jpeg"
 	"os"
+	"slices"
 	"testing"
 
 	"github.com/jackc/pgx/v5"
@@ -115,3 +116,31 @@ func TestIntegrationImageVariantsJob(t *testing.T) {
 }
 
 func errorAs(err error, target any) bool { return err != nil && errors.As(err, target) }
+
+type fakeDeleter struct{ calls []string }
+
+func (f *fakeDeleter) DeletePrefix(_ context.Context, bucket, prefix string) (int, error) {
+	f.calls = append(f.calls, bucket+":"+prefix)
+	return 1, nil
+}
+
+func TestPurgeBusinessFiles(t *testing.T) {
+	f := &fakeDeleter{}
+	const biz = "aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa"
+	if err := PurgeBusinessFiles(context.Background(), f, biz); err != nil {
+		t.Fatal(err)
+	}
+	want := []string{"catalog:" + biz + "/", "private-docs:" + biz + "/", "rental-evidence:" + biz + "/"}
+	if !slices.Equal(f.calls, want) {
+		t.Fatalf("calls: %v", f.calls)
+	}
+	// Anything but a business id never reaches S3 (an empty prefix would be the whole bucket).
+	for _, bad := range []string{"", "/", "../x", "aaaaaaaa"} {
+		f.calls = nil
+		if err := PurgeBusinessFiles(context.Background(), f, bad); err == nil || len(f.calls) != 0 {
+			t.Fatalf("%q: err=%v calls=%v", bad, err, f.calls)
+		}
+	}
+}
+
+func (m memFiles) DeletePrefix(context.Context, string, string) (int, error) { return 0, nil }

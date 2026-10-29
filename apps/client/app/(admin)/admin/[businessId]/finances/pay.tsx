@@ -67,7 +67,7 @@ export default function PayScreen() {
       {list?.length === 0 && <EmptyState icon="people-outline" title={t.noStaff} />}
       {!!list?.length && (
         <View style={{ backgroundColor: ui.surface, borderRadius: radius.sm, overflow: 'hidden' }}>
-          {list.map((p, i) => <PayCard key={p.staff_id} businessId={businessId} pay={p} first={i === 0} />)}
+          {list.filter((p) => !p.deleted).map((p, i) => <PayCard key={p.staff_id} businessId={businessId} pay={p} first={i === 0} />)}
         </View>
       )}
     </Screen>

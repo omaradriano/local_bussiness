@@ -14,6 +14,7 @@ import (
 	"github.com/riverqueue/river"
 	"github.com/riverqueue/river/riverdriver/riverpgxv5"
 
+	"github.com/omaradriano/local_bussiness/services/api/internal/auth"
 	"github.com/omaradriano/local_bussiness/services/api/internal/bookings"
 	"github.com/omaradriano/local_bussiness/services/api/internal/files"
 	"github.com/omaradriano/local_bussiness/services/api/internal/images"
@@ -31,6 +32,50 @@ func (ImageVariantsArgs) Kind() string { return "generate_image_variants" }
 type FileStore interface {
 	Get(ctx context.Context, bucket, key string, maxBytes int64) ([]byte, error)
 	PutImmutable(ctx context.Context, bucket, key, contentType string, data []byte) error
+	PrefixDeleter
+}
+
+type PrefixDeleter interface {
+	DeletePrefix(ctx context.Context, bucket, prefix string) (int, error)
+}
+
+// PurgeBusinessFilesArgs: purge_business_files, after a business was deleted from the database.
+type PurgeBusinessFilesArgs struct {
+	BusinessID string `json:"business_id"`
+}
+
+func (PurgeBusinessFilesArgs) Kind() string { return "purge_business_files" }
+
+type PurgeBusinessFilesWorker struct {
+	river.WorkerDefaults[PurgeBusinessFilesArgs]
+	Files PrefixDeleter
+}
+
+func (w *PurgeBusinessFilesWorker) Work(ctx context.Context, job *river.Job[PurgeBusinessFilesArgs]) error {
+	if err := PurgeBusinessFiles(ctx, w.Files, job.Args.BusinessID); errors.Is(err, errBadBusinessID) {
+		return river.JobCancel(err) // retrying won't fix it
+	} else if err != nil {
+		return err
+	}
+	return nil
+}
+
+var errBadBusinessID = errors.New("purge: not a business id")
+
+// PurgeBusinessFiles deletes the business's folder ({id}/) in every bucket. Only a real business id
+// gets this far: an empty or partial prefix would delete other businesses' files.
+func PurgeBusinessFiles(ctx context.Context, f PrefixDeleter, businessID string) error {
+	if !auth.IsUUID(businessID) {
+		return fmt.Errorf("%w: %q", errBadBusinessID, businessID)
+	}
+	for _, bucket := range []string{files.Catalog, files.PrivateDocs, files.RentalEvidence} {
+		n, err := f.DeletePrefix(ctx, bucket, businessID+"/")
+		if err != nil {
+			return fmt.Errorf("purge %s: %w", bucket, err)
+		}
+		slog.InfoContext(ctx, "purged business files", "business", businessID, "bucket", bucket, "objects", n)
+	}
+	return nil
 }
 
 type ImageVariantsWorker struct {
@@ -104,6 +149,7 @@ func (w *sweepWorker[T]) Work(ctx context.Context, _ *river.Job[T]) error {
 func Workers(m media.Repo, f FileStore, db store.DB) *river.Workers {
 	ws := river.NewWorkers()
 	river.AddWorker(ws, &ImageVariantsWorker{Media: m, Files: f})
+	river.AddWorker(ws, &PurgeBusinessFilesWorker{Files: f})
 	river.AddWorker(ws, &sweepWorker[ExpireHoldsArgs]{DB: db, Sweep: bookings.ExpireHolds})
 	river.AddWorker(ws, &sweepWorker[MarkOverdueArgs]{DB: db, Sweep: bookings.MarkOverdue})
 	return ws

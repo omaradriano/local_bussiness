@@ -306,6 +306,17 @@ export const strings = {
       done: 'Entendido',
     },
   },
+  deleteBusiness: {
+    title: 'Zona de peligro',
+    action: 'Eliminar negocio',
+    hint: 'Borra el negocio y toda su información para siempre.',
+    confirmTitle: (name: string) => `¿Eliminar ${name}?`,
+    body: 'Se borran para siempre sus citas, rentas y pedidos, sus clientes con sus documentos, el catálogo con sus fotos, el equipo, los productos y las finanzas. No se puede deshacer.',
+    typeName: (name: string) => `Escribe «${name}» para confirmar`,
+    confirm: 'Eliminar para siempre',
+    done: 'Negocio eliminado.',
+  },
+  confirm: { cancel: 'Cancelar' },
   welcome: {
     title: 'Bienvenido a Mi negocio',
     open: '¿Qué es Mi negocio?',
@@ -655,6 +666,10 @@ export const strings = {
     onlyOwner: 'Solo el dueño puede cambiar los ajustes.',
   },
   staff: {
+    remove: 'Eliminar persona',
+    removeTitle: (name: string) => `¿Eliminar a ${name}?`,
+    removeBody: 'Sale de la lista, de la agenda y de Sueldos. Sus citas y comisiones pasadas conservan su nombre.',
+    removed: 'Persona eliminada.',
     title: 'Equipo',
     hint: 'Las personas que atienden, cada una con su disponibilidad. Una persona nueva atiende todos los servicios en el horario del negocio; entra a su ficha para ajustarlo. Si trabajas solo, ya estás aquí como "Yo".',
     add: 'Agregar persona',

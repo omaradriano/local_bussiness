@@ -174,6 +174,31 @@ type Business struct {
 	Role     string `json:"role"`
 }
 
+// ErrNotFound: no business with that id.
+var ErrNotFound = errors.New("business not found")
+
+// Delete removes a business with everything in it: the database cascades from businesses (bookings,
+// customers, catalog, staff, finances…), and purge enqueues the job that deletes its files in S3, in
+// the same transaction, so either both happen or neither. The owner's account and plan stay.
+func Delete(ctx context.Context, db Beginner, businessID string, purge func(context.Context, pgx.Tx) error) error {
+	tx, err := db.Begin(ctx)
+	if err != nil {
+		return err
+	}
+	defer tx.Rollback(ctx)
+	tag, err := tx.Exec(ctx, `delete from public.businesses where id = $1`, businessID)
+	if err != nil {
+		return err
+	}
+	if tag.RowsAffected() == 0 {
+		return ErrNotFound
+	}
+	if err := purge(ctx, tx); err != nil {
+		return err
+	}
+	return tx.Commit(ctx)
+}
+
 type Beginner interface {
 	Begin(ctx context.Context) (pgx.Tx, error)
 }

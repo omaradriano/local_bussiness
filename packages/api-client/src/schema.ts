@@ -124,6 +124,25 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/v1/admin/businesses/{businessId}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                businessId: components["parameters"]["BusinessId"];
+            };
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post?: never;
+        /** El superadmin borra un negocio con todo (datos y archivos) */
+        delete: operations["adminDeleteBusiness"];
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/v1/admin/businesses/{businessId}/plan": {
         parameters: {
             query?: never;
@@ -193,7 +212,8 @@ export interface paths {
         get: operations["getBusinessRole"];
         put?: never;
         post?: never;
-        delete?: never;
+        /** Borra el negocio con todo: datos (en cascada) y archivos (un job del worker). Solo el dueño; también con la cuenta vencida */
+        delete: operations["deleteBusiness"];
         options?: never;
         head?: never;
         patch?: never;
@@ -313,7 +333,8 @@ export interface paths {
         get?: never;
         put?: never;
         post?: never;
-        delete?: never;
+        /** Saca a la persona del equipo (lista, agenda, sueldos); su nombre se queda en las citas y comisiones pasadas */
+        delete: operations["deleteStaff"];
         options?: never;
         head?: never;
         patch: operations["updateStaff"];
@@ -1588,6 +1609,8 @@ export interface components {
             /** @enum {string} */
             salary_period: "weekly" | "biweekly" | "monthly";
             commission_percent: number;
+            /** @description Ya no está en el equipo (cuenta para comisiones pasadas; no se muestra en Sueldos) */
+            deleted: boolean;
         };
         FinancePart: {
             /** @description Ingresos: bookings | fees | products. Gastos: una categoría, payroll o commissions */
@@ -2188,6 +2211,36 @@ export interface operations {
             403: components["responses"]["Error"];
         };
     };
+    adminDeleteBusiness: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                businessId: components["parameters"]["BusinessId"];
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": {
+                    /** @description El nombre del negocio, escrito otra vez (sin importar mayúsculas ni espacios) */
+                    confirm: string;
+                };
+            };
+        };
+        responses: {
+            /** @description Borrado */
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            403: components["responses"]["Error"];
+            404: components["responses"]["Error"];
+            422: components["responses"]["Error"];
+        };
+    };
     adminSetPlan: {
         parameters: {
             query?: never;
@@ -2318,6 +2371,36 @@ export interface operations {
             400: components["responses"]["Error"];
             401: components["responses"]["Error"];
             403: components["responses"]["Error"];
+        };
+    };
+    deleteBusiness: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                businessId: components["parameters"]["BusinessId"];
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": {
+                    /** @description El nombre del negocio, escrito otra vez (sin importar mayúsculas ni espacios) */
+                    confirm: string;
+                };
+            };
+        };
+        responses: {
+            /** @description Borrado */
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            403: components["responses"]["Error"];
+            404: components["responses"]["Error"];
+            422: components["responses"]["Error"];
         };
     };
     listCatalog: {
@@ -2547,6 +2630,30 @@ export interface operations {
             };
             403: components["responses"]["Error"];
             422: components["responses"]["Error"];
+        };
+    };
+    deleteStaff: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                businessId: components["parameters"]["BusinessId"];
+                staffId: components["parameters"]["StaffId"];
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Borrado */
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            403: components["responses"]["Error"];
+            404: components["responses"]["Error"];
+            409: components["responses"]["Error"];
         };
     };
     updateStaff: {

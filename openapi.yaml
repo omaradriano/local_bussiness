@@ -136,6 +136,27 @@ paths:
                   businesses: { type: array, items: { $ref: "#/components/schemas/AdminBusiness" } }
         "403": { $ref: "#/components/responses/Error" }
 
+  /v1/admin/businesses/{businessId}:
+    parameters:
+      - $ref: "#/components/parameters/BusinessId"
+    delete:
+      operationId: adminDeleteBusiness
+      summary: El superadmin borra un negocio con todo (datos y archivos)
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [confirm]
+              properties:
+                confirm: { type: string, description: "El nombre del negocio, escrito otra vez (sin importar mayúsculas ni espacios)" }
+      responses:
+        "204": { description: Borrado }
+        "403": { $ref: "#/components/responses/Error" }
+        "404": { $ref: "#/components/responses/Error" }
+        "422": { $ref: "#/components/responses/Error" }
+
   /v1/admin/businesses/{businessId}/plan:
     parameters:
       - $ref: "#/components/parameters/BusinessId"
@@ -219,6 +240,23 @@ paths:
   /v1/b/{businessId}/:
     parameters:
       - $ref: "#/components/parameters/BusinessId"
+    delete:
+      operationId: deleteBusiness
+      summary: "Borra el negocio con todo: datos (en cascada) y archivos (un job del worker). Solo el dueño; también con la cuenta vencida"
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [confirm]
+              properties:
+                confirm: { type: string, description: "El nombre del negocio, escrito otra vez (sin importar mayúsculas ni espacios)" }
+      responses:
+        "204": { description: Borrado }
+        "403": { $ref: "#/components/responses/Error" }
+        "404": { $ref: "#/components/responses/Error" }
+        "422": { $ref: "#/components/responses/Error" }
     get:
       operationId: getBusinessRole
       summary: Rol del usuario en el negocio
@@ -407,6 +445,14 @@ paths:
     parameters:
       - $ref: "#/components/parameters/BusinessId"
       - $ref: "#/components/parameters/StaffId"
+    delete:
+      operationId: deleteStaff
+      summary: "Saca a la persona del equipo (lista, agenda, sueldos); su nombre se queda en las citas y comisiones pasadas"
+      responses:
+        "204": { description: Borrado }
+        "403": { $ref: "#/components/responses/Error" }
+        "404": { $ref: "#/components/responses/Error" }
+        "409": { $ref: "#/components/responses/Error" }
     patch:
       operationId: updateStaff
       requestBody:
@@ -2033,7 +2079,7 @@ components:
 
     StaffPay:
       type: object
-      required: [staff_id, name, active, salary, salary_period, commission_percent]
+      required: [staff_id, name, active, salary, salary_period, commission_percent, deleted]
       properties:
         staff_id: { type: string, format: uuid }
         name: { type: string }
@@ -2041,6 +2087,7 @@ components:
         salary: { type: integer }
         salary_period: { type: string, enum: [weekly, biweekly, monthly] }
         commission_percent: { type: number }
+        deleted: { type: boolean, description: "Ya no está en el equipo (cuenta para comisiones pasadas; no se muestra en Sueldos)" }
 
     FinancePart:
       type: object

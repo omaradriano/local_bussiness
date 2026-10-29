@@ -123,3 +123,35 @@ func (s *S3) PresignGet(ctx context.Context, name, key string) (string, error) {
 	}
 	return req.URL, nil
 }
+
+// DeletePrefix deletes every object under prefix (a business's folder) and returns how many.
+// In versioned buckets this leaves delete markers; the old versions go with the bucket's lifecycle.
+func (s *S3) DeletePrefix(ctx context.Context, name, prefix string) (int, error) {
+	if len(prefix) < 2 { // never "" or "/": that would be the whole bucket
+		return 0, errors.New("files: refusing to delete an empty prefix")
+	}
+	pages := s3.NewListObjectsV2Paginator(s.client, &s3.ListObjectsV2Input{Bucket: s.bucket(name), Prefix: aws.String(prefix)})
+	n := 0
+	for pages.HasMorePages() {
+		page, err := pages.NextPage(ctx)
+		if err != nil {
+			return n, err
+		}
+		if len(page.Contents) == 0 {
+			continue
+		}
+		ids := make([]types.ObjectIdentifier, len(page.Contents))
+		for i, o := range page.Contents {
+			ids[i] = types.ObjectIdentifier{Key: o.Key}
+		}
+		out, err := s.client.DeleteObjects(ctx, &s3.DeleteObjectsInput{Bucket: s.bucket(name), Delete: &types.Delete{Objects: ids, Quiet: aws.Bool(true)}})
+		if err != nil {
+			return n, err
+		}
+		if len(out.Errors) > 0 {
+			return n, fmt.Errorf("files: %d objects not deleted, first: %s", len(out.Errors), aws.ToString(out.Errors[0].Message))
+		}
+		n += len(ids)
+	}
+	return n, nil
+}
