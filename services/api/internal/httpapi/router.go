@@ -62,6 +62,68 @@ type PlansRepo interface {
 	ForBusiness(ctx context.Context, businessID string) (plans.Account, error)
 	OwnerOf(ctx context.Context, businessID string) (string, error)
 	Set(ctx context.Context, userID string, a plans.Account, note string) error
+	Usage(ctx context.Context, businessID, what, itemID string) (int, error)
+	OwnedBusinesses(ctx context.Context, userID string) (int, error)
+}
+
+// businessPlan: what the business's owner's plan includes (a trial includes what its plan does).
+func (d Deps) businessPlan(w http.ResponseWriter, r *http.Request) (plans.Account, bool) {
+	m, _ := auth.MemberFrom(r.Context())
+	a, err := d.Plans.ForBusiness(r.Context(), m.BusinessID)
+	if err != nil {
+		internalError(w, r, "account plan", err)
+		return a, false
+	}
+	return a, true
+}
+
+// withinPlan: creating one more of `what` must fit the plan's limit (the itemId URL param counts photos).
+func (d Deps) withinPlan(what string) func(http.Handler) http.Handler {
+	return func(next http.Handler) http.Handler {
+		return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+			a, ok := d.businessPlan(w, r)
+			if !ok {
+				return
+			}
+			limit := plans.Get(a.Plan).Limit(what)
+			if limit == nil {
+				next.ServeHTTP(w, r)
+				return
+			}
+			m, _ := auth.MemberFrom(r.Context())
+			used, err := d.Plans.Usage(r.Context(), m.BusinessID, what, chi.URLParam(r, "itemId"))
+			if err != nil {
+				internalError(w, r, "plan usage", err)
+				return
+			}
+			if !plans.HasRoom(limit, used) {
+				apierr.Write(w, http.StatusForbidden, "plan_limit", plans.LimitMessage(a.Plan, what, *limit))
+				return
+			}
+			next.ServeHTTP(w, r)
+		})
+	}
+}
+
+func planMissing(w http.ResponseWriter, a plans.Account) {
+	apierr.Write(w, http.StatusForbidden, "plan_capability", "Esta función no está incluida en tu plan "+strings.ToUpper(a.Plan[:1])+a.Plan[1:]+".")
+}
+
+// requireCapability: a part of the app that only some plans include (sueldos, gastos recurrentes…).
+func (d Deps) requireCapability(capability string) func(http.Handler) http.Handler {
+	return func(next http.Handler) http.Handler {
+		return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+			a, ok := d.businessPlan(w, r)
+			if !ok {
+				return
+			}
+			if !plans.Get(a.Plan).Can(capability) {
+				planMissing(w, a)
+				return
+			}
+			next.ServeHTTP(w, r)
+		})
+	}
 }
 
 // planExpired: what an expired account gets when it tries to change something.
@@ -261,7 +323,7 @@ func NewRouter(d Deps) http.Handler {
 					Features map[string]bool `json:"features"`
 				}
 				_ = json.Unmarshal(m.Settings, &s)
-				ms[i].Features = features.Active(m.Vertical, features.Parse(m.Grants), s.Features)
+				ms[i].Features = features.Active(m.Vertical, features.ParseForPlan(m.Grants, m.Plan), s.Features)
 				a, err := d.Plans.ForBusiness(r.Context(), m.BusinessID)
 				if err != nil {
 					internalError(w, r, "account plan", err)
@@ -438,13 +500,30 @@ func NewRouter(d Deps) http.Handler {
 				invalid(w, "Ese giro todavía no está disponible.", map[string]string{"vertical": "Ese giro todavía no está disponible."})
 				return
 			}
-			// An owner whose account expired can't open more businesses (a new owner gets a trial).
-			if acct, ok, err := d.Plans.ForUser(r.Context(), user); err != nil {
+			// An owner whose account expired can't open more businesses (a new owner gets a trial), nor
+			// more than their plan allows; the platform admin tries giros out without that cap.
+			acct, ok, err := d.Plans.ForUser(r.Context(), user)
+			if err != nil {
 				internalError(w, r, "account plan", err)
 				return
-			} else if ok && !acct.Writable(d.now()) {
+			}
+			if !ok {
+				acct = plans.NewTrial(d.now())
+			}
+			if !acct.Writable(d.now()) {
 				planExpired(w, acct)
 				return
+			}
+			if limit := plans.Get(acct.Plan).Limit("businesses"); !admin {
+				owned, err := d.Plans.OwnedBusinesses(r.Context(), user)
+				if err != nil {
+					internalError(w, r, "owned businesses", err)
+					return
+				}
+				if !plans.HasRoom(limit, owned) {
+					apierr.Write(w, http.StatusForbidden, "plan_limit", plans.LimitMessage(acct.Plan, "businesses", *limit))
+					return
+				}
 			}
 			b, err := d.CreateBusiness(r.Context(), user, in)
 			if errors.Is(err, businesses.ErrSlugTaken) {
@@ -490,7 +569,7 @@ func NewRouter(d Deps) http.Handler {
 				apierr.JSON(w, http.StatusOK, map[string]any{"items": items})
 			})
 
-			r.With(auth.RequireRole("owner")).Post("/catalog", func(w http.ResponseWriter, r *http.Request) {
+			r.With(auth.RequireRole("owner"), d.withinPlan("catalog_items")).Post("/catalog", func(w http.ResponseWriter, r *http.Request) {
 				m, _ := auth.MemberFrom(r.Context())
 				var body struct {
 					catalog.Item
@@ -555,7 +634,7 @@ func NewRouter(d Deps) http.Handler {
 				apierr.JSON(w, http.StatusOK, updated)
 			})
 
-			mountImages(r, d.Photos)
+			mountImages(r, d.Photos, d.withinPlan("photos_per_item"))
 			mountCustomers(r, d)
 			mountFinances(r, d)
 			mountProducts(r, d)
@@ -1055,7 +1134,7 @@ func NewRouter(d Deps) http.Handler {
 				apierr.JSON(w, http.StatusOK, map[string]any{"staff": list})
 			})
 
-			r.With(auth.RequireRole("owner")).Post("/staff", func(w http.ResponseWriter, r *http.Request) {
+			r.With(auth.RequireRole("owner"), d.withinPlan("staff")).Post("/staff", func(w http.ResponseWriter, r *http.Request) {
 				m, _ := auth.MemberFrom(r.Context())
 				var p staff.Patch
 				if !decode(w, r, &p) {
@@ -1168,7 +1247,7 @@ func NewRouter(d Deps) http.Handler {
 				apierr.JSON(w, http.StatusOK, map[string]any{"units": units})
 			})
 
-			r.With(auth.RequireRole("owner")).Post("/catalog/{itemId}/units", func(w http.ResponseWriter, r *http.Request) {
+			r.With(auth.RequireRole("owner"), d.withinPlan("rental_units")).Post("/catalog/{itemId}/units", func(w http.ResponseWriter, r *http.Request) {
 				m, _ := auth.MemberFrom(r.Context())
 				itemID := chi.URLParam(r, "itemId")
 				var p catalog.UnitPatch

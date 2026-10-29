@@ -214,6 +214,10 @@ func Create(ctx context.Context, db Beginner, userID string, in Input) (Business
 		values ($1, 'trial', now() + make_interval(days => $2)) on conflict do nothing`, userID, plans.TrialDays); err != nil {
 		return Business{}, err
 	}
+	if _, err := tx.Exec(ctx, `update public.businesses set plan = (select plan from public.account_plans where user_id = $2) where id = $1`,
+		b.ID, userID); err != nil {
+		return Business{}, err
+	}
 
 	var ownerStaff *string
 	if tpl.OwnerAttends {

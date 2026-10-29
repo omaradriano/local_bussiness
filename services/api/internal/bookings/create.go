@@ -138,17 +138,17 @@ func Create(ctx context.Context, db store.DB, businessID string, in CreateInput,
 	}
 	defer tx.Rollback(ctx)
 
-	var tz, vertical string
+	var tz, vertical, plan string
 	var rawSettings, grants []byte
-	if err := tx.QueryRow(ctx, `select timezone, settings, vertical, feature_grants from public.businesses where id = $1`, businessID).
-		Scan(&tz, &rawSettings, &vertical, &grants); err != nil {
+	if err := tx.QueryRow(ctx, `select timezone, settings, vertical, feature_grants, plan from public.businesses where id = $1`, businessID).
+		Scan(&tz, &rawSettings, &vertical, &grants, &plan); err != nil {
 		return Booking{}, false, err
 	}
 	var owner struct {
 		Features map[string]bool `json:"features"`
 	}
 	_ = json.Unmarshal(rawSettings, &owner)
-	active := features.Active(vertical, features.Parse(grants), owner.Features)
+	active := features.Active(vertical, features.ParseForPlan(grants, plan), owner.Features)
 	if in.Customer.WalkIn && in.Customer.ID == "" && !slices.Contains(active, "walkIn") {
 		return Booking{}, false, Invalid{"customer.walk_in", "Este negocio no registra clientes casuales; elige o registra al cliente."}
 	}

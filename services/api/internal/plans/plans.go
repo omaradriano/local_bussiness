@@ -7,6 +7,7 @@ package plans
 import (
 	_ "embed"
 	"encoding/json"
+	"fmt"
 	"maps"
 	"slices"
 	"time"
@@ -128,4 +129,58 @@ func (a Account) DaysLeft(now time.Time) int {
 		d++
 	}
 	return d
+}
+
+// Limit: the cap on one kind of thing (nil = unlimited, or not a limit at all).
+func (d Def) Limit(what string) *int {
+	switch what {
+	case "businesses":
+		return d.Limits.Businesses
+	case "members":
+		return d.Limits.Members
+	case "staff":
+		return d.Limits.Staff
+	case "catalog_items":
+		return d.Limits.CatalogItems
+	case "rental_units":
+		return d.Limits.RentalUnits
+	case "photos_per_item":
+		return d.Limits.PhotosPerItem
+	}
+	return nil
+}
+
+func (d Def) Can(capability string) bool { return slices.Contains(d.Capabilities, capability) }
+
+// HasRoom: one more fits when used is below the limit.
+func HasRoom(limit *int, used int) bool { return limit == nil || used < *limit }
+
+// limitNouns: singular and plural.
+var limitNouns = map[string][2]string{
+	"businesses":      {"negocio", "negocios"},
+	"members":         {"persona con acceso", "personas con acceso"},
+	"staff":           {"persona que atiende", "personas que atienden"},
+	"catalog_items":   {"artículo en el catálogo", "artículos en el catálogo"},
+	"rental_units":    {"unidad en renta", "unidades en renta"},
+	"photos_per_item": {"foto por artículo", "fotos por artículo"},
+}
+
+var names = map[string]string{Lite: "Lite", Pro: "Pro", Business: "Business"}
+
+// LimitMessage: what the owner reads when a limit stops them (es-MX).
+func LimitMessage(plan, what string, limit int) string {
+	who := "Tu plan " + names[plan]
+	if plan == Trial {
+		who = "Tu prueba (plan " + names[catalog.Trial.As] + ")"
+	}
+	noun := limitNouns[what][1]
+	if limit == 1 {
+		noun = limitNouns[what][0]
+	}
+	return fmt.Sprintf("%s permite hasta %d %s.", who, limit, noun)
+}
+
+// IsCalendarMonth: [from, to] is exactly one month (what plans without "any_period" may look at).
+func IsCalendarMonth(from, to time.Time) bool {
+	return from.Day() == 1 && to.Equal(from.AddDate(0, 1, -1))
 }

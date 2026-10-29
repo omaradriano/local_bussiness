@@ -77,12 +77,13 @@ type Membership struct {
 	Account *plans.View `json:"account" db:"-"`
 
 	Grants   []byte `json:"-"` // businesses.feature_grants
+	Plan     string `json:"-"` // businesses.plan (the owner's account plan)
 	Settings []byte `json:"-"` // businesses.settings (owner's feature choices)
 }
 
 func (s *Store) Memberships(ctx context.Context, userID string) ([]Membership, error) {
 	rows, err := s.db.Query(ctx, `
-		select b.id::text, b.slug, b.name, b.vertical, m.role, '{}'::text[], b.feature_grants, b.settings
+		select b.id::text, b.slug, b.name, b.vertical, m.role, '{}'::text[], b.feature_grants, b.plan, b.settings
 		from public.business_members m
 		join public.businesses b on b.id = m.business_id
 		where m.user_id = $1

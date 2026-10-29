@@ -303,13 +303,13 @@ func (s Repo) Notice(ctx context.Context, slug string) (Notice, error) {
 
 func (s Repo) Get(ctx context.Context, businessID string) (Settings, error) {
 	var raw, grants []byte
-	var vertical string
-	err := s.DB.QueryRow(ctx, `select settings, vertical, feature_grants from public.businesses where id = $1`, businessID).
-		Scan(&raw, &vertical, &grants)
+	var vertical, plan string
+	err := s.DB.QueryRow(ctx, `select settings, vertical, feature_grants, plan from public.businesses where id = $1`, businessID).
+		Scan(&raw, &vertical, &grants, &plan)
 	if errors.Is(err, pgx.ErrNoRows) {
 		return Settings{}, ErrNotFound
 	}
-	return From(raw).WithBusiness(vertical, features.Parse(grants)), err
+	return From(raw).WithBusiness(vertical, features.ParseForPlan(grants, plan)), err
 }
 
 // Save merges every section's keys into settings (keys of other features are left as they are).

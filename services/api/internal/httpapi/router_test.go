@@ -39,6 +39,9 @@ const (
 	// The owner's other business, whose account ran out (read-only); expiredUser's own trial ended.
 	bizExpired  = "eeeeeeee-eeee-eeee-eeee-eeeeeeeeeeee"
 	expiredUser = "33333333-3333-3333-3333-333333333333"
+	// A Lite business of the owner (at its limits), and a Lite owner who already has their one business.
+	bizLite  = "dddddddd-dddd-dddd-dddd-dddddddddddd"
+	liteUser = "44444444-4444-4444-4444-444444444444"
 )
 
 type fakeStore struct{}
@@ -50,7 +53,7 @@ func (fakeStore) Role(_ context.Context, businessID, userID string) (string, err
 	if businessID == bizA && userID == staffUser {
 		return "staff", nil
 	}
-	if businessID == bizExpired && userID == user {
+	if (businessID == bizExpired || businessID == bizLite) && userID == user {
 		return "owner", nil
 	}
 	return "", nil
@@ -72,7 +75,7 @@ func (fakeStore) IsPlatformAdmin(_ context.Context, userID string) (bool, error)
 // fakeAuth: "Bearer ok" is the owner of bizA, "Bearer staff" its employee; anything else is 401.
 func fakeAuth(next http.Handler) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		id := map[string]string{"Bearer ok": user, "Bearer staff": staffUser, "Bearer vencido": expiredUser}[r.Header.Get("Authorization")]
+		id := map[string]string{"Bearer ok": user, "Bearer staff": staffUser, "Bearer vencido": expiredUser, "Bearer lite": liteUser}[r.Header.Get("Authorization")]
 		if id == "" {
 			apierr.Write(w, http.StatusUnauthorized, "unauthorized", "x")
 			return
@@ -1317,12 +1320,17 @@ func (fakePlans) ForUser(_ context.Context, userID string) (plans.Account, bool,
 		return plans.Account{Plan: plans.Pro}, true, nil
 	case expiredUser:
 		return ended(), true, nil
+	case liteUser:
+		return plans.Account{Plan: plans.Lite}, true, nil
 	}
 	return plans.Account{}, false, nil // never opened a business
 }
 func (fakePlans) ForBusiness(_ context.Context, businessID string) (plans.Account, error) {
 	if businessID == bizExpired {
 		return ended(), nil
+	}
+	if businessID == bizLite {
+		return plans.Account{Plan: plans.Lite}, nil
 	}
 	return plans.Account{Plan: plans.Pro}, nil
 }
@@ -1333,6 +1341,47 @@ func (fakePlans) OwnerOf(_ context.Context, businessID string) (string, error) {
 	return user, nil
 }
 func (fakePlans) Set(context.Context, string, plans.Account, string) error { return nil }
+
+// The Lite business is full: 30 items and its one person; the Lite owner already has a business.
+func (fakePlans) Usage(_ context.Context, businessID, what, _ string) (int, error) {
+	if businessID != bizLite {
+		return 0, nil
+	}
+	return map[string]int{"catalog_items": 30, "staff": 1, "rental_units": 3, "photos_per_item": 3}[what], nil
+}
+func (fakePlans) OwnedBusinesses(_ context.Context, userID string) (int, error) {
+	return map[string]int{user: 6, liteUser: 1}[userID], nil
+}
+
+func TestPlanLimits(t *testing.T) {
+	lite := "/v1/b/" + bizLite
+	cases := []struct {
+		name, method, path, token, body string
+		code                            int
+		want                            string
+	}{
+		{"Lite: catálogo lleno", http.MethodPost, lite + "/catalog", "ok", `{"kind":"service","name":"Corte","price":1}`, http.StatusForbidden, `Tu plan Lite permite hasta 30 artículos en el catálogo.`},
+		{"Lite: solo una persona atiende", http.MethodPost, lite + "/staff", "ok", `{"name":"Beto"}`, http.StatusForbidden, `"plan_limit"`},
+		{"Lite: fotos por artículo", http.MethodPost, lite + "/catalog/" + itemID + "/images", "ok", `{"content_type":"image/jpeg","size":1000}`, http.StatusForbidden, `3 fotos por artículo`},
+		{"Lite: sin gastos recurrentes", http.MethodGet, lite + "/finances/recurring", "ok", "", http.StatusForbidden, `"plan_capability"`},
+		{"Lite: sin compras a plazos", http.MethodPost, lite + "/finances/plans", "ok", `{}`, http.StatusForbidden, `"plan_capability"`},
+		{"Lite: sin sueldos", http.MethodGet, lite + "/finances/pay", "ok", "", http.StatusForbidden, `"plan_capability"`},
+		{"Lite: gastos simples sí", http.MethodPost, lite + "/finances/expenses", "ok", `{"spent_on":"2026-11-03","category":"transport","amount":50000}`, http.StatusCreated, `"amount":50000`},
+		{"Lite: resumen de un mes", http.MethodGet, lite + "/finances/summary?from=2026-10-01&to=2026-10-31", "ok", "", http.StatusOK, `"profit"`},
+		{"Lite: resumen de un año no", http.MethodGet, lite + "/finances/summary?from=2026-01-01&to=2026-12-31", "ok", "", http.StatusForbidden, `"plan_capability"`},
+		{"Pro: resumen de un año", http.MethodGet, "/v1/b/" + bizA + "/finances/summary?from=2026-01-01&to=2026-12-31", "ok", "", http.StatusOK, `"profit"`},
+		{"Lite: un solo negocio", http.MethodPost, "/v1/businesses", "lite", `{"name":"Otra","slug":"otra-lite","vertical":"tool_rental"}`, http.StatusForbidden, `Tu plan Lite permite hasta 1 negocio.`},
+		{"el superadmin no tiene tope de negocios", http.MethodPost, "/v1/businesses", "ok", `{"name":"Prueba","slug":"prueba-admin","vertical":"tool_rental"}`, http.StatusCreated, `"role":"owner"`},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			rec := doBody(tc.method, tc.path, tc.token, strings.NewReader(tc.body))
+			if rec.Code != tc.code || !strings.Contains(rec.Body.String(), tc.want) {
+				t.Fatalf("got %d %s", rec.Code, rec.Body)
+			}
+		})
+	}
+}
 
 func TestPlans(t *testing.T) {
 	cases := []struct {

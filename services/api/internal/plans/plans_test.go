@@ -66,3 +66,37 @@ func TestValidPlanChange(t *testing.T) {
 		t.Error("there is no free plan")
 	}
 }
+
+func TestLimits(t *testing.T) {
+	lite := Get(Lite)
+	if n := lite.Limit("catalog_items"); n == nil || *n != 30 {
+		t.Fatalf("lite catalog: %v", n)
+	}
+	if Get(Business).Limit("staff") != nil {
+		t.Fatal("business has unlimited staff")
+	}
+	if Get(Lite).Limit("nonsense") != nil {
+		t.Fatal("unknown limits don't limit")
+	}
+	thirty := 30
+	if !HasRoom(nil, 1000) || !HasRoom(&thirty, 29) || HasRoom(&thirty, 30) {
+		t.Fatal("room")
+	}
+	if got := LimitMessage(Lite, "catalog_items", 30); got != "Tu plan Lite permite hasta 30 artículos en el catálogo." {
+		t.Fatalf("message: %q", got)
+	}
+	if got := LimitMessage(Trial, "staff", 10); got != "Tu prueba (plan Pro) permite hasta 10 personas que atienden." {
+		t.Fatalf("trial message: %q", got)
+	}
+}
+
+func TestCapabilities(t *testing.T) {
+	if Get(Lite).Can("payroll") || !Get(Lite).Can("expenses") || !Get(Trial).Can("recurring_expenses") || !Get(Business).Can("compare_businesses") {
+		t.Fatal("capabilities")
+	}
+	day := func(s string) time.Time { v, _ := time.Parse("2006-01-02", s); return v }
+	if !IsCalendarMonth(day("2026-02-01"), day("2026-02-28")) || IsCalendarMonth(day("2026-02-01"), day("2026-02-27")) ||
+		IsCalendarMonth(day("2026-01-01"), day("2026-12-31")) || IsCalendarMonth(day("2026-02-02"), day("2026-02-28")) {
+		t.Fatal("calendar month")
+	}
+}

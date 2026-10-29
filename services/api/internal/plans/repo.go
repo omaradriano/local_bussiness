@@ -60,10 +60,43 @@ func (r Repo) StartTrial(ctx context.Context, userID string, now time.Time) erro
 	return err
 }
 
-// Set: the platform admin assigns a plan (while there's no billing).
+// Set: the platform admin assigns a plan (while there's no billing). Their businesses copy it
+// (businesses.plan), which is what the active features read.
 func (r Repo) Set(ctx context.Context, userID string, a Account, note string) error {
-	_, err := r.DB.Exec(ctx, `insert into public.account_plans (user_id, plan, ends_at, note) values ($1, $2, $3, nullif($4, ''))
-		on conflict (user_id) do update set plan = excluded.plan, ends_at = excluded.ends_at, note = excluded.note, updated_at = now()`,
+	_, err := r.DB.Exec(ctx, `with saved as (
+			insert into public.account_plans (user_id, plan, ends_at, note) values ($1, $2, $3, nullif($4, ''))
+			on conflict (user_id) do update set plan = excluded.plan, ends_at = excluded.ends_at, note = excluded.note, updated_at = now()
+			returning plan)
+		update public.businesses set plan = (select plan from saved)
+		where id in (select business_id from public.business_members where user_id = $1 and role = 'owner')`,
 		userID, a.Plan, a.EndsAt, note)
 	return err
+}
+
+// Usage: how many of a limited thing a business has (itemID for photos per item). Deactivated items
+// and staff, and retired units, don't count: deactivating frees room.
+func (r Repo) Usage(ctx context.Context, businessID, what, itemID string) (int, error) {
+	q := map[string]string{
+		"staff":           `select count(*) from public.staff where business_id = $1 and active`,
+		"catalog_items":   `select count(*) from public.catalog_items where business_id = $1 and active`,
+		"rental_units":    `select count(*) from public.item_units where business_id = $1 and status <> 'retired'`,
+		"photos_per_item": `select count(*) from public.catalog_item_images where business_id = $1 and item_id = $2::uuid`,
+	}[what]
+	if q == "" {
+		return 0, nil
+	}
+	args := []any{businessID}
+	if what == "photos_per_item" {
+		args = append(args, itemID)
+	}
+	var n int
+	err := r.DB.QueryRow(ctx, q, args...).Scan(&n)
+	return n, err
+}
+
+// OwnedBusinesses: how many businesses the user owns.
+func (r Repo) OwnedBusinesses(ctx context.Context, userID string) (int, error) {
+	var n int
+	err := r.DB.QueryRow(ctx, `select count(*) from public.business_members where user_id = $1 and role = 'owner'`, userID).Scan(&n)
+	return n, err
 }

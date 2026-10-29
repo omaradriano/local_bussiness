@@ -17,6 +17,7 @@ import (
 	"slices"
 
 	"github.com/omaradriano/local_bussiness/services/api/internal/businesses"
+	"github.com/omaradriano/local_bussiness/services/api/internal/plans"
 )
 
 //go:embed features.json
@@ -91,5 +92,17 @@ func Active(vertical string, grants, enabled map[string]bool) []string {
 func Parse(raw []byte) map[string]bool {
 	m := map[string]bool{}
 	_ = json.Unmarshal(raw, &m)
+	return m
+}
+
+// ParseForPlan: the grants with what the owner's plan leaves out removed (Lite has no team, for
+// example). A feature the platform admin explicitly gave stays: a courtesy beats the plan.
+func ParseForPlan(raw []byte, plan string) map[string]bool {
+	m := Parse(raw)
+	for _, f := range plans.Get(plan).ExcludedFeatures {
+		if !m[f] {
+			m[f] = false
+		}
+	}
 	return m
 }

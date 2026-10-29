@@ -12,8 +12,8 @@ export function currentMonth(): Period {
   return { kind: 'month', ...periodOf('month', todayISO()) };
 }
 
-/** Week / month / year with ‹ › to move, or a custom range picked on the calendar. */
-export function PeriodPicker({ value, onChange }: { value: Period; onChange: (p: Period) => void }) {
+/** Week / month / year with ‹ › to move, or a custom range picked on the calendar (monthOnly: just months, for Lite). */
+export function PeriodPicker({ value, onChange, monthOnly }: { value: Period; onChange: (p: Period) => void; monthOnly?: boolean }) {
   const ui = useUI();
   const [month, setMonth] = useState(firstOfMonth(value.from));
   const [pending, setPending] = useState<string | null>(null); // range: first day picked
@@ -25,7 +25,7 @@ export function PeriodPicker({ value, onChange }: { value: Period; onChange: (p:
 
   return (
     <View style={{ gap: 12 }}>
-      <Segmented options={(['week', 'month', 'year', 'range'] as PeriodKind[]).map((k) => ({ value: k, label: t.periods[k] }))} value={value.kind} onChange={pickKind} />
+      {!monthOnly && <Segmented options={(['week', 'month', 'year', 'range'] as PeriodKind[]).map((k) => ({ value: k, label: t.periods[k] }))} value={value.kind} onChange={pickKind} />}
       {value.kind !== 'range' ? (
         <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' }}>
           <PressableScale accessibilityRole="button" accessibilityLabel="Periodo anterior" hitSlop={10} style={{ padding: 6 }}

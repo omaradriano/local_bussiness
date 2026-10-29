@@ -1,4 +1,4 @@
-import { hasFeature, kindFor, textsFor, type Feature, type ItemKind, type Vertical, type VerticalTexts } from '@lb/shared';
+import { hasFeature, kindFor, planCan, textsFor, type Capability, type Feature, type ItemKind, type PlanKey, type Vertical, type VerticalTexts } from '@lb/shared';
 import { usePathname } from 'expo-router';
 import { useBusiness } from './useMe';
 
@@ -15,12 +15,14 @@ export function useCurrentBusinessId(): { businessId: string | null; rest: strin
  * Screens ask `has('guarantor')` instead of "is it a rental?" (active features of this business).
  * Until the business loads it uses the rental map (the first giro).
  */
-export function useTexts(): { vertical: Vertical; kind: ItemKind; texts: VerticalTexts; has: (f: Feature) => boolean } {
+export function useTexts(): { vertical: Vertical; kind: ItemKind; texts: VerticalTexts; has: (f: Feature) => boolean; can: (c: Capability) => boolean } {
   const { businessId } = useCurrentBusinessId();
   const { business } = useBusiness(businessId ?? '');
   const vertical: Vertical = business?.vertical ?? 'tool_rental';
   // Active features come from the API (giro + platform admin's grants + the owner's choice);
   // until the business loads, the giro's defaults.
   const has = (f: Feature) => (business ? business.features.includes(f) : hasFeature(vertical, f));
-  return { vertical, kind: kindFor(vertical), texts: textsFor(vertical), has };
+  // What the owner's plan includes (Finanzas parts, reports); the API enforces it too. Pro until it loads.
+  const can = (c: Capability) => planCan((business?.account.plan ?? 'pro') as PlanKey, c);
+  return { vertical, kind: kindFor(vertical), texts: textsFor(vertical), has, can };
 }

@@ -33,7 +33,7 @@ type Business struct {
 type Repo struct{ DB store.DB }
 
 // The owner's account comes along; an owner without one predates plans (Pro, like plans.Repo).
-const cols = `b.id::text, b.slug, b.name, b.vertical, b.created_at, b.feature_grants, b.settings, ap.plan, ap.ends_at`
+const cols = `b.id::text, b.slug, b.name, b.vertical, b.created_at, b.feature_grants, b.settings, ap.plan, ap.ends_at, b.plan`
 const from = ` from public.businesses b
 	left join lateral (select user_id from public.business_members where business_id = b.id and role = 'owner' order by created_at limit 1) o on true
 	left join public.account_plans ap on ap.user_id = o.user_id`
@@ -43,7 +43,8 @@ func scan(row pgx.Row) (Business, error) {
 	var grants, settings []byte
 	var plan *string
 	var acct plans.Account
-	if err := row.Scan(&b.ID, &b.Slug, &b.Name, &b.Vertical, &b.CreatedAt, &grants, &settings, &plan, &acct.EndsAt); err != nil {
+	var businessPlan string
+	if err := row.Scan(&b.ID, &b.Slug, &b.Name, &b.Vertical, &b.CreatedAt, &grants, &settings, &plan, &acct.EndsAt, &businessPlan); err != nil {
 		return b, err
 	}
 	acct.Plan = plans.Pro
@@ -55,7 +56,7 @@ func scan(row pgx.Row) (Business, error) {
 		Features map[string]bool `json:"features"`
 	}
 	_ = json.Unmarshal(settings, &s)
-	b.Features = features.States(b.Vertical, features.Parse(grants), s.Features)
+	b.Features = features.States(b.Vertical, features.ParseForPlan(grants, businessPlan), s.Features)
 	if b.Features == nil {
 		b.Features = []features.State{}
 	}
