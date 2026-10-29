@@ -64,6 +64,62 @@ paths:
                     items: { $ref: "#/components/schemas/Membership" }
         "401": { $ref: "#/components/responses/Error" }
 
+  /v1/verticals:
+    get:
+      operationId: listAvailableVerticals
+      summary: Giros con los que este usuario puede abrir un negocio (el superadmin también ve los de prueba)
+      responses:
+        "200":
+          description: OK
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [verticals]
+                properties:
+                  verticals: { type: array, items: { $ref: "#/components/schemas/VerticalAvailability" } }
+
+  /v1/admin/verticals:
+    get:
+      operationId: adminListVerticals
+      summary: Todos los giros con su estado (solo superadmin)
+      responses:
+        "200":
+          description: OK
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [verticals]
+                properties:
+                  verticals: { type: array, items: { $ref: "#/components/schemas/VerticalAvailability" } }
+        "403": { $ref: "#/components/responses/Error" }
+
+  /v1/admin/verticals/{vertical}:
+    parameters:
+      - { name: vertical, in: path, required: true, schema: { $ref: "#/components/schemas/Vertical" } }
+    put:
+      operationId: adminSetVerticalStatus
+      summary: Quién puede abrir negocios nuevos de un giro (los existentes siguen funcionando)
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [status]
+              properties:
+                status: { $ref: "#/components/schemas/VerticalStatus" }
+      responses:
+        "200":
+          description: OK
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/VerticalAvailability" }
+        "403": { $ref: "#/components/responses/Error" }
+        "404": { $ref: "#/components/responses/Error" }
+        "422": { $ref: "#/components/responses/Error" }
+
   /v1/admin/businesses:
     get:
       operationId: adminListBusinesses
@@ -1662,6 +1718,18 @@ components:
     Vertical:
       type: string
       enum: [nails, flowers, tool_rental, barbershop]
+
+    VerticalStatus:
+      type: string
+      enum: [public, admin, off]
+      description: "public: cualquiera al registrarse · admin: solo el superadmin (para probar) · off: nadie"
+
+    VerticalAvailability:
+      type: object
+      required: [vertical, status]
+      properties:
+        vertical: { $ref: "#/components/schemas/Vertical" }
+        status: { $ref: "#/components/schemas/VerticalStatus" }
 
     ItemKind:
       type: string
