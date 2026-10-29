@@ -344,6 +344,29 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/v1/b/{businessId}/import/{kind}": {
+        parameters: {
+            query?: {
+                /** @description true guarda las filas válidas en una transacción; sin él solo es la vista previa */
+                apply?: boolean;
+            };
+            header?: never;
+            path: {
+                businessId: components["parameters"]["BusinessId"];
+                kind: "customers" | "catalog" | "products";
+            };
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Importa filas leídas de un CSV (clientes por teléfono, catálogo y productos por nombre): crea, actualiza o explica el error de cada fila */
+        post: operations["importRows"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/v1/b/{businessId}/staff/{staffId}/": {
         parameters: {
             query?: never;
@@ -2684,6 +2707,59 @@ export interface operations {
                         rows: {
                             [key: string]: unknown;
                         }[];
+                    };
+                };
+            };
+            403: components["responses"]["Error"];
+            404: components["responses"]["Error"];
+            422: components["responses"]["Error"];
+        };
+    };
+    importRows: {
+        parameters: {
+            query?: {
+                /** @description true guarda las filas válidas en una transacción; sin él solo es la vista previa */
+                apply?: boolean;
+            };
+            header?: never;
+            path: {
+                businessId: components["parameters"]["BusinessId"];
+                kind: "customers" | "catalog" | "products";
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": {
+                    /** @description Clientes: CustomerInput. Catálogo: name, description, price, duration_minutes, price_unit, security_deposit, late_fee_per_day, active. Productos: name, price, cost, stock, active. Montos en centavos. */
+                    rows: {
+                        [key: string]: unknown;
+                    }[];
+                };
+            };
+        };
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        results: {
+                            /** @description Línea del archivo (1 es el encabezado) */
+                            row: number;
+                            name: string;
+                            /** @enum {string} */
+                            action: "create" | "update" | "error";
+                            errors?: {
+                                [key: string]: string;
+                            };
+                        }[];
+                        created: number;
+                        updated: number;
+                        failed: number;
+                        applied: boolean;
                     };
                 };
             };

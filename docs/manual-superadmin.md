@@ -165,13 +165,38 @@ La persona ligada al dueño («Yo») no se puede eliminar. Eliminar personas lib
 - **Ajustes:** políticas por giro, funciones, documentos, privacidad.
 - **PWA:** instalable y abre sin conexión (los datos sí necesitan red).
 
+### 7.1 Exportar e importar (Ajustes, solo el dueño)
+
+- **Exportar a CSV:**
+  - Qué: clientes, reservas (Citas, Rentas o Pedidos), gastos, ventas de productos, catálogo y productos.
+  - Periodo: reservas, gastos y ventas usan el elegido.
+  - El archivo se abre bien en Excel (acentos y columnas) y funciona también con la cuenta vencida.
+- **Importar desde CSV:**
+  - Qué: clientes (se reconocen por teléfono), catálogo y productos (por nombre).
+  - Primero se ve una vista previa (nuevos, se actualizan, filas con error y por qué) y después se confirma.
+  - Se aplican las mismas reglas que en las pantallas: p. ej. en renta, el cliente necesita dirección y aval.
+  - El catálogo respeta el límite del plan.
+  - La existencia de un producto que ya existe no se sobreescribe.
+  - Hay **plantillas** descargables, y un archivo exportado se puede volver a importar.
+- **Hoy solo en la versión web (PWA).**
+
+### 7.2 Cuenta del usuario
+
+- **¿Olvidaste tu contraseña?** en la pantalla de entrar: llega un enlace a `/reset` para poner una nueva. El correo sale con la plantilla y el remitente por defecto de Supabase, en inglés y con límite bajo de envíos, hasta configurar Resend.
+- **Términos y condiciones** en `/terminos` (borrador, `packages/shared/src/terms.ts`): al crear cuenta se aceptan junto con el aviso de privacidad y se guarda la versión de los dos.
+
 ## 8. Operación técnica
 
 - **Flujo:** rama → PR → CI verde (lint, typecheck, tests, pruebas contra base, build de Docker, preview de Vercel) → merge → despliegue a staging.
 - **Esquema:** solo con migraciones nuevas en `supabase/migrations`; nunca se edita una aplicada.
 - **Logs:** `railway logs --service api` / `--service worker`; Vercel con `vercel logs`.
 - **Si Railway falla antes de construir** (sin logs): el workflow reintenta una vez; si sigue, `gh run rerun <id> --failed`.
-- **Procesos automáticos (worker):** variantes de fotos, apartados sin anticipo que expiran, rentas que pasan a vencidas.
+- **Procesos automáticos (worker):** variantes de fotos, apartados sin anticipo que expiran, rentas que pasan a vencidas y borrado de archivos de negocios eliminados.
+- **Monitoreo de errores (Sentry):** ya está en el código de la API, el worker y la app, pero **apagado** hasta configurar los DSN. Para encenderlo:
+  1. Crea en sentry.io dos proyectos: Go para la API y React Native para la app.
+  2. En Railway, en `api` y `worker`: `SENTRY_DSN` y `APP_ENV`.
+  3. En Vercel: `EXPO_PUBLIC_SENTRY_DSN` y `EXPO_PUBLIC_APP_ENV`.
+  No se envían datos personales.
 
 ## 9. Datos de contacto y textos
 
@@ -190,15 +215,14 @@ Bloqueantes:
   - AWS (buckets y CloudFront de producción con OpenTofu en `infra/aws/`);
   - flujo `deploy-production.yml` con aprobación manual.
   - *Requiere tus inicios de sesión y aprobaciones.*
-- [ ] **«¿Olvidaste tu contraseña?»**: hoy no hay forma de recuperar la cuenta.
-- [ ] **Correo de Supabase con SMTP propio** (Resend o similar): el correo por defecto tiene un límite muy bajo de envíos por hora y puede caer en spam, lo que afecta confirmaciones y recuperación de contraseña.
+- [ ] **Correo de Supabase con SMTP propio (Resend)**: el correo por defecto tiene un límite muy bajo de envíos por hora y puede caer en spam, lo que afecta confirmaciones y recuperación de contraseña.
 - [ ] **Datos del responsable en el aviso de la plataforma** (nombre o razón social y domicilio).
-- [ ] **Términos y condiciones** (uso del servicio, prueba, planes, cancelación), además del aviso de privacidad.
+- [ ] **Revisión legal** de los términos y del aviso de privacidad, con los datos del responsable.
 
 Recomendados antes del primer piloto:
-- [ ] **Dominio propio** para la web y la API (más confianza que `vercel.app`).
-- [ ] **Monitoreo de errores** (p. ej. Sentry) en la API y la app.
-- [ ] **Exportar datos** (clientes, reservas, finanzas a CSV): los textos de cuenta vencida prometen que pueden consultar su información, y exportar es lo que esperan.
+- [ ] **Encender el monitoreo** con los DSN de Sentry (el código ya está).
+- [ ] **Dominio propio** (por ahora se comparte el link de Vercel).
+- [ ] **Respaldos diarios** (por ahora no; decisión tomada).
 - [ ] **Probar la PWA instalada** en un iPhone y un Android reales.
 - [ ] **Nombre e ícono definitivos.**
 
