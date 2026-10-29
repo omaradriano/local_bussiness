@@ -14,7 +14,7 @@ const t = strings.finances;
 const day = (iso: string | null) => (iso ? new Date(`${iso.slice(0, 10)}T12:00:00Z`).toLocaleDateString('es-MX', { timeZone: 'UTC', day: 'numeric', month: 'short', year: 'numeric' }) : '');
 // Stable color order: a category keeps its color whatever the period.
 const INCOME_KEYS = ['bookings', 'products', 'fees'];
-const EXPENSE_KEYS = ['payroll', 'commissions', 'transport', 'supplies', 'asset', 'rent', 'maintenance', 'utilities', 'advertising', 'taxes', 'other'];
+const EXPENSE_KEYS = ['payroll', 'commissions', 'merchandise', 'transport', 'supplies', 'asset', 'rent', 'maintenance', 'utilities', 'advertising', 'taxes', 'other'];
 
 /** The owner's money for a period: profit, where income came from, where it went. */
 export default function Finances() {

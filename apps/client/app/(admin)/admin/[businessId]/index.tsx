@@ -30,6 +30,9 @@ export default function BusinessHome() {
         <Cell icon="today" tint={ui.warning} label={s.sections.today} sublabel={texts.home.today} onPress={go('/admin/[businessId]/today')} />
         <Cell icon="calendar" tint={ui.accent} label={s.sections.calendar} sublabel={texts.home.calendar} onPress={go('/admin/[businessId]/calendar')} />
         <Cell icon="time" tint={ui.purple} label={texts.bookings.plural} sublabel={texts.home.history} onPress={go('/admin/[businessId]/bookings')} />
+        {has('productSales') ? (
+          <Cell icon="pricetags" tint={ui.success} label={strings.products.title} sublabel={strings.products.hint} onPress={go('/admin/[businessId]/products')} />
+        ) : null}
         <Cell icon="people" tint={ui.indigo} label={s.sections.customers} sublabel={texts.home.customers} onPress={go('/admin/[businessId]/customers')} />
       </Group>
 

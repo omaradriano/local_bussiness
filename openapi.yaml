@@ -538,6 +538,160 @@ paths:
         "404": { $ref: "#/components/responses/Error" }
         "422": { $ref: "#/components/responses/Error" }
 
+  /v1/b/{businessId}/products:
+    parameters:
+      - $ref: "#/components/parameters/BusinessId"
+    get:
+      operationId: listProducts
+      summary: Productos a la venta (función productSales); el costo solo para el dueño
+      responses:
+        "200":
+          description: OK
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [products]
+                properties:
+                  products: { type: array, items: { $ref: "#/components/schemas/RetailProduct" } }
+        "403": { $ref: "#/components/responses/Error" }
+    post:
+      operationId: createProduct
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/RetailProductInput" }
+      responses:
+        "201":
+          description: Creado
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/RetailProduct" }
+        "422": { $ref: "#/components/responses/Error" }
+
+  /v1/b/{businessId}/products/{productId}:
+    parameters:
+      - $ref: "#/components/parameters/BusinessId"
+      - { name: productId, in: path, required: true, schema: { type: string, format: uuid } }
+    patch:
+      operationId: updateProduct
+      summary: Nombre, precio, costo o activo (las existencias solo cambian con ventas y compras)
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/RetailProductInput" }
+      responses:
+        "200":
+          description: OK
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/RetailProduct" }
+        "404": { $ref: "#/components/responses/Error" }
+        "422": { $ref: "#/components/responses/Error" }
+
+  /v1/b/{businessId}/products/{productId}/purchases:
+    parameters:
+      - $ref: "#/components/parameters/BusinessId"
+      - { name: productId, in: path, required: true, schema: { type: string, format: uuid } }
+    post:
+      operationId: purchaseStock
+      summary: Compra de mercancía; suma existencias, actualiza el costo y cuenta como gasto
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [quantity, unit_cost, purchased_on]
+              properties:
+                quantity: { type: integer, minimum: 1 }
+                unit_cost: { type: integer, minimum: 0 }
+                purchased_on: { type: string, format: date }
+      responses:
+        "200":
+          description: OK
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/RetailProduct" }
+        "404": { $ref: "#/components/responses/Error" }
+        "422": { $ref: "#/components/responses/Error" }
+
+  /v1/b/{businessId}/products/stats:
+    parameters:
+      - $ref: "#/components/parameters/BusinessId"
+    get:
+      operationId: productStats
+      parameters:
+        - { name: from, in: query, schema: { type: string, format: date } }
+        - { name: to, in: query, schema: { type: string, format: date } }
+      responses:
+        "200":
+          description: OK
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/ProductStats" }
+
+  /v1/b/{businessId}/sales:
+    parameters:
+      - $ref: "#/components/parameters/BusinessId"
+    get:
+      operationId: listSales
+      parameters:
+        - { name: from, in: query, schema: { type: string, format: date } }
+        - { name: to, in: query, schema: { type: string, format: date } }
+      responses:
+        "200":
+          description: OK
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [sales]
+                properties:
+                  sales: { type: array, items: { $ref: "#/components/schemas/Sale" } }
+    post:
+      operationId: sell
+      summary: Venta (cualquiera del equipo); descuenta existencias; sola o durante una reserva
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [lines, method]
+              properties:
+                lines:
+                  type: array
+                  minItems: 1
+                  items:
+                    type: object
+                    required: [product_id, quantity]
+                    properties:
+                      product_id: { type: string, format: uuid }
+                      quantity: { type: integer, minimum: 1 }
+                method: { type: string, enum: [cash, transfer, card] }
+                booking_id: { type: string, format: uuid }
+      responses:
+        "201":
+          description: Creada
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Sale" }
+        "422": { $ref: "#/components/responses/Error" }
+
+  /v1/b/{businessId}/sales/{saleId}:
+    parameters:
+      - $ref: "#/components/parameters/BusinessId"
+      - { name: saleId, in: path, required: true, schema: { type: string, format: uuid } }
+    delete:
+      operationId: cancelSale
+      summary: Cancela una venta (error) y regresa las existencias (solo dueño)
+      responses:
+        "204": { description: Cancelada }
+        "404": { $ref: "#/components/responses/Error" }
+
   /v1/b/{businessId}/finances/summary:
     parameters:
       - $ref: "#/components/parameters/BusinessId"
@@ -1533,6 +1687,71 @@ components:
               key: { type: string }
               created_at: { type: string, format: date-time }
 
+    RetailProduct:
+      type: object
+      required: [id, name, price, cost, stock, active]
+      properties:
+        id: { type: string, format: uuid }
+        name: { type: string }
+        price: { type: integer }
+        cost: { type: [integer, "null"], description: "Solo para el dueño" }
+        stock: { type: integer }
+        active: { type: boolean }
+
+    RetailProductInput:
+      type: object
+      properties:
+        name: { type: string, maxLength: 80 }
+        price: { type: integer, minimum: 0 }
+        cost: { type: integer, minimum: 0 }
+        stock: { type: integer, minimum: 0, description: "Solo al crear" }
+        active: { type: boolean }
+
+    Sale:
+      type: object
+      required: [id, booking_id, sold_at, method, total, lines]
+      properties:
+        id: { type: string, format: uuid }
+        booking_id: { type: [string, "null"] }
+        sold_at: { type: string, format: date-time }
+        method: { type: string, enum: [cash, transfer, card] }
+        total: { type: integer }
+        lines:
+          type: array
+          items:
+            type: object
+            required: [product_id, name, quantity, unit_price]
+            properties:
+              product_id: { type: string, format: uuid }
+              name: { type: string }
+              quantity: { type: integer }
+              unit_price: { type: integer }
+
+    ProductStats:
+      type: object
+      required: [revenue, cost, profit, purchases, units, sales, by_product, low_stock, stock_value]
+      properties:
+        revenue: { type: integer }
+        cost: { type: integer, description: "Costo de lo vendido" }
+        profit: { type: integer }
+        purchases: { type: integer, description: "Mercancía comprada en el periodo" }
+        units: { type: integer }
+        sales: { type: integer }
+        stock_value: { type: integer, description: "Lo que costó la mercancía en existencia" }
+        low_stock: { type: array, items: { $ref: "#/components/schemas/RetailProduct" } }
+        by_product:
+          type: array
+          items:
+            type: object
+            required: [product_id, name, units, revenue, cost, profit]
+            properties:
+              product_id: { type: string, format: uuid }
+              name: { type: string }
+              units: { type: integer }
+              revenue: { type: integer }
+              cost: { type: integer }
+              profit: { type: integer }
+
     ExpenseCategory:
       type: string
       enum: [transport, maintenance, rent, utilities, supplies, asset, advertising, taxes, payroll, other]
@@ -1621,7 +1840,7 @@ components:
 
     Feature:
       type: string
-      enum: [staff, inventory, guarantor, customerAddress, customerDocuments, trustedCustomers, walkIn, homeService, startService, bookingDocuments]
+      enum: [staff, inventory, guarantor, customerAddress, customerDocuments, trustedCustomers, walkIn, homeService, startService, bookingDocuments, productSales]
 
     FeatureState:
       type: object

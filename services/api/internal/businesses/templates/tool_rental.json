@@ -6,7 +6,8 @@
     "customerAddress",
     "customerDocuments",
     "trustedCustomers",
-    "bookingDocuments"
+    "bookingDocuments",
+    "productSales"
   ],
   "optional_features": [],
   "settings": {

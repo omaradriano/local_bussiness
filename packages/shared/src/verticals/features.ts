@@ -13,6 +13,7 @@ const INFO: Record<Feature, { label: string; hint: string }> = {
   walkIn: { label: 'Clientes casuales', hint: 'Agendar sin registrar al cliente, como «Cliente casual».' },
   homeService: { label: 'Servicio a domicilio', hint: 'Una cita puede ser en la dirección del cliente.' },
   startService: { label: 'Iniciar servicio', hint: 'Marcar cuándo empieza la atención antes de terminarla. Sin esto, la cita se da por terminada directamente.' },
+  productSales: { label: 'Venta de productos', hint: 'Inventario con costo y existencias, ventas en mostrador y sus estadísticas.' },
   bookingDocuments: { label: 'Documentos adicionales', hint: 'Adjuntar archivos con nombre a una reserva (contratos, pagarés…).' },
 };
 

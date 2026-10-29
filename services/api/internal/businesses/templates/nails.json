@@ -6,7 +6,8 @@
   ],
   "optional_features": [
     "walkIn",
-    "homeService"
+    "homeService",
+    "productSales"
   ],
   "settings": {
     "deposit_percent": 30,
