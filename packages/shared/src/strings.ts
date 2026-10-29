@@ -293,6 +293,17 @@ export const strings = {
     bookingHint: 'Para un cliente, con fecha',
     sale: 'Venta de producto',
     saleHint: 'Cobrar productos en mostrador',
+    install: 'Instalar app',
+    installed: 'App instalada. Ábrela desde tu pantalla de inicio.',
+    installIos: {
+      title: 'Instalar en tu iPhone o iPad',
+      steps: [
+        { title: 'Toca Compartir', description: 'El cuadro con la flecha hacia arriba, en la barra de Safari.' },
+        { title: 'Elige «Agregar a inicio»', description: 'Si no lo ves, desliza la lista hacia abajo.' },
+        { title: 'Toca «Agregar»', description: 'La app queda en tu pantalla de inicio y abre sin la barra del navegador.' },
+      ],
+      done: 'Entendido',
+    },
   },
   products: {
     title: 'Productos',

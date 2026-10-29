@@ -21,6 +21,8 @@
         link.href = '/manifest.json';
         document.head.appendChild(link);
       }
+      // The install prompt may fire before the app's JS loads; lib/install.ts picks it up.
+      window.addEventListener('beforeinstallprompt', function (e) { e.preventDefault(); window.__installPrompt = e; });
     </script>
     <!-- The `react-native-web` recommended style reset: https://necolas.github.io/react-native-web/docs/setup/#root-element -->
     <style id="expo-reset">
