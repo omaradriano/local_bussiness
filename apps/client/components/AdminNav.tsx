@@ -9,6 +9,7 @@ import { useCurrentBusinessId, useTexts } from '../lib/useTexts';
 import { Cell, Group, PressableScale, Text, contentWidth, radius, useUI } from '../ui';
 import { useInstallAction } from './InstallApp';
 import { useNewAction } from './NewAction';
+import { PlanBadge } from './PlanBadge';
 
 const WIDE = 900; // from here the sections live in a sidebar instead of the ☰ menu
 
@@ -67,7 +68,8 @@ export function AdminNav() {
   const close = (then: () => void) => () => { setOpen(false); then(); };
 
   return (
-    <View style={{ paddingRight: 8 }}>
+    <View style={{ paddingRight: 8, flexDirection: 'row', alignItems: 'center', gap: 6 }}>
+      <PlanBadge account={nav.business.account} />
       <PressableScale accessibilityRole="button" accessibilityLabel={strings.nav.menu} hitSlop={10} onPress={() => setOpen(true)} style={{ padding: 6 }}>
         <Ionicons name="menu" size={26} color={ui.accent} />
       </PressableScale>
@@ -122,7 +124,7 @@ export function AdminSidebar() {
       contentContainerStyle={{ paddingTop: insets.top + 16, paddingBottom: 24, paddingHorizontal: 12, gap: 20 }}>
       <View style={{ gap: 12, paddingHorizontal: 8 }}>
         <Text variant="headline" numberOfLines={2}>{nav.business.name}</Text>
-        <PlanLine account={nav.business.account} />
+        <PlanBadge account={nav.business.account} />
         <View ref={nav.add.anchor} collapsable={false}>
         <PressableScale accessibilityRole="button" onPress={nav.add.onPress}
           style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 6, paddingVertical: 9, borderRadius: radius.full, backgroundColor: ui.accent }}>
@@ -159,14 +161,3 @@ function SideLink({ section, active, onPress }: { section: Section; active: bool
   );
 }
 
-/** Under the business name in the sidebar: the trial's days left, or read-only. */
-function PlanLine({ account }: { account: { plan: string; status: string; days_left: number } }) {
-  const ui = useUI();
-  if (account.status === 'active') return null;
-  const expired = account.status === 'expired';
-  return (
-    <Text variant="footnote" style={{ color: expired ? ui.warning : ui.labelSecondary, marginTop: -6 }}>
-      {expired ? strings.plans.readOnly : strings.plans.trialLeft(account.days_left)}
-    </Text>
-  );
-}

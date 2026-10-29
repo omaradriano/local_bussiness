@@ -1,6 +1,7 @@
 import { strings, term } from '@lb/shared';
 import { router, Stack } from 'expo-router';
 import { ActivityIndicator } from 'react-native';
+import { PlanBadge } from '../../../components/PlanBadge';
 import { signOut, useMe } from '../../../lib/useMe';
 import { Button, Cell, EmptyState, Group, Notice, Screen, Text, useUI } from '../../../ui';
 
@@ -28,7 +29,7 @@ export default function AdminHome() {
         <Group label={t.yourBusinesses} separatorInset={58}>
           {businesses.map((b) => (
             <Cell key={b.business_id} icon="storefront" tint={ui.accent} label={b.name}
-              sublabel={`${term(b.vertical, 'catalog')} · ${t.role[b.role]}`}
+              sublabel={`${term(b.vertical, 'catalog')} · ${t.role[b.role]}`} accessory={<PlanBadge account={b.account} />}
               onPress={() => router.push({ pathname: '/admin/[businessId]', params: { businessId: b.business_id } })} />
           ))}
         </Group>

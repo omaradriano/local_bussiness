@@ -324,6 +324,9 @@ export const strings = {
     trialEnded: 'Tu prueba terminó. Puedes consultar tu información, pero para seguir registrando hay que elegir un plan.',
     planEnded: 'Tu plan venció. Puedes consultar tu información, pero para seguir registrando hay que renovarlo.',
     readOnly: 'Solo lectura',
+    days: (n: number) => (n === 1 ? '1 día' : `${n} días`),
+    badgeTrial: (n: number) => `Prueba · ${n === 1 ? '1 día' : `${n} días`}`,
+    badgeEnds: (n: number) => `Vence en ${n === 1 ? '1 día' : `${n} días`}`,
     admin: {
       title: 'Plan de la cuenta',
       hint: 'Aplica a todos los negocios de este dueño. Sin último día = sin vencimiento (piloto o cortesía); una prueba sin fecha dura 14 días desde hoy.',

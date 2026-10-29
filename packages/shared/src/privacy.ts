@@ -12,6 +12,9 @@ export const PRIVACY_VERSION: string = notice.version;
 
 export type NoticeSection = { title: string; body: string[] };
 
+// Contacto para dudas, comentarios y mejoras (ventana de bienvenida).
+export const PLATFORM_CONTACT = 'oadriandev@gmail.com';
+
 // Pendiente: el dueño de la plataforma da estos datos; mientras, se ven como marcadores.
 export const PLATFORM_RESPONSIBLE = {
   legalName: '[Nombre o razón social del responsable]',
