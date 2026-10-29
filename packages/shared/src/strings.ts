@@ -306,6 +306,18 @@ export const strings = {
       done: 'Entendido',
     },
   },
+  welcome: {
+    title: 'Bienvenido a Mi negocio',
+    open: '¿Qué es Mi negocio?',
+    done: 'Entendido',
+    privacy: 'Aviso de privacidad',
+    sections: [
+      { icon: 'storefront', title: 'Tu negocio en un solo lugar', body: 'Citas, rentas y pedidos, tus clientes, cobros, productos y finanzas, desde tu teléfono o tu computadora.' },
+      { icon: 'gift', title: '14 días gratis', body: 'Al registrar tu negocio tienes 14 días de prueba con todas las funciones del plan Pro, sin tarjeta. Al terminar puedes seguir consultando tu información; para seguir registrando, eliges un plan.' },
+      { icon: 'construct', title: 'Proyecto en desarrollo', body: 'La app está en desarrollo, así que algunas funciones pueden cambiar o mejorar con el tiempo. Tu información se conserva.' },
+      { icon: 'chatbubbles', title: 'Tu opinión cuenta', body: 'Estamos abiertos a ideas, mejoras y comentarios. Si algo no funciona o te hace falta, cuéntanos:' },
+    ],
+  },
   plans: {
     names: { trial: 'Prueba', lite: 'Lite', pro: 'Pro', business: 'Business' } as Record<string, string>,
     trialLeft: (n: number) => (n === 1 ? 'Prueba de Pro: queda 1 día' : `Prueba de Pro: quedan ${n} días`),
