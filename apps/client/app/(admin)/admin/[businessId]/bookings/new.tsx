@@ -34,7 +34,7 @@ export default function NewBooking() {
   const toast = useToast();
   const today = todayISO();
   const [items, setItems] = useState<Item[] | null>(null);
-  const [staffNames, setStaffNames] = useState<Record<string, string>>({});
+  const [staff, setStaff] = useState<{ id: string; name: string; service_ids: string[]; active: boolean }[]>([]);
   const [itemId, setItemId] = useState<string | null>(null);
   const item = items?.find((i) => i.id === itemId) ?? null;
 
@@ -73,8 +73,7 @@ export default function NewBooking() {
   useEffect(() => {
     const path = { businessId };
     api.GET('/v1/b/{businessId}/catalog', { params: { path } }).then(({ data }) => setItems(data?.items.filter((i) => i.active) ?? []));
-    api.GET('/v1/b/{businessId}/staff', { params: { path } }).then(({ data }) =>
-      setStaffNames(Object.fromEntries((data?.staff ?? []).map((s) => [s.id, s.name]))));
+    api.GET('/v1/b/{businessId}/staff', { params: { path } }).then(({ data }) => setStaff(data?.staff ?? []));
   }, [businessId]);
 
   // Picking today with a time already past: show the corrected time right away.
@@ -100,13 +99,18 @@ export default function NewBooking() {
     });
   }, [businessId, item, month, qty, today, refresh]);
 
-  // Services: slots of the chosen day.
+  // Who can do this service. With more than one person the form asks who attends first, and then
+  // shows only that person's free times ("Cualquiera" = anyone free; the API assigns one).
+  const attendants = staff.filter((p) => p.active && !!item && p.service_ids.includes(item.id));
+  useEffect(() => { setStaffId(null); }, [itemId]);
+
+  // Services: slots of the chosen day (for the chosen person, if any).
   useEffect(() => {
-    setSlots(null); setSlot(null); setStaffId(null);
+    setSlots(null); setSlot(null);
     if (!item || item.kind !== 'service' || !from) return;
-    api.GET('/v1/b/{businessId}/availability', { params: { path: { businessId }, query: { item_id: item.id, date: from } } })
+    api.GET('/v1/b/{businessId}/availability', { params: { path: { businessId }, query: { item_id: item.id, date: from, ...(staffId ? { staff_id: staffId } : {}) } } })
       .then(({ data, error, response }) => (data ? setSlots(data.slots ?? []) : setMessage(errorText(error, response.status))));
-  }, [businessId, item, from, refresh]);
+  }, [businessId, item, from, staffId, refresh]);
 
   // Rentals: check the exact range (days + times) as soon as it is complete.
   // A past time today counts as the next full hour (the field shows it on blur).
@@ -239,6 +243,15 @@ export default function NewBooking() {
             </>
           )}
 
+          {item?.kind === 'service' && attendants.length > 1 && (
+            <View style={{ gap: 8 }}>
+              <Text variant="subhead" color="labelSecondary">{t.whoAttends}</Text>
+              <Chips>
+                <Chip selected={staffId === null} onPress={() => setStaffId(null)}>{t.anyone}</Chip>
+                {attendants.map((p) => <Chip key={p.id} selected={staffId === p.id} onPress={() => setStaffId(p.id)}>{p.name}</Chip>)}
+              </Chips>
+            </View>
+          )}
           {item?.kind === 'service' && from && (
             <>
               {has('homeService') && (
@@ -259,20 +272,9 @@ export default function NewBooking() {
               {!!slots?.length && (
                 <Chips>
                   {slots.map((sl) => (
-                    <Chip key={sl.starts_at} selected={slot?.starts_at === sl.starts_at} onPress={() => { setSlot(sl); setStaffId(null); }}>{hhmm(sl.starts_at)}</Chip>
+                    <Chip key={sl.starts_at} selected={slot?.starts_at === sl.starts_at} onPress={() => setSlot(sl)}>{hhmm(sl.starts_at)}</Chip>
                   ))}
                 </Chips>
-              )}
-              {slot && slot.staff_ids.length > 1 && (
-                <>
-                  <Text variant="subhead" color="labelSecondary">{t.attendedBy}</Text>
-                  <Chips>
-                    <Chip selected={staffId === null} onPress={() => setStaffId(null)}>{t.anyone}</Chip>
-                    {slot.staff_ids.map((id) => (
-                      <Chip key={id} selected={staffId === id} onPress={() => setStaffId(id)}>{staffNames[id] ?? id.slice(0, 6)}</Chip>
-                    ))}
-                  </Chips>
-                </>
               )}
             </>
           )}

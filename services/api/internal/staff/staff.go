@@ -147,12 +147,27 @@ func (r Repo) Get(ctx context.Context, businessID, staffID string) (Member, erro
 	return Member{}, ErrNotFound
 }
 
+// Create adds a person ready to take appointments: every active service and the business's hours.
+// The owner narrows them down afterwards (without this a new person would never show up as free).
 func (r Repo) Create(ctx context.Context, businessID string, m Member) (Member, error) {
-	err := r.DB.QueryRow(ctx,
-		`insert into public.staff (business_id, name, color) values ($1, $2, nullif($3, '')) returning id::text, active`,
-		businessID, m.Name, m.Color).Scan(&m.ID, &m.Active)
-	m.ServiceIDs, m.Hours = []string{}, []Hours{}
-	return m, err
+	err := inTx(ctx, r.DB, func(tx pgx.Tx) error {
+		if err := tx.QueryRow(ctx,
+			`insert into public.staff (business_id, name, color) values ($1, $2, nullif($3, '')) returning id::text, active`,
+			businessID, m.Name, m.Color).Scan(&m.ID, &m.Active); err != nil {
+			return err
+		}
+		if _, err := tx.Exec(ctx, `insert into public.staff_services (business_id, staff_id, item_id)
+			select $1, $2, id from public.catalog_items where business_id = $1 and kind = 'service' and active`, businessID, m.ID); err != nil {
+			return err
+		}
+		_, err := tx.Exec(ctx, `insert into public.business_hours (business_id, staff_id, weekday, opens_at, closes_at)
+			select $1, $2, weekday, opens_at, closes_at from public.business_hours where business_id = $1 and staff_id is null`, businessID, m.ID)
+		return err
+	})
+	if err != nil {
+		return Member{}, err
+	}
+	return r.Get(ctx, businessID, m.ID)
 }
 
 func (r Repo) Update(ctx context.Context, businessID string, m Member) error {
