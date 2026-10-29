@@ -1,0 +1,17 @@
+{
+  "name": "Mi negocio",
+  "short_name": "Mi negocio",
+  "description": "Citas, rentas, pedidos y ventas de tu negocio",
+  "lang": "es-MX",
+  "id": "/admin",
+  "start_url": "/admin",
+  "scope": "/",
+  "display": "standalone",
+  "background_color": "#0052CC",
+  "theme_color": "#F2F2F7",
+  "icons": [
+    { "src": "/icons/icon-192.png", "sizes": "192x192", "type": "image/png", "purpose": "any" },
+    { "src": "/icons/icon-512.png", "sizes": "512x512", "type": "image/png", "purpose": "any" },
+    { "src": "/icons/icon-512.png", "sizes": "512x512", "type": "image/png", "purpose": "maskable" }
+  ]
+}

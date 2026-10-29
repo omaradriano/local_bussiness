@@ -38,7 +38,7 @@
     "ios": "expo start --ios",
     "web": "expo start --web",
     "typecheck": "tsc --noEmit",
-    "build": "expo export --platform web"
+    "build": "expo export --platform web && node scripts/precache.mjs"
   },
   "private": true
 }
