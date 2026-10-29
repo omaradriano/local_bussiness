@@ -410,6 +410,122 @@ export interface paths {
         patch: operations["updateDocumentType"];
         trace?: never;
     };
+    "/v1/b/{businessId}/products": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                businessId: components["parameters"]["BusinessId"];
+            };
+            cookie?: never;
+        };
+        /** Productos a la venta (función productSales); el costo solo para el dueño */
+        get: operations["listProducts"];
+        put?: never;
+        post: operations["createProduct"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/b/{businessId}/products/{productId}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                businessId: components["parameters"]["BusinessId"];
+                productId: string;
+            };
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        /** Nombre, precio, costo o activo (las existencias solo cambian con ventas y compras) */
+        patch: operations["updateProduct"];
+        trace?: never;
+    };
+    "/v1/b/{businessId}/products/{productId}/purchases": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                businessId: components["parameters"]["BusinessId"];
+                productId: string;
+            };
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Compra de mercancía; suma existencias, actualiza el costo y cuenta como gasto */
+        post: operations["purchaseStock"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/b/{businessId}/products/stats": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                businessId: components["parameters"]["BusinessId"];
+            };
+            cookie?: never;
+        };
+        get: operations["productStats"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/b/{businessId}/sales": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                businessId: components["parameters"]["BusinessId"];
+            };
+            cookie?: never;
+        };
+        get: operations["listSales"];
+        put?: never;
+        /** Venta (cualquiera del equipo); descuenta existencias; sola o durante una reserva */
+        post: operations["sell"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/b/{businessId}/sales/{saleId}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                businessId: components["parameters"]["BusinessId"];
+                saleId: string;
+            };
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post?: never;
+        /** Cancela una venta (error) y regresa las existencias (solo dueño) */
+        delete: operations["cancelSale"];
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/v1/b/{businessId}/finances/summary": {
         parameters: {
             query?: never;
@@ -1162,6 +1278,63 @@ export interface components {
                 created_at: string;
             }[];
         };
+        RetailProduct: {
+            /** Format: uuid */
+            id: string;
+            name: string;
+            price: number;
+            /** @description Solo para el dueño */
+            cost: number | null;
+            stock: number;
+            active: boolean;
+        };
+        RetailProductInput: {
+            name?: string;
+            price?: number;
+            cost?: number;
+            /** @description Solo al crear */
+            stock?: number;
+            active?: boolean;
+        };
+        Sale: {
+            /** Format: uuid */
+            id: string;
+            booking_id: string | null;
+            /** Format: date-time */
+            sold_at: string;
+            /** @enum {string} */
+            method: "cash" | "transfer" | "card";
+            total: number;
+            lines: {
+                /** Format: uuid */
+                product_id: string;
+                name: string;
+                quantity: number;
+                unit_price: number;
+            }[];
+        };
+        ProductStats: {
+            revenue: number;
+            /** @description Costo de lo vendido */
+            cost: number;
+            profit: number;
+            /** @description Mercancía comprada en el periodo */
+            purchases: number;
+            units: number;
+            sales: number;
+            /** @description Lo que costó la mercancía en existencia */
+            stock_value: number;
+            low_stock: components["schemas"]["RetailProduct"][];
+            by_product: {
+                /** Format: uuid */
+                product_id: string;
+                name: string;
+                units: number;
+                revenue: number;
+                cost: number;
+                profit: number;
+            }[];
+        };
         /** @enum {string} */
         ExpenseCategory: "transport" | "maintenance" | "rent" | "utilities" | "supplies" | "asset" | "advertising" | "taxes" | "payroll" | "other";
         Expense: {
@@ -1228,7 +1401,7 @@ export interface components {
             }[];
         };
         /** @enum {string} */
-        Feature: "staff" | "inventory" | "guarantor" | "customerAddress" | "customerDocuments" | "trustedCustomers" | "walkIn" | "homeService" | "startService" | "bookingDocuments";
+        Feature: "staff" | "inventory" | "guarantor" | "customerAddress" | "customerDocuments" | "trustedCustomers" | "walkIn" | "homeService" | "startService" | "bookingDocuments" | "productSales";
         FeatureState: {
             key: components["schemas"]["Feature"];
             /** @description La trae su giro */
@@ -2319,6 +2492,232 @@ export interface operations {
             };
             404: components["responses"]["Error"];
             422: components["responses"]["Error"];
+        };
+    };
+    listProducts: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                businessId: components["parameters"]["BusinessId"];
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        products: components["schemas"]["RetailProduct"][];
+                    };
+                };
+            };
+            403: components["responses"]["Error"];
+        };
+    };
+    createProduct: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                businessId: components["parameters"]["BusinessId"];
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["RetailProductInput"];
+            };
+        };
+        responses: {
+            /** @description Creado */
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["RetailProduct"];
+                };
+            };
+            422: components["responses"]["Error"];
+        };
+    };
+    updateProduct: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                businessId: components["parameters"]["BusinessId"];
+                productId: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["RetailProductInput"];
+            };
+        };
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["RetailProduct"];
+                };
+            };
+            404: components["responses"]["Error"];
+            422: components["responses"]["Error"];
+        };
+    };
+    purchaseStock: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                businessId: components["parameters"]["BusinessId"];
+                productId: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": {
+                    quantity: number;
+                    unit_cost: number;
+                    /** Format: date */
+                    purchased_on: string;
+                };
+            };
+        };
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["RetailProduct"];
+                };
+            };
+            404: components["responses"]["Error"];
+            422: components["responses"]["Error"];
+        };
+    };
+    productStats: {
+        parameters: {
+            query?: {
+                from?: string;
+                to?: string;
+            };
+            header?: never;
+            path: {
+                businessId: components["parameters"]["BusinessId"];
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ProductStats"];
+                };
+            };
+        };
+    };
+    listSales: {
+        parameters: {
+            query?: {
+                from?: string;
+                to?: string;
+            };
+            header?: never;
+            path: {
+                businessId: components["parameters"]["BusinessId"];
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        sales: components["schemas"]["Sale"][];
+                    };
+                };
+            };
+        };
+    };
+    sell: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                businessId: components["parameters"]["BusinessId"];
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": {
+                    lines: {
+                        /** Format: uuid */
+                        product_id: string;
+                        quantity: number;
+                    }[];
+                    /** @enum {string} */
+                    method: "cash" | "transfer" | "card";
+                    /** Format: uuid */
+                    booking_id?: string;
+                };
+            };
+        };
+        responses: {
+            /** @description Creada */
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Sale"];
+                };
+            };
+            422: components["responses"]["Error"];
+        };
+    };
+    cancelSale: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                businessId: components["parameters"]["BusinessId"];
+                saleId: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Cancelada */
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            404: components["responses"]["Error"];
         };
     };
     financeSummary: {

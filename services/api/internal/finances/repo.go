@@ -299,7 +299,19 @@ func (r Repo) Summary(ctx context.Context, businessID string, from, to Day, now 
 		return out, err
 	}
 
-	expenses := map[string]int64{}
+	// Product sales are income; merchandise bought for them is an expense («Mercancía»).
+	var sold, bought int64
+	if err := r.DB.QueryRow(ctx, `select coalesce(sum(total), 0) from public.sales where business_id = $1 and sold_at >= $2 and sold_at < $3`,
+		businessID, start, end).Scan(&sold); err != nil {
+		return out, err
+	}
+	income["products"] += sold
+	if err := r.DB.QueryRow(ctx, `select coalesce(sum(quantity * unit_cost), 0) from public.stock_purchases
+		where business_id = $1 and purchased_on between $2 and $3`, businessID, from, to).Scan(&bought); err != nil {
+		return out, err
+	}
+
+	expenses := map[string]int64{"merchandise": bought}
 	rows, err = r.DB.Query(ctx, `select category, sum(amount) from public.expenses
 		where business_id = $1 and spent_on between $2 and $3 group by category`, businessID, from, to)
 	if err != nil {

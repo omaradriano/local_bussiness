@@ -2,7 +2,8 @@
   "kind": "service",
   "features": [
     "staff",
-    "walkIn"
+    "walkIn",
+    "productSales"
   ],
   "optional_features": [
     "homeService"

@@ -22,6 +22,7 @@ import (
 	"github.com/omaradriano/local_bussiness/services/api/internal/finances"
 	"github.com/omaradriano/local_bussiness/services/api/internal/media"
 	"github.com/omaradriano/local_bussiness/services/api/internal/platform"
+	"github.com/omaradriano/local_bussiness/services/api/internal/products"
 	"github.com/omaradriano/local_bussiness/services/api/internal/settings"
 	"github.com/omaradriano/local_bussiness/services/api/internal/staff"
 	"github.com/omaradriano/local_bussiness/services/api/internal/steps"
@@ -158,10 +159,11 @@ func doBody(method, path, token string, body io.Reader, headers ...string) *http
 		Staff:          fakeStaff{},
 		Availability:   fakeAvailability{},
 		Bookings:       fakeBookings{},
-		Settings:       &fakeSettings{s: settings.From([]byte(`{}`))},
+		Settings:       &fakeSettings{s: settings.From([]byte(`{}`)).WithBusiness("barbershop", nil)},
 		Customers:      &fakeCustomers{},
 		Platform:       fakePlatform{},
 		Finances:       fakeFinances{},
+		Products:       fakeProducts{},
 		Now:            func() time.Time { return fixedNow },
 		Photos:         &Photos{Media: fakeMedia{}, Files: fakeFiles{}, EnqueueImage: fakeEnqueue, CDNBase: "https://cdn.test"},
 		AllowedOrigins: []string{"http://localhost:8082", "https://local-bussiness-staging-*.vercel.app"},
@@ -1101,6 +1103,78 @@ func TestFinanceRoutes(t *testing.T) {
 		{"primer pago antes de la compra", http.MethodPost, base + "/plans", "ok", `{"description":"Camioneta","category":"asset","purchased_on":"2026-11-01","installment_amount":800000,"installments":24,"first_due":"2026-10-01"}`, http.StatusUnprocessableEntity, `"first_due"`},
 		{"sueldo y comisión", http.MethodPut, base + "/pay/" + stepID, "ok", `{"salary":1200000,"salary_period":"monthly","commission_percent":40}`, http.StatusOK, `"commission_percent":40`},
 		{"comisión > 100", http.MethodPut, base + "/pay/" + stepID, "ok", `{"salary":0,"salary_period":"monthly","commission_percent":140}`, http.StatusUnprocessableEntity, `"commission_percent"`},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			rec := doBody(tc.method, tc.path, tc.token, strings.NewReader(tc.body))
+			if rec.Code != tc.code || !strings.Contains(rec.Body.String(), tc.want) {
+				t.Fatalf("got %d %s", rec.Code, rec.Body)
+			}
+		})
+	}
+}
+
+type fakeProducts struct{}
+
+func (fakeProducts) Products(_ context.Context, _ string, withCost bool) ([]products.Product, error) {
+	p := products.Product{ID: itemID, Name: "Cera", Price: 15000, Stock: 3, Active: true}
+	if withCost {
+		c := int64(7000)
+		p.Cost = &c
+	}
+	return []products.Product{p}, nil
+}
+func (fakeProducts) Product(_ context.Context, _, id string) (products.Product, error) {
+	c := int64(7000)
+	return products.Product{ID: id, Name: "Cera", Price: 15000, Cost: &c, Stock: 3, Active: true}, nil
+}
+func (fakeProducts) Create(_ context.Context, _ string, p products.Product) (products.Product, error) {
+	p.ID = itemID
+	return p, nil
+}
+func (fakeProducts) Update(_ context.Context, _ string, p products.Product) (products.Product, error) {
+	return p, nil
+}
+func (fakeProducts) Purchase(_ context.Context, _, id string, q int, _ int64, _ time.Time, _ string) (products.Product, error) {
+	return products.Product{ID: id, Stock: 3 + q}, nil
+}
+func (fakeProducts) Sell(_ context.Context, _ string, in []products.LineInput, method, _, _ string, _ time.Time) (products.Sale, error) {
+	if len(in) == 0 {
+		return products.Sale{}, products.Invalid{"lines": "Agrega productos."}
+	}
+	return products.Sale{ID: bookingID, Method: method, Total: 15000}, nil
+}
+func (fakeProducts) CancelSale(context.Context, string, string) error { return nil }
+func (fakeProducts) Sales(context.Context, string, time.Time, time.Time) ([]products.Sale, error) {
+	return []products.Sale{}, nil
+}
+func (fakeProducts) StatsFor(context.Context, string, time.Time, time.Time, time.Time, time.Time) (products.Stats, error) {
+	return products.Stats{Revenue: 15000, Profit: 8000}, nil
+}
+func (fakeProducts) Bounds(_ context.Context, _ string, from, to time.Time) (time.Time, time.Time, error) {
+	return from, to.AddDate(0, 0, 1), nil
+}
+
+func TestProductRoutes(t *testing.T) {
+	base := "/v1/b/" + bizA
+	cases := []struct {
+		name, method, path, token, body string
+		code                            int
+		want                            string
+	}{
+		{"empleado ve productos sin costo", http.MethodGet, base + "/products", "staff", "", http.StatusOK, `"cost":null`},
+		{"dueño ve el costo", http.MethodGet, base + "/products", "ok", "", http.StatusOK, `"cost":7000`},
+		{"empleado no crea productos", http.MethodPost, base + "/products", "staff", `{"name":"Cera","price":15000}`, http.StatusForbidden, `"forbidden"`},
+		{"crear", http.MethodPost, base + "/products", "ok", `{"name":" Cera ","price":15000,"cost":7000,"stock":10}`, http.StatusCreated, `"name":"Cera"`},
+		{"sin nombre", http.MethodPost, base + "/products", "ok", `{"name":"","price":1}`, http.StatusUnprocessableEntity, `"name"`},
+		{"compra de mercancía", http.MethodPost, base + "/products/" + itemID + "/purchases", "ok", `{"quantity":5,"unit_cost":6500,"purchased_on":"2026-11-03"}`, http.StatusOK, `"stock":8`},
+		{"compra sin fecha", http.MethodPost, base + "/products/" + itemID + "/purchases", "ok", `{"quantity":5,"unit_cost":6500}`, http.StatusUnprocessableEntity, `"purchased_on"`},
+		{"empleado vende", http.MethodPost, base + "/sales", "staff", `{"lines":[{"product_id":"` + itemID + `","quantity":1}],"method":"cash"}`, http.StatusCreated, `"total":15000`},
+		{"venta vacía", http.MethodPost, base + "/sales", "staff", `{"lines":[],"method":"cash"}`, http.StatusUnprocessableEntity, `"lines"`},
+		{"empleado no cancela ventas", http.MethodDelete, base + "/sales/" + bookingID, "staff", "", http.StatusForbidden, `"forbidden"`},
+		{"dueño cancela", http.MethodDelete, base + "/sales/" + bookingID, "ok", "", http.StatusNoContent, ""},
+		{"estadísticas solo dueño", http.MethodGet, base + "/products/stats", "staff", "", http.StatusForbidden, `"forbidden"`},
+		{"estadísticas", http.MethodGet, base + "/products/stats?from=2026-11-01&to=2026-11-30", "ok", "", http.StatusOK, `"profit":8000`},
 	}
 	for _, tc := range cases {
 		t.Run(tc.name, func(t *testing.T) {
