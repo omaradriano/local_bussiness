@@ -6,6 +6,7 @@ import (
 	"os"
 	"strings"
 	"testing"
+	"time"
 
 	"github.com/jackc/pgx/v5"
 )
@@ -16,7 +17,7 @@ var rental = Rules{RequireAddress: true, RequireGuarantor: true}
 
 func TestValidateRentalCustomer(t *testing.T) {
 	full := Customer{}.Apply(Input{Name: s(" Ana López "), Phone: s("614 123 4567"), Address: s("Calle 1 #2, Chihuahua"),
-		GuarantorName: s("Pedro López"), GuarantorPhone: s("614 765 4321")})
+		GuarantorName: s("Pedro López"), GuarantorPhone: s("614 765 4321")}, time.Time{})
 	if errs := full.Validate(rental); len(errs) != 0 {
 		t.Fatalf("complete rental customer: %v", errs)
 	}
@@ -38,13 +39,13 @@ func TestValidateRentalCustomer(t *testing.T) {
 	}
 	for _, tc := range cases {
 		t.Run(tc.name, func(t *testing.T) {
-			if errs := full.Apply(tc.in).Validate(rental); errs[tc.field] == "" {
+			if errs := full.Apply(tc.in, time.Time{}).Validate(rental); errs[tc.field] == "" {
 				t.Fatalf("want error on %s, got %v", tc.field, errs)
 			}
 		})
 	}
 	// Other verticals only need name and phone.
-	if errs := (Customer{}.Apply(Input{Name: s("Ana"), Phone: s("6141234567")})).Validate(Rules{}); len(errs) != 0 {
+	if errs := (Customer{}.Apply(Input{Name: s("Ana"), Phone: s("6141234567")}, time.Time{})).Validate(Rules{}); len(errs) != 0 {
 		t.Fatalf("nails customer: %v", errs)
 	}
 }
@@ -70,7 +71,7 @@ func TestIntegrationCustomerProfiles(t *testing.T) {
 		t.Fatal(err)
 	}
 	r := Repo{DB: tx}
-	c := Customer{}.Apply(Input{Name: s("Ana López"), Phone: s("6141234567"), Address: s("Calle 1"), GuarantorName: s("Pedro"), GuarantorPhone: s("6147654321")})
+	c := Customer{}.Apply(Input{Name: s("Ana López"), Phone: s("6141234567"), Address: s("Calle 1"), GuarantorName: s("Pedro"), GuarantorPhone: s("6147654321")}, time.Time{})
 	ana, err := r.Create(ctx, bizA, c)
 	if err != nil || ana.ID == "" {
 		t.Fatalf("create: %v", err)
@@ -100,7 +101,7 @@ func TestIntegrationCustomerProfiles(t *testing.T) {
 		t.Fatalf("documents: %+v %v", got.Documents, err)
 	}
 	trusted := true
-	if up, err := r.Update(ctx, bizA, got.Apply(Input{Trusted: &trusted})); err != nil || !up.Trusted || len(up.Documents) != 1 {
+	if up, err := r.Update(ctx, bizA, got.Apply(Input{Trusted: &trusted}, time.Time{})); err != nil || !up.Trusted || len(up.Documents) != 1 {
 		t.Fatalf("update: %+v %v", up, err)
 	}
 	if _, err := r.Get(ctx, bizB, ana.ID); !errors.Is(err, ErrNotFound) {

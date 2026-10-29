@@ -65,7 +65,7 @@ func mountCustomers(r chi.Router, d Deps) {
 		if in.Trusted != nil && m.Role != "owner" {
 			in.Trusted = nil // only the owner decides who is trusted
 		}
-		c := current.Apply(in)
+		c := current.Apply(in, d.now())
 		rules, err := d.Customers.Rules(r.Context(), m.BusinessID)
 		if err != nil {
 			internalError(w, r, "customer rules", err)

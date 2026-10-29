@@ -1,6 +1,6 @@
 import { centavosToInput, featureInfo, parsePesos, settingsSectionsFor, strings, type SettingsSection } from '@lb/shared';
 import { Ionicons } from '@expo/vector-icons';
-import { Stack, useLocalSearchParams } from 'expo-router';
+import { router, Stack, useLocalSearchParams, type Href } from 'expo-router';
 import { useEffect, useState, type ReactNode } from 'react';
 import { ActivityIndicator, Pressable, Switch, View } from 'react-native';
 import { DocumentTypesEditor } from '../../../../components/DocumentTypesEditor';
@@ -11,6 +11,7 @@ import { useSettings, type Settings } from '../../../../lib/useSettings';
 import { Button, Cell, Field, Group, Notice, Screen, Text, useToast, useUI } from '../../../../ui';
 
 const t = strings.settings;
+const pv = strings.privacy.settings;
 type Rentals = Settings['rentals'];
 type ZoneRow = { name: string; fee: string }; // fee as typed (pesos)
 
@@ -30,6 +31,7 @@ export default function SettingsScreen() {
   const [inspectionOn, setInspectionOn] = useState(false);
   const [hours, setHours] = useState('1');
   const [zones, setZones] = useState<ZoneRow[]>([]);
+  const [privacy, setPrivacy] = useState<Settings['privacy']>({ privacy_legal_name: '', privacy_address: '', privacy_email: '' });
   const [errors, setErrors] = useState<Record<string, string>>({});
   const [busy, setBusy] = useState(false);
 
@@ -45,6 +47,7 @@ export default function SettingsScreen() {
     setInspectionOn(settings.rentals.inspection_minutes > 0);
     setHours(String(Math.max(1, Math.round(settings.rentals.inspection_minutes / 60))));
     setZones(settings.delivery.delivery_zones.map((z) => ({ name: z.name, fee: centavosToInput(z.fee) })));
+    setPrivacy(settings.privacy);
   }, [settings]);
 
   if (!business || !r) return <ActivityIndicator style={{ marginTop: 24 }} />;
@@ -72,6 +75,7 @@ export default function SettingsScreen() {
           rentals: { ...r!, late_fee_multiplier: Number(multiplier.replace(',', '.')), inspection_minutes: inspectionOn ? h * 60 : 0 },
         } : {}),
         ...(has('delivery') ? { delivery: { delivery_zones: zones.map((z, i) => ({ name: z.name, fee: fees[i]! })) } } : {}),
+        privacy,
       },
     });
     setBusy(false);
@@ -167,6 +171,17 @@ export default function SettingsScreen() {
       <Text variant="largeTitle" accessibilityRole="header" style={{ marginBottom: 20 }}>{t.title}</Text>
       {!isOwner && <View style={{ marginBottom: 16 }}><Notice>{t.onlyOwner}</Notice></View>}
       {sections.map((s) => render[s]())}
+      {/* Every business: the responsible in the privacy notice its customers read. */}
+      <Group label={pv.title} padded footer={pv.hint}>
+        {!privacy.privacy_address && <Notice tone="warning">{pv.missingAddress}</Notice>}
+        <Field label={pv.legalName} placeholder={business.name} value={privacy.privacy_legal_name} editable={isOwner}
+          onChangeText={(privacy_legal_name) => setPrivacy({ ...privacy, privacy_legal_name })} error={errors.privacy_legal_name} />
+        <Field label={pv.address} value={privacy.privacy_address} editable={isOwner} multiline
+          onChangeText={(privacy_address) => setPrivacy({ ...privacy, privacy_address })} error={errors.privacy_address} />
+        <Field label={pv.email} value={privacy.privacy_email} editable={isOwner} autoCapitalize="none" keyboardType="email-address"
+          onChangeText={(privacy_email) => setPrivacy({ ...privacy, privacy_email })} error={errors.privacy_email} />
+        <Button size="sm" variant="plain" icon="document-text" onPress={() => router.push(`/${business.slug}/privacidad` as Href)}>{pv.see}</Button>
+      </Group>
       {isOwner && <Button variant="primary" busy={busy} onPress={save} style={{ marginBottom: 28 }}>{t.save}</Button>}
       <FeatureToggles businessId={businessId} isOwner={isOwner} features={settings!.features} onSaved={setSettings} />
       {has('documents') && (

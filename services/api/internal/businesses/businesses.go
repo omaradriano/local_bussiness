@@ -63,7 +63,7 @@ func OffersFeature(vertical, feature string) bool {
 }
 
 // Slugs that would collide with app routes, since the public catalog lives at /<slug>.
-var reserved = []string{"admin", "login", "signup", "onboarding", "api", "app", "assets", "static", "www", "help", "soporte", "_expo"}
+var reserved = []string{"admin", "login", "signup", "onboarding", "api", "app", "assets", "static", "www", "help", "soporte", "privacidad", "_expo"}
 
 var slugRe = regexp.MustCompile(`^[a-z0-9]+(-[a-z0-9]+)*$`)
 

@@ -1185,3 +1185,24 @@ func TestProductRoutes(t *testing.T) {
 		})
 	}
 }
+
+func (f *fakeSettings) Notice(_ context.Context, slug string) (settings.Notice, error) {
+	if slug != "barber360" {
+		return settings.Notice{}, settings.ErrNotFound
+	}
+	return settings.NoticeFrom("Barber360", nil, []byte(`{"privacy_email":"hola@barber.mx"}`)), nil
+}
+
+func TestPublicPrivacyNoticeNeedsNoSession(t *testing.T) {
+	rec := do(http.MethodGet, "/v1/public/businesses/barber360/privacy", "")
+	if rec.Code != http.StatusOK || !strings.Contains(rec.Body.String(), `"legal_name":"Barber360"`) || !strings.Contains(rec.Body.String(), `"email":"hola@barber.mx"`) {
+		t.Fatalf("notice: %d %s", rec.Code, rec.Body)
+	}
+	if rec := do(http.MethodGet, "/v1/public/businesses/nadie/privacy", ""); rec.Code != http.StatusNotFound {
+		t.Fatalf("unknown: %d", rec.Code)
+	}
+	// The rest of /v1 still requires a session.
+	if rec := do(http.MethodGet, "/v1/me", ""); rec.Code != http.StatusUnauthorized {
+		t.Fatalf("me without session: %d", rec.Code)
+	}
+}

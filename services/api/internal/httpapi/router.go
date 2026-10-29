@@ -66,6 +66,7 @@ type SettingsRepo interface {
 	DocumentType(ctx context.Context, businessID, id string) (settings.DocumentType, error)
 	CreateDocumentType(ctx context.Context, businessID string, d settings.DocumentType) (settings.DocumentType, error)
 	UpdateDocumentType(ctx context.Context, businessID string, d settings.DocumentType) (settings.DocumentType, error)
+	Notice(ctx context.Context, slug string) (settings.Notice, error)
 }
 
 type BookingsRepo interface {
@@ -183,6 +184,19 @@ func NewRouter(d Deps) http.Handler {
 	r.Get("/healthz", func(w http.ResponseWriter, _ *http.Request) {
 		w.Header().Set("Content-Type", "application/json")
 		w.Write([]byte(`{"status":"ok"}`))
+	})
+
+	// Public (no session): what a customer reads before giving their data to a business.
+	r.Get("/v1/public/businesses/{slug}/privacy", func(w http.ResponseWriter, r *http.Request) {
+		n, err := d.Settings.Notice(r.Context(), chi.URLParam(r, "slug"))
+		switch {
+		case errors.Is(err, settings.ErrNotFound):
+			notFound(w, "El negocio no existe.")
+		case err != nil:
+			internalError(w, r, "privacy notice", err)
+		default:
+			apierr.JSON(w, http.StatusOK, n)
+		}
 	})
 
 	r.Route("/v1", func(r chi.Router) {

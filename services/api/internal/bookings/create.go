@@ -15,6 +15,7 @@ import (
 
 	"github.com/omaradriano/local_bussiness/services/api/internal/availability"
 	"github.com/omaradriano/local_bussiness/services/api/internal/features"
+	"github.com/omaradriano/local_bussiness/services/api/internal/privacy"
 	"github.com/omaradriano/local_bussiness/services/api/internal/settings"
 	"github.com/omaradriano/local_bussiness/services/api/internal/store"
 )
@@ -34,6 +35,8 @@ type CustomerInput struct {
 	Email string `json:"email"`
 	// A walk-in nobody registers (barbershops): the booking goes to the business's «Cliente casual».
 	WalkIn bool `json:"walk_in"`
+	// The customer accepted the business's privacy notice (recorded once per version).
+	PrivacyAccepted bool `json:"privacy_accepted"`
 }
 
 type CreateInput struct {
@@ -447,11 +450,20 @@ func upsertCustomer(ctx context.Context, tx pgx.Tx, businessID string, c Custome
 			returning id::text`, businessID).Scan(&id)
 		return id, err
 	}
-	// Same phone in the same business = same customer; keep the name they already had.
+	// Same phone in the same business = same customer; keep the name they already had. An acceptance
+	// of the privacy notice is recorded only if that version wasn't (same rule as customers.Apply).
+	var version *string
+	if c.PrivacyAccepted {
+		version = &privacy.Version
+	}
 	err := tx.QueryRow(ctx, `
-		insert into public.customers (business_id, name, phone, email) values ($1, $2, $3, nullif($4, ''))
-		on conflict (business_id, phone) do update set email = coalesce(public.customers.email, excluded.email)
-		returning id::text`, businessID, c.Name, c.Phone, strings.TrimSpace(c.Email)).Scan(&id)
+		insert into public.customers (business_id, name, phone, email, privacy_accepted_at, privacy_version)
+		values ($1, $2, $3, nullif($4, ''), case when $5::text is not null then now() end, $5)
+		on conflict (business_id, phone) do update set email = coalesce(public.customers.email, excluded.email),
+			privacy_accepted_at = case when excluded.privacy_version is distinct from public.customers.privacy_version and excluded.privacy_version is not null
+				then excluded.privacy_accepted_at else public.customers.privacy_accepted_at end,
+			privacy_version = coalesce(excluded.privacy_version, public.customers.privacy_version)
+		returning id::text`, businessID, c.Name, c.Phone, strings.TrimSpace(c.Email), version).Scan(&id)
 	return id, err
 }
 

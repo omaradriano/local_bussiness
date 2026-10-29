@@ -198,6 +198,7 @@ type Settings struct {
 	Agenda   Agenda   `json:"agenda"`
 	Rentals  Rentals  `json:"rentals"`
 	Delivery Delivery `json:"delivery"`
+	Privacy  Privacy  `json:"privacy"`
 	// Features the giro supports, with what's available and what the owner has on. The owner only
 	// changes "enabled" (stored in settings.features); availability is the platform admin's.
 	Features []features.State `json:"features"`
@@ -212,6 +213,7 @@ type Patch struct {
 	Agenda   *AgendaPatch    `json:"agenda"`
 	Rentals  *RentalsPatch   `json:"rentals"`
 	Delivery *DeliveryPatch  `json:"delivery"`
+	Privacy  *PrivacyPatch   `json:"privacy"`
 	Features map[string]bool `json:"features"` // feature -> on/off (only available ones)
 }
 
@@ -221,6 +223,7 @@ func From(raw []byte) Settings {
 	_ = json.Unmarshal(raw, &s.General)
 	_ = json.Unmarshal(raw, &s.Agenda)
 	_ = json.Unmarshal(raw, &s.Delivery)
+	_ = json.Unmarshal(raw, &s.Privacy)
 	if s.Delivery.Zones == nil {
 		s.Delivery.Zones = []Zone{}
 	}
@@ -258,6 +261,10 @@ func (s Settings) Apply(p Patch) (Settings, map[string]string) {
 		s.Delivery = s.Delivery.Apply(*p.Delivery)
 		maps.Copy(errs, s.Delivery.Validate())
 	}
+	if p.Privacy != nil {
+		s.Privacy = s.Privacy.Apply(*p.Privacy)
+		maps.Copy(errs, s.Privacy.Validate())
+	}
 	if p.Features != nil {
 		enabled := maps.Clone(s.enabled)
 		if enabled == nil {
@@ -281,6 +288,19 @@ var ErrNotFound = errors.New("business not found")
 
 type Repo struct{ DB store.DB }
 
+// Notice: the public privacy notice of an active business, by its slug.
+func (s Repo) Notice(ctx context.Context, slug string) (Notice, error) {
+	var name string
+	var phone *string
+	var raw []byte
+	err := s.DB.QueryRow(ctx, `select name, phone_whatsapp, settings from public.businesses where slug = $1 and status = 'active'`, slug).
+		Scan(&name, &phone, &raw)
+	if errors.Is(err, pgx.ErrNoRows) {
+		return Notice{}, ErrNotFound
+	}
+	return NoticeFrom(name, phone, raw), err
+}
+
 func (s Repo) Get(ctx context.Context, businessID string) (Settings, error) {
 	var raw, grants []byte
 	var vertical string
@@ -295,7 +315,7 @@ func (s Repo) Get(ctx context.Context, businessID string) (Settings, error) {
 // Save merges every section's keys into settings (keys of other features are left as they are).
 func (s Repo) Save(ctx context.Context, businessID string, st Settings) error {
 	merged := map[string]any{}
-	for _, part := range []any{st.General, st.Agenda, st.Rentals, st.Delivery} {
+	for _, part := range []any{st.General, st.Agenda, st.Rentals, st.Delivery, st.Privacy} {
 		raw, _ := json.Marshal(part)
 		_ = json.Unmarshal(raw, &merged)
 	}
