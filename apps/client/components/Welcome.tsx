@@ -47,7 +47,10 @@ export function Welcome() {
               ))}
               <Text variant="subhead" style={{ color: ui.accent, marginLeft: 36, marginTop: -10 }} selectable>{PLATFORM_CONTACT}</Text>
               <Button variant="primary" onPress={close}>{w.done}</Button>
-              <Button variant="plain" size="sm" onPress={() => { close(); router.push('/privacidad'); }}>{w.privacy}</Button>
+              <View style={{ flexDirection: 'row', justifyContent: 'center', flexWrap: 'wrap' }}>
+                <Button variant="plain" size="sm" onPress={() => { close(); router.push('/terminos'); }}>{w.terms}</Button>
+                <Button variant="plain" size="sm" onPress={() => { close(); router.push('/privacidad'); }}>{w.privacy}</Button>
+              </View>
             </ScrollView>
           </Pressable>
         </Pressable>

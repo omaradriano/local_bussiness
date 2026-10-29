@@ -1,4 +1,4 @@
-import { authErrorMessage, PRIVACY_VERSION, strings, validateCredentials, validateEmail } from '@lb/shared';
+import { authErrorMessage, PRIVACY_VERSION, strings, TERMS_VERSION, validateCredentials, validateEmail } from '@lb/shared';
 import * as Linking from 'expo-linking';
 import { Redirect, router, Stack } from 'expo-router';
 import { useState } from 'react';
@@ -46,9 +46,10 @@ export default function Login() {
       const { error } = await supabase.auth.signInWithPassword(creds);
       if (error) toast(authErrorMessage(error.code), 'error');
     } else {
-      // Record which privacy notice the owner accepted, and when (user metadata).
+      // Record which privacy notice and terms the owner accepted, and when (user metadata).
+      const accepted = new Date().toISOString();
       const { data, error } = await supabase.auth.signUp({
-        ...creds, options: { data: { privacy_version: PRIVACY_VERSION, privacy_accepted_at: new Date().toISOString() } },
+        ...creds, options: { data: { privacy_version: PRIVACY_VERSION, privacy_accepted_at: accepted, terms_version: TERMS_VERSION, terms_accepted_at: accepted } },
       });
       if (error) toast(authErrorMessage(error.code), 'error');
       else if (!data.session) toast(t.checkEmail, 'info'); // confirmación por correo activa
@@ -75,7 +76,10 @@ export default function Login() {
               <Text style={{ flex: 1 }}>{strings.privacy.accept}</Text>
               <Switch accessibilityLabel={strings.privacy.accept} value={privacy} onValueChange={setPrivacy} />
             </View>
-            <Button variant="plain" size="sm" onPress={() => router.push('/privacidad')} style={{ alignSelf: 'flex-start' }}>{strings.privacy.read}</Button>
+            <View style={{ flexDirection: 'row', flexWrap: 'wrap' }}>
+              <Button variant="plain" size="sm" onPress={() => router.push('/terminos')}>{strings.privacy.readTerms}</Button>
+              <Button variant="plain" size="sm" onPress={() => router.push('/privacidad')}>{strings.privacy.read}</Button>
+            </View>
           </View>
         )}
         <Button variant="primary" busy={busy} onPress={submit}>{mode === 'login' ? t.submitLogin : mode === 'signup' ? t.submitSignUp : t.sendLink}</Button>
