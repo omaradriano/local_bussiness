@@ -19,6 +19,7 @@ import (
 	"github.com/omaradriano/local_bussiness/services/api/internal/customers"
 	"github.com/omaradriano/local_bussiness/services/api/internal/features"
 	"github.com/omaradriano/local_bussiness/services/api/internal/files"
+	"github.com/omaradriano/local_bussiness/services/api/internal/finances"
 	"github.com/omaradriano/local_bussiness/services/api/internal/media"
 	"github.com/omaradriano/local_bussiness/services/api/internal/platform"
 	"github.com/omaradriano/local_bussiness/services/api/internal/settings"
@@ -160,6 +161,7 @@ func doBody(method, path, token string, body io.Reader, headers ...string) *http
 		Settings:       &fakeSettings{s: settings.From([]byte(`{}`))},
 		Customers:      &fakeCustomers{},
 		Platform:       fakePlatform{},
+		Finances:       fakeFinances{},
 		Now:            func() time.Time { return fixedNow },
 		Photos:         &Photos{Media: fakeMedia{}, Files: fakeFiles{}, EnqueueImage: fakeEnqueue, CDNBase: "https://cdn.test"},
 		AllowedOrigins: []string{"http://localhost:8082", "https://local-bussiness-staging-*.vercel.app"},
@@ -1038,6 +1040,72 @@ func TestPlatformAdminRoutes(t *testing.T) {
 	for _, tc := range cases {
 		t.Run(tc.name, func(t *testing.T) {
 			if rec := doBody(http.MethodPut, tc.path, "ok", strings.NewReader(tc.body)); rec.Code != tc.code || !strings.Contains(rec.Body.String(), tc.want) {
+				t.Fatalf("got %d %s", rec.Code, rec.Body)
+			}
+		})
+	}
+}
+
+type fakeFinances struct{}
+
+func (fakeFinances) Today(context.Context, string, time.Time) (finances.Day, error) {
+	return time.Date(2026, 11, 15, 0, 0, 0, 0, time.UTC), nil
+}
+func (fakeFinances) Summary(_ context.Context, _ string, from, to finances.Day, _ time.Time) (finances.Summary, error) {
+	return finances.Summary{From: from, To: to, Profit: 1000}, nil
+}
+func (fakeFinances) Expenses(context.Context, string, finances.Day, finances.Day) ([]finances.Expense, error) {
+	return []finances.Expense{}, nil
+}
+func (fakeFinances) AddExpense(_ context.Context, _ string, e finances.Expense, _ string) (finances.Expense, error) {
+	e.ID = bookingID
+	return e, nil
+}
+func (fakeFinances) DeleteExpense(_ context.Context, _, id string) error {
+	if id != bookingID {
+		return finances.ErrNotFound
+	}
+	return nil
+}
+func (fakeFinances) Plans(context.Context, string) ([]finances.Plan, error) {
+	return []finances.Plan{}, nil
+}
+func (fakeFinances) AddPlan(_ context.Context, _ string, p finances.Plan, _ string) (finances.Plan, error) {
+	return p, nil
+}
+func (fakeFinances) DeletePlan(context.Context, string, string) error { return nil }
+func (fakeFinances) Pays(context.Context, string) ([]finances.Pay, error) {
+	return []finances.Pay{}, nil
+}
+func (fakeFinances) SetPay(_ context.Context, _ string, p finances.Pay) (finances.Pay, error) {
+	return p, nil
+}
+
+func TestFinanceRoutes(t *testing.T) {
+	base := "/v1/b/" + bizA + "/finances"
+	cases := []struct {
+		name, method, path, token, body string
+		code                            int
+		want                            string
+	}{
+		{"empleado no ve finanzas", http.MethodGet, base + "/summary", "staff", "", http.StatusForbidden, `"forbidden"`},
+		{"mes actual por defecto", http.MethodGet, base + "/summary", "ok", "", http.StatusOK, `"from":"2026-11-01T00:00:00Z","to":"2026-11-30T00:00:00Z"`},
+		{"rango", http.MethodGet, base + "/summary?from=2026-01-01&to=2026-12-31", "ok", "", http.StatusOK, `"profit":1000`},
+		{"rango al revés", http.MethodGet, base + "/summary?from=2026-12-01&to=2026-01-01", "ok", "", http.StatusUnprocessableEntity, `"from"`},
+		{"gasto", http.MethodPost, base + "/expenses", "ok", `{"spent_on":"2026-11-03","category":"transport","amount":50000,"description":"Gasolina"}`, http.StatusCreated, `"category":"transport"`},
+		{"gasto sin categoría", http.MethodPost, base + "/expenses", "ok", `{"spent_on":"2026-11-03","category":"x","amount":50000}`, http.StatusUnprocessableEntity, `"category"`},
+		{"gasto en cero", http.MethodPost, base + "/expenses", "ok", `{"spent_on":"2026-11-03","category":"transport","amount":0}`, http.StatusUnprocessableEntity, `"amount"`},
+		{"borrar gasto", http.MethodDelete, base + "/expenses/" + bookingID, "ok", "", http.StatusNoContent, ""},
+		{"borrar gasto ajeno", http.MethodDelete, base + "/expenses/" + stepID, "ok", "", http.StatusNotFound, `"not_found"`},
+		{"compra a plazos", http.MethodPost, base + "/plans", "ok", `{"description":"Camioneta","category":"asset","purchased_on":"2026-11-01","down_payment":5000000,"installment_amount":800000,"installments":24,"first_due":"2026-12-01"}`, http.StatusCreated, `"installments":24`},
+		{"primer pago antes de la compra", http.MethodPost, base + "/plans", "ok", `{"description":"Camioneta","category":"asset","purchased_on":"2026-11-01","installment_amount":800000,"installments":24,"first_due":"2026-10-01"}`, http.StatusUnprocessableEntity, `"first_due"`},
+		{"sueldo y comisión", http.MethodPut, base + "/pay/" + stepID, "ok", `{"salary":1200000,"salary_period":"monthly","commission_percent":40}`, http.StatusOK, `"commission_percent":40`},
+		{"comisión > 100", http.MethodPut, base + "/pay/" + stepID, "ok", `{"salary":0,"salary_period":"monthly","commission_percent":140}`, http.StatusUnprocessableEntity, `"commission_percent"`},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			rec := doBody(tc.method, tc.path, tc.token, strings.NewReader(tc.body))
+			if rec.Code != tc.code || !strings.Contains(rec.Body.String(), tc.want) {
 				t.Fatalf("got %d %s", rec.Code, rec.Body)
 			}
 		})

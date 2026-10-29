@@ -21,6 +21,7 @@ import (
 	"github.com/omaradriano/local_bussiness/services/api/internal/catalog"
 	"github.com/omaradriano/local_bussiness/services/api/internal/customers"
 	"github.com/omaradriano/local_bussiness/services/api/internal/files"
+	"github.com/omaradriano/local_bussiness/services/api/internal/finances"
 	"github.com/omaradriano/local_bussiness/services/api/internal/httpapi"
 	"github.com/omaradriano/local_bussiness/services/api/internal/jobs"
 	"github.com/omaradriano/local_bussiness/services/api/internal/media"
@@ -77,6 +78,7 @@ func run(log *slog.Logger) error {
 			Settings:     settings.Repo{DB: pool},
 			Customers:    customers.Repo{DB: pool},
 			Platform:     platform.Repo{DB: pool},
+			Finances:     finances.Repo{DB: pool},
 			CreateBusiness: func(ctx context.Context, userID string, in businesses.Input) (businesses.Business, error) {
 				return businesses.Create(ctx, pool, userID, in)
 			},
