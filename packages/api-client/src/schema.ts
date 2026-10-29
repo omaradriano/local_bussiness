@@ -1418,6 +1418,22 @@ export interface components {
         FinanceSummary: {
             from: string;
             to: string;
+            /** @description Reservas que empiezan en el periodo, por estado (en orden del ciclo de vida, sin ceros) */
+            bookings: {
+                key: components["schemas"]["BookingStatus"];
+                count: number;
+            }[];
+            /** @description Rentas vencidas ahora mismo (sin importar el periodo), la más atrasada primero */
+            overdue: {
+                /** Format: uuid */
+                booking_id: string;
+                customer: string;
+                item: string;
+                /** Format: date-time */
+                due: string;
+                /** @description Días de atraso, contando el día empezado (mínimo 1) */
+                days_late: number;
+            }[];
             income: components["schemas"]["FinanceSide"];
             expenses: components["schemas"]["FinanceSide"];
             profit: number;

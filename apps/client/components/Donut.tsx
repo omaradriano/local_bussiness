@@ -1,6 +1,6 @@
 import { formatMXN } from '@lb/shared';
 import { useColorScheme, View } from 'react-native';
-import Svg, { Circle, G } from 'react-native-svg';
+import Svg, { Circle } from 'react-native-svg';
 import { Text, useUI } from '../ui';
 
 // Categorical colors in fixed order (dataviz reference palette, validated for these surfaces:
@@ -37,10 +37,10 @@ export function Donut({ title, total, slices, colorKeys, empty }: {
       {sum === 0 ? <Text color="labelSecondary">{empty}</Text> : (
         <View style={{ flexDirection: 'row', flexWrap: 'wrap', alignItems: 'center', gap: 20 }}>
           <View style={{ width: size, height: size, alignItems: 'center', justifyContent: 'center' }}>
-            {/* Hidden on the View: react-native-svg forwards a11y props to the DOM on web */}
-            <View accessibilityElementsHidden importantForAccessibility="no-hide-descendants">
+            {/* On the View, not the Svg: react-native-svg forwards a11y props and the G origin to the DOM on web.
+                Rotated so the first slice starts at 12 o'clock. */}
+            <View accessibilityElementsHidden importantForAccessibility="no-hide-descendants" style={{ transform: [{ rotate: '-90deg' }] }}>
             <Svg width={size} height={size}>
-              <G rotation={-90} origin={`${size / 2}, ${size / 2}`}>
                 {parts.map((p) => {
                   const len = (p.amount / sum) * c;
                   const el = (
@@ -50,7 +50,6 @@ export function Donut({ title, total, slices, colorKeys, empty }: {
                   offset += len;
                   return el;
                 })}
-              </G>
             </Svg>
             </View>
             <View style={{ position: 'absolute', alignItems: 'center' }}>

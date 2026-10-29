@@ -241,6 +241,17 @@ type Summary struct {
 	Profit   int64        `json:"profit"`
 	Plans    []PlanStatus `json:"plans"`
 	Payroll  []PayLine    `json:"payroll"`
+	Bookings []Count      `json:"bookings"` // bookings starting in the period, by status
+	Overdue  []Overdue    `json:"overdue"`  // rentals not returned on time, right now (any period)
+}
+
+// Overdue: a rental that wasn't returned on time.
+type Overdue struct {
+	BookingID string    `json:"booking_id"`
+	Customer  string    `json:"customer"`
+	Item      string    `json:"item"`
+	Due       time.Time `json:"due"`
+	DaysLate  int       `json:"days_late"`
 }
 
 func side(m map[string]int64) Side {
@@ -263,7 +274,7 @@ func side(m map[string]int64) Side {
 // Summary of [from, to] (business dates, both included). Fixed pay counts only up to today (the
 // business's local date at now): no future salary.
 func (r Repo) Summary(ctx context.Context, businessID string, from, to Day, now time.Time) (Summary, error) {
-	out := Summary{From: from, To: to, Plans: []PlanStatus{}, Payroll: []PayLine{}}
+	out := Summary{From: from, To: to, Plans: []PlanStatus{}, Payroll: []PayLine{}, Overdue: []Overdue{}}
 	var tz string
 	if err := r.DB.QueryRow(ctx, `select timezone from public.businesses where id = $1`, businessID).Scan(&tz); err != nil {
 		return out, err
@@ -390,7 +401,47 @@ func (r Repo) Summary(ctx context.Context, businessID string, from, to Day, now 
 
 	out.Income, out.Expenses = side(income), side(expenses)
 	out.Profit = out.Income.Total - out.Expenses.Total
-	return out, nil
+
+	byStatus := map[string]int{}
+	rows, err = r.DB.Query(ctx, `select status, count(*)::int from public.bookings
+		where business_id = $1 and starts_at >= $2 and starts_at < $3 group by status`, businessID, start, end)
+	if err != nil {
+		return out, err
+	}
+	for rows.Next() {
+		var k string
+		var n int
+		if err := rows.Scan(&k, &n); err != nil {
+			rows.Close()
+			return out, err
+		}
+		byStatus[k] = n
+	}
+	rows.Close()
+	if err := rows.Err(); err != nil {
+		return out, err
+	}
+	out.Bookings = counts(byStatus)
+
+	rows, err = r.DB.Query(ctx, `
+		select b.id::text, c.name, coalesce((select string_agg(ci.name, ', ' order by ci.name) from public.booking_items bi
+			join public.catalog_items ci on ci.id = bi.item_id where bi.booking_id = b.id), ''), b.ends_at
+		from public.bookings b join public.customers c on c.id = b.customer_id
+		where b.business_id = $1 and b.status = 'overdue' order by b.ends_at`, businessID)
+	if err != nil {
+		return out, err
+	}
+	for rows.Next() {
+		var o Overdue
+		if err := rows.Scan(&o.BookingID, &o.Customer, &o.Item, &o.Due); err != nil {
+			rows.Close()
+			return out, err
+		}
+		o.DaysLate = DaysLate(o.Due, now)
+		out.Overdue = append(out.Overdue, o)
+	}
+	rows.Close()
+	return out, rows.Err()
 }
 
 func deref(s *string) string {

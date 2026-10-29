@@ -7,6 +7,7 @@ import { Donut } from '../../../../../components/Donut';
 import { currentMonth, PeriodPicker, type Period } from '../../../../../components/PeriodPicker';
 import { api } from '../../../../../lib/api';
 import { errorText } from '../../../../../lib/errors';
+import { useTexts } from '../../../../../lib/useTexts';
 import { Cell, Group, Notice, Row, Screen, Text, radius, useUI } from '../../../../../ui';
 
 type Summary = components['schemas']['FinanceSummary'];
@@ -20,6 +21,7 @@ const EXPENSE_KEYS = ['payroll', 'commissions', 'merchandise', 'transport', 'sup
 export default function Finances() {
   const { businessId } = useLocalSearchParams<{ businessId: string }>();
   const ui = useUI();
+  const { texts, kind } = useTexts();
   const [period, setPeriod] = useState<Period>(currentMonth);
   const [s, setS] = useState<Summary | null>(null);
   const [error, setError] = useState<string | null>(null);
@@ -52,6 +54,17 @@ export default function Finances() {
             <Text variant="footnote" color="labelSecondary">{t.incomeHint}</Text>
           </View>
 
+          {(kind === 'rental' || s.overdue.length > 0) && (
+            <Group label={t.overdue}>
+              {s.overdue.length === 0 ? <Cell icon="checkmark-circle" tint={ui.success} label={t.noOverdue} /> : null}
+              {s.overdue.map((o) => (
+                <Cell key={o.booking_id} icon="alert-circle" tint={ui.danger} label={o.customer}
+                  sublabel={[o.item, t.dueOn(day(o.due))].filter(Boolean).join(' · ')} value={t.daysLate(o.days_late)}
+                  onPress={() => router.push(`/admin/${businessId}/bookings/${o.booking_id}` as Href)} />
+              ))}
+            </Group>
+          )}
+
           <View style={{ backgroundColor: ui.surface, borderRadius: radius.md, padding: 16 }}>
             <Donut title={t.incomeChart} total={s.income.total} empty={t.noIncome} colorKeys={INCOME_KEYS}
               slices={s.income.parts.map((p) => ({ key: p.key, label: t.incomeSources[p.key] ?? p.key, amount: p.amount }))} />
@@ -60,6 +73,11 @@ export default function Finances() {
             <Donut title={t.expensesChart} total={s.expenses.total} empty={t.noExpenses} colorKeys={EXPENSE_KEYS}
               slices={s.expenses.parts.map((p) => ({ key: p.key, label: t.categories[p.key] ?? p.key, amount: p.amount }))} />
           </View>
+
+          <Group label={t.byStatus(texts.bookings.plural)} footer={t.byStatusHint}>
+            {s.bookings.length === 0 ? <Cell label={t.noBookings(texts.bookings.plural)} /> : null}
+            {s.bookings.map((b) => <Cell key={b.key} label={texts.bookings.status[b.key]} value={String(b.count)} />)}
+          </Group>
 
           {s.plans.length > 0 && (
             <Group label={t.plans}>
