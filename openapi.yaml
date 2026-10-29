@@ -1842,10 +1842,31 @@ components:
 
     FinanceSummary:
       type: object
-      required: [from, to, income, expenses, profit, plans, payroll]
+      required: [from, to, income, expenses, profit, plans, payroll, bookings, overdue]
       properties:
         from: { type: string }
         to: { type: string }
+        bookings:
+          type: array
+          description: "Reservas que empiezan en el periodo, por estado (en orden del ciclo de vida, sin ceros)"
+          items:
+            type: object
+            required: [key, count]
+            properties:
+              key: { $ref: "#/components/schemas/BookingStatus" }
+              count: { type: integer }
+        overdue:
+          type: array
+          description: "Rentas vencidas ahora mismo (sin importar el periodo), la más atrasada primero"
+          items:
+            type: object
+            required: [booking_id, customer, item, due, days_late]
+            properties:
+              booking_id: { type: string, format: uuid }
+              customer: { type: string }
+              item: { type: string }
+              due: { type: string, format: date-time }
+              days_late: { type: integer, description: "Días de atraso, contando el día empezado (mínimo 1)" }
         income: { $ref: "#/components/schemas/FinanceSide" }
         expenses: { $ref: "#/components/schemas/FinanceSide" }
         profit: { type: integer }

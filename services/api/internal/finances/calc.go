@@ -3,7 +3,11 @@
 // collected in the period (security deposits are held, not income).
 package finances
 
-import "time"
+import (
+	"slices"
+	"strings"
+	"time"
+)
 
 // Day is a calendar date (midnight UTC) so date math has no time zone surprises.
 type Day = time.Time
@@ -88,4 +92,47 @@ func ProratedSalary(salary int64, period string, from, to, today Day) int64 {
 // Commission: percent of what was collected for the person's services, rounded to centavos.
 func Commission(collected float64, percent float64) int64 {
 	return int64(collected*percent/100 + 0.5)
+}
+
+// DaysLate: whole days, started ones included, a rental has been late since it was due (at least 1).
+func DaysLate(due, now time.Time) int {
+	h := now.Sub(due).Hours()
+	days := int(h / 24)
+	if float64(days*24) < h {
+		days++
+	}
+	return max(days, 1)
+}
+
+// Count of bookings in one status.
+type Count struct {
+	Key   string `json:"key"`
+	Count int    `json:"count"`
+}
+
+// lifecycle: the order statuses are shown in (the open ones first, then how they ended).
+var lifecycle = []string{"pending_deposit", "confirmed", "in_progress", "ready", "out_for_delivery", "checked_out", "overdue",
+	"returned", "completed", "cancelled", "expired", "no_show"}
+
+// counts drops zeros and orders by the lifecycle; unknown statuses go last, by name.
+func counts(m map[string]int) []Count {
+	out := []Count{}
+	for k, n := range m {
+		if n > 0 {
+			out = append(out, Count{k, n})
+		}
+	}
+	rank := func(k string) int {
+		if i := slices.Index(lifecycle, k); i >= 0 {
+			return i
+		}
+		return len(lifecycle)
+	}
+	slices.SortFunc(out, func(a, b Count) int {
+		if r := rank(a.Key) - rank(b.Key); r != 0 {
+			return r
+		}
+		return strings.Compare(a.Key, b.Key)
+	})
+	return out
 }

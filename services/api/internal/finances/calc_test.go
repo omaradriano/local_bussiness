@@ -1,6 +1,9 @@
 package finances
 
-import "testing"
+import (
+	"testing"
+	"time"
+)
 
 func d(s string) Day {
 	v, ok := ParseDay(s)
@@ -61,5 +64,37 @@ func TestProratedSalary(t *testing.T) {
 	}
 	if got := Commission(35_000, 40); got != 14_000 {
 		t.Fatalf("40%% of 350: %d", got)
+	}
+}
+
+func TestDaysLate(t *testing.T) {
+	due := time.Date(2026, 11, 2, 15, 0, 0, 0, time.UTC)
+	cases := []struct {
+		now  time.Time
+		want int
+	}{
+		{due.Add(3 * time.Hour), 1},  // marked overdue after the grace: at least one day
+		{due.Add(24 * time.Hour), 1}, // exactly one day
+		{due.Add(25 * time.Hour), 2}, // started a second day
+		{due.Add(-time.Hour), 1},     // clock skew never shows 0 or negative
+		{due.AddDate(0, 0, 10).Add(time.Minute), 11},
+	}
+	for _, c := range cases {
+		if got := DaysLate(due, c.now); got != c.want {
+			t.Errorf("DaysLate(%v) = %d, want %d", c.now.Sub(due), got, c.want)
+		}
+	}
+}
+
+func TestCountsFollowTheLifecycle(t *testing.T) {
+	got := counts(map[string]int{"completed": 5, "cancelled": 1, "confirmed": 2, "no_show": 0, "weird": 3})
+	want := []Count{{"confirmed", 2}, {"completed", 5}, {"cancelled", 1}, {"weird", 3}}
+	if len(got) != len(want) {
+		t.Fatalf("got %+v", got)
+	}
+	for i := range want {
+		if got[i] != want[i] {
+			t.Fatalf("got %+v, want %+v", got, want)
+		}
 	}
 }
