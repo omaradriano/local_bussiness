@@ -37,7 +37,9 @@ export function Donut({ title, total, slices, colorKeys, empty }: {
       {sum === 0 ? <Text color="labelSecondary">{empty}</Text> : (
         <View style={{ flexDirection: 'row', flexWrap: 'wrap', alignItems: 'center', gap: 20 }}>
           <View style={{ width: size, height: size, alignItems: 'center', justifyContent: 'center' }}>
-            <Svg width={size} height={size} accessibilityElementsHidden importantForAccessibility="no-hide-descendants">
+            {/* Hidden on the View: react-native-svg forwards a11y props to the DOM on web */}
+            <View accessibilityElementsHidden importantForAccessibility="no-hide-descendants">
+            <Svg width={size} height={size}>
               <G rotation={-90} origin={`${size / 2}, ${size / 2}`}>
                 {parts.map((p) => {
                   const len = (p.amount / sum) * c;
@@ -50,6 +52,7 @@ export function Donut({ title, total, slices, colorKeys, empty }: {
                 })}
               </G>
             </Svg>
+            </View>
             <View style={{ position: 'absolute', alignItems: 'center' }}>
               <Text variant="caption" color="labelSecondary">Total</Text>
               <Text variant="headline" style={{ fontVariant: ['tabular-nums'] }}>{formatMXN(total)}</Text>

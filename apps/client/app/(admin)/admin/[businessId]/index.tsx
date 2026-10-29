@@ -1,7 +1,8 @@
 import { strings, term } from '@lb/shared';
 import { router, Stack, useLocalSearchParams, type Href } from 'expo-router';
-import { ActivityIndicator } from 'react-native';
+import { ActivityIndicator, View } from 'react-native';
 import { useBusiness } from '../../../../lib/useMe';
+import { useNewAction } from '../../../../components/NewAction';
 import { useTexts } from '../../../../lib/useTexts';
 import { Button, Cell, Group, Screen, Text, useUI } from '../../../../ui';
 
@@ -12,6 +13,7 @@ export default function BusinessHome() {
   const { business, businesses, error } = useBusiness(businessId);
   const ui = useUI();
   const { texts, has } = useTexts();
+  const add = useNewAction(businessId);
 
   if (error) return <Text style={{ padding: 16 }}>{error}</Text>;
   if (!businesses) return <ActivityIndicator style={{ marginTop: 24 }} accessibilityLabel={strings.common.loading} />;
@@ -22,9 +24,10 @@ export default function BusinessHome() {
     <Screen>
       <Stack.Screen options={{ title: business.name }} />
       <Text variant="largeTitle" accessibilityRole="header" style={{ marginBottom: 16 }}>{business.name}</Text>
-      <Button variant="primary" icon="add-circle" onPress={go('/admin/[businessId]/bookings/new')} style={{ marginBottom: 28 }}>
-        {strings.bookings.new(term(business.vertical, 'booking') ?? '')}
-      </Button>
+      <View ref={add.anchor} collapsable={false} style={{ marginBottom: 28 }}>
+        <Button variant="primary" icon="add-circle" onPress={add.onPress}>{add.label}</Button>
+      </View>
+      {add.sheet}
 
       <Group label={s.groups.daily} separatorInset={58}>
         <Cell icon="today" tint={ui.warning} label={s.sections.today} sublabel={texts.home.today} onPress={go('/admin/[businessId]/today')} />

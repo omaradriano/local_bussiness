@@ -282,7 +282,18 @@ export const strings = {
     },
     nothing: 'Nada pendiente para hoy.',
   },
-  nav: { menu: 'Menú', businesses: 'Cambiar de negocio' },
+  nav: {
+    menu: 'Menú',
+    businesses: 'Cambiar de negocio',
+    summary: 'Resumen',
+    pay: 'Sueldos',
+    // One "new" button: a booking, or a counter sale when the business sells products.
+    new: 'Nuevo',
+    newHint: '¿Qué quieres registrar?',
+    bookingHint: 'Para un cliente, con fecha',
+    sale: 'Venta de producto',
+    saleHint: 'Cobrar productos en mostrador',
+  },
   products: {
     title: 'Productos',
     hint: 'Vender, inventario y estadísticas',
@@ -352,6 +363,7 @@ export const strings = {
     sections: { expenses: 'Gastos y compras a plazos', pay: 'Sueldos y comisiones' },
     sectionHints: { expenses: 'Registra gasolina, insumos, compras…', pay: 'Sueldo fijo y comisión por persona' },
     plans: 'Compras a plazos',
+    expenseTabs: { fixed: 'Gasto fijo', plans: 'Gasto a plazos' },
     planLine: (paid: number, total: number) => `${paid} de ${total} mensualidades`,
     remaining: 'Falta pagar',
     nextDue: 'Próxima',

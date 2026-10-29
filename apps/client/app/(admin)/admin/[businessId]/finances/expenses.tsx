@@ -7,7 +7,7 @@ import { Ionicons } from '@expo/vector-icons';
 import { currentMonth, PeriodPicker, type Period } from '../../../../../components/PeriodPicker';
 import { api } from '../../../../../lib/api';
 import { errorText, fieldErrors } from '../../../../../lib/errors';
-import { Button, Cell, Chip, Chips, Field, Group, Screen, Text, useToast, useUI } from '../../../../../ui';
+import { Button, Cell, Chip, Chips, Field, Group, Screen, Segmented, Text, useToast, useUI } from '../../../../../ui';
 
 type Expense = components['schemas']['Expense'];
 type Plan = components['schemas']['ExpensePlan'];
@@ -40,6 +40,7 @@ export default function Expenses() {
   const [errors, setErrors] = useState<Record<string, string>>({});
   const [planErrors, setPlanErrors] = useState<Record<string, string>>({});
   const [busy, setBusy] = useState<'expense' | 'plan' | null>(null);
+  const [tab, setTab] = useState<'fixed' | 'plans'>('fixed');
   const path = { businessId };
 
   const load = useCallback(() => {
@@ -108,7 +109,11 @@ export default function Expenses() {
     <Screen>
       <Stack.Screen options={{ title: t.sections.expenses }} />
       <Text variant="largeTitle" accessibilityRole="header" style={{ marginBottom: 16 }}>{t.expenses}</Text>
+      <View style={{ marginBottom: 20 }}>
+        <Segmented options={(['fixed', 'plans'] as const).map((k) => ({ value: k, label: t.expenseTabs[k] }))} value={tab} onChange={setTab} />
+      </View>
 
+      {tab === 'fixed' && <>
       <Group label={t.addExpense} padded>
         <Field label={t.date} value={form.spentOn} onChangeText={(spentOn) => setForm({ ...form, spentOn })} error={errors.spent_on} />
         <CategoryChips value={form.category} onChange={(category) => setForm({ ...form, category })} />
@@ -127,7 +132,9 @@ export default function Expenses() {
           ))}
         </Group>
       )}
+      </>}
 
+      {tab === 'plans' && <>
       <Group label={t.plans} footer={t.planHint}>
         {plans?.length === 0 ? <Cell label={t.emptyPlans} /> : null}
         {(plans ?? []).map((p) => (
@@ -149,6 +156,7 @@ export default function Expenses() {
         <Field label={t.firstDue} value={plan.firstDue} onChangeText={(firstDue) => setPlan({ ...plan, firstDue })} error={planErrors.first_due} />
         <Button variant="primary" icon="add" busy={busy === 'plan'} onPress={addPlan}>{t.addPlan}</Button>
       </Group>
+      </>}
     </Screen>
   );
 }
