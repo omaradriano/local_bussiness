@@ -5,6 +5,8 @@ package store
 import (
 	"context"
 	"errors"
+	"strings"
+	"time"
 
 	"github.com/jackc/pgx/v5"
 	"github.com/jackc/pgx/v5/pgconn"
@@ -23,8 +25,23 @@ type Store struct{ db DB }
 
 func New(db DB) *Store { return &Store{db: db} }
 
+// Supabase's session pooler allows 15 clients for everyone (api, worker, local dev, migrations);
+// pgx's default (one per CPU, idle for 30 min) fills it. A pool_max_conns in the URL wins.
+const (
+	maxConns    = 4
+	maxIdleTime = time.Minute
+)
+
 func Connect(ctx context.Context, url string) (*pgxpool.Pool, error) {
-	pool, err := pgxpool.New(ctx, url)
+	cfg, err := pgxpool.ParseConfig(url)
+	if err != nil {
+		return nil, err
+	}
+	if !strings.Contains(url, "pool_max_conns") {
+		cfg.MaxConns = maxConns
+	}
+	cfg.MaxConnIdleTime = maxIdleTime
+	pool, err := pgxpool.NewWithConfig(ctx, cfg)
 	if err != nil {
 		return nil, err
 	}
