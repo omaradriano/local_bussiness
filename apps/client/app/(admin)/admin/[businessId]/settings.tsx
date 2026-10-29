@@ -4,6 +4,7 @@ import { router, Stack, useLocalSearchParams, type Href } from 'expo-router';
 import { useEffect, useState, type ReactNode } from 'react';
 import { ActivityIndicator, Pressable, Switch, View } from 'react-native';
 import { DeleteBusiness } from '../../../../components/DeleteBusiness';
+import { ExportData } from '../../../../components/ExportData';
 import { DocumentTypesEditor } from '../../../../components/DocumentTypesEditor';
 import { api } from '../../../../lib/api';
 import { errorText, fieldErrors } from '../../../../lib/errors';
@@ -192,6 +193,7 @@ export default function SettingsScreen() {
           <Text variant="footnote" color="labelSecondary" style={{ marginHorizontal: 16, marginBottom: 28 }}>{t.documents.hint}</Text>
         </>
       )}
+      {isOwner && <ExportData businessId={businessId} />}
       {isOwner && <DeleteBusiness businessId={businessId} name={business.name} onDeleted={() => router.replace('/admin')} />}
     </Screen>
   );

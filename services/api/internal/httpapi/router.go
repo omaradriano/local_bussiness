@@ -21,8 +21,10 @@ import (
 	"github.com/omaradriano/local_bussiness/services/api/internal/bookings"
 	"github.com/omaradriano/local_bussiness/services/api/internal/businesses"
 	"github.com/omaradriano/local_bussiness/services/api/internal/catalog"
+	"github.com/omaradriano/local_bussiness/services/api/internal/exports"
 	"github.com/omaradriano/local_bussiness/services/api/internal/features"
 	"github.com/omaradriano/local_bussiness/services/api/internal/files"
+	"github.com/omaradriano/local_bussiness/services/api/internal/finances"
 	"github.com/omaradriano/local_bussiness/services/api/internal/media"
 	"github.com/omaradriano/local_bussiness/services/api/internal/monitor"
 	"github.com/omaradriano/local_bussiness/services/api/internal/plans"
@@ -57,6 +59,7 @@ type Deps struct {
 	Plans          PlansRepo
 	// DeleteBusiness removes a business, its rows and (by a job) its files; businesses.ErrNotFound if missing.
 	DeleteBusiness func(ctx context.Context, businessID string) error
+	Exports        ExportsRepo
 	Now            func() time.Time // injectable clock; nil = time.Now
 }
 
@@ -194,6 +197,11 @@ func (d Deps) deleteBusiness(w http.ResponseWriter, r *http.Request, businessID 
 		slog.InfoContext(r.Context(), "business deleted", "business", businessID, "name", b.Name)
 		w.WriteHeader(http.StatusNoContent)
 	}
+}
+
+type ExportsRepo interface {
+	Timezone(ctx context.Context, businessID string) (string, error)
+	Rows(ctx context.Context, businessID, kind string, p *exports.Period) (any, error)
 }
 
 type PlatformRepo interface {
@@ -589,6 +597,38 @@ func NewRouter(d Deps) http.Handler {
 			r.With(auth.RequireRole("owner")).Delete("/", func(w http.ResponseWriter, r *http.Request) {
 				m, _ := auth.MemberFrom(r.Context())
 				d.deleteBusiness(w, r, m.BusinessID)
+			})
+
+			// Everything of one kind, unpaginated, for the owner's CSV (also when the account expired:
+			// their data is theirs). ?from=&to= (YYYY-MM-DD) narrows dated kinds; none = all.
+			r.With(auth.RequireRole("owner")).Get("/export/{kind}", func(w http.ResponseWriter, r *http.Request) {
+				m, _ := auth.MemberFrom(r.Context())
+				kind := chi.URLParam(r, "kind")
+				if !exports.Valid(kind) {
+					notFound(w, "No se puede exportar eso.")
+					return
+				}
+				var p *exports.Period
+				if q := r.URL.Query(); q.Get("from") != "" || q.Get("to") != "" {
+					from, ok1 := finances.ParseDay(q.Get("from"))
+					to, ok2 := finances.ParseDay(q.Get("to"))
+					if !ok1 || !ok2 || to.Before(from) {
+						invalid(w, "Indica un periodo válido.", map[string]string{"from": "Periodo inválido."})
+						return
+					}
+					p = &exports.Period{From: from, To: to}
+				}
+				tz, err := d.Exports.Timezone(r.Context(), m.BusinessID)
+				if err != nil {
+					internalError(w, r, "export timezone", err)
+					return
+				}
+				rows, err := d.Exports.Rows(r.Context(), m.BusinessID, kind, p)
+				if err != nil {
+					internalError(w, r, "export "+kind, err)
+					return
+				}
+				apierr.JSON(w, http.StatusOK, map[string]any{"timezone": tz, "rows": rows})
 			})
 			r.Get("/", func(w http.ResponseWriter, r *http.Request) {
 				m, _ := auth.MemberFrom(r.Context())

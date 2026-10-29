@@ -441,6 +441,30 @@ paths:
         "403": { $ref: "#/components/responses/Error" }
         "422": { $ref: "#/components/responses/Error" }
 
+  /v1/b/{businessId}/export/{kind}:
+    parameters:
+      - $ref: "#/components/parameters/BusinessId"
+      - { name: kind, in: path, required: true, schema: { type: string, enum: [customers, bookings, expenses, sales, catalog, products] } }
+      - { name: from, in: query, schema: { type: string, format: date }, description: "Con to: solo reservas, gastos y ventas del periodo; sin periodo = todo" }
+      - { name: to, in: query, schema: { type: string, format: date } }
+    get:
+      operationId: exportRows
+      summary: "Todo lo de un tipo, sin paginar, para el CSV del dueño (también con la cuenta vencida). Datos crudos: centavos, instantes UTC, claves de estado"
+      responses:
+        "200":
+          description: OK
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [timezone, rows]
+                properties:
+                  timezone: { type: string, description: "Zona del negocio para mostrar las fechas" }
+                  rows: { type: array, items: { type: object, additionalProperties: true } }
+        "403": { $ref: "#/components/responses/Error" }
+        "404": { $ref: "#/components/responses/Error" }
+        "422": { $ref: "#/components/responses/Error" }
+
   /v1/b/{businessId}/staff/{staffId}/:
     parameters:
       - $ref: "#/components/parameters/BusinessId"
