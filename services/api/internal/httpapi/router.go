@@ -24,6 +24,7 @@ import (
 	"github.com/omaradriano/local_bussiness/services/api/internal/features"
 	"github.com/omaradriano/local_bussiness/services/api/internal/files"
 	"github.com/omaradriano/local_bussiness/services/api/internal/media"
+	"github.com/omaradriano/local_bussiness/services/api/internal/monitor"
 	"github.com/omaradriano/local_bussiness/services/api/internal/plans"
 	"github.com/omaradriano/local_bussiness/services/api/internal/platform"
 	"github.com/omaradriano/local_bussiness/services/api/internal/settings"
@@ -310,6 +311,7 @@ func decode(w http.ResponseWriter, r *http.Request, v any) bool {
 
 func internalError(w http.ResponseWriter, r *http.Request, what string, err error) {
 	slog.ErrorContext(r.Context(), what, "err", err)
+	monitor.Capture(r.Context(), err, what)
 	apierr.Write(w, http.StatusInternalServerError, "internal", "Error interno.")
 }
 
@@ -319,7 +321,7 @@ func invalid(w http.ResponseWriter, message string, errs map[string]string) {
 
 func NewRouter(d Deps) http.Handler {
 	r := chi.NewRouter()
-	r.Use(middleware.RequestID, middleware.Recoverer)
+	r.Use(middleware.RequestID, middleware.Recoverer, monitor.Middleware) // monitor reports a panic, Recoverer answers 500
 	r.Use(cors.Handler(cors.Options{
 		AllowedOrigins: d.AllowedOrigins,
 		AllowedMethods: []string{"GET", "POST", "PUT", "PATCH", "DELETE", "OPTIONS"},
