@@ -637,6 +637,86 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/v1/b/{businessId}/finances/recurring": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                businessId: components["parameters"]["BusinessId"];
+            };
+            cookie?: never;
+        };
+        /** Gastos recurrentes con su próximo cobro y los cobros por confirmar */
+        get: operations["listRecurring"];
+        put?: never;
+        /** Gasto que se repite (renta, internet, luz); cada cobro se confirma con su monto real */
+        post: operations["addRecurring"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/b/{businessId}/finances/recurring/{recurringId}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                businessId: components["parameters"]["BusinessId"];
+                recurringId: string;
+            };
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post?: never;
+        /** Deja de pagarse; los cobros confirmados se quedan como gastos */
+        delete: operations["deleteRecurring"];
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/b/{businessId}/finances/recurring/{recurringId}/charges": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                businessId: components["parameters"]["BusinessId"];
+                recurringId: string;
+            };
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Confirma un cobro con lo que se pagó; se vuelve un gasto */
+        post: operations["payRecurringCharge"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/b/{businessId}/finances/recurring/{recurringId}/skips": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                businessId: components["parameters"]["BusinessId"];
+                recurringId: string;
+            };
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Ese cobro no se pagó (deja de pedirse) */
+        post: operations["skipRecurringCharge"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/v1/b/{businessId}/finances/pay": {
         parameters: {
             query?: never;
@@ -1384,6 +1464,28 @@ export interface components {
             description: string | null;
             /** Format: date-time */
             created_at: string;
+            /**
+             * Format: uuid
+             * @description Cobro confirmado de un gasto recurrente
+             */
+            recurring_id: string | null;
+        };
+        /** @enum {string} */
+        Frequency: "weekly" | "biweekly" | "monthly" | "yearly";
+        RecurringExpense: {
+            /** Format: uuid */
+            id: string;
+            description: string;
+            category: components["schemas"]["ExpenseCategory"];
+            /** @description Monto aproximado */
+            amount: number;
+            frequency: components["schemas"]["Frequency"];
+            starts_on: string;
+            ends_on: string | null;
+            /** @description Próximo cobro después de hoy */
+            next_due: string | null;
+            /** @description Cobros hasta hoy sin confirmar (último año), el más antiguo primero */
+            pending: string[];
         };
         ExpensePlan: {
             /** Format: uuid */
@@ -1418,6 +1520,8 @@ export interface components {
         FinanceSummary: {
             from: string;
             to: string;
+            /** @description Cobros de gastos recurrentes por confirmar (no cuentan hasta confirmarse) */
+            pending_recurring: number;
             /** @description Reservas que empiezan en el periodo, por estado (en orden del ciclo de vida, sin ceros) */
             bookings: {
                 key: components["schemas"]["BookingStatus"];
@@ -2995,6 +3099,162 @@ export interface operations {
                 content?: never;
             };
             404: components["responses"]["Error"];
+        };
+    };
+    listRecurring: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                businessId: components["parameters"]["BusinessId"];
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        recurring: components["schemas"]["RecurringExpense"][];
+                    };
+                };
+            };
+        };
+    };
+    addRecurring: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                businessId: components["parameters"]["BusinessId"];
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": {
+                    description: string;
+                    category: components["schemas"]["ExpenseCategory"];
+                    /** @description Monto aproximado (centavos) */
+                    amount: number;
+                    frequency: components["schemas"]["Frequency"];
+                    /** Format: date */
+                    starts_on: string;
+                    /** Format: date */
+                    ends_on?: string;
+                };
+            };
+        };
+        responses: {
+            /** @description Creado */
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["RecurringExpense"];
+                };
+            };
+            422: components["responses"]["Error"];
+        };
+    };
+    deleteRecurring: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                businessId: components["parameters"]["BusinessId"];
+                recurringId: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Borrado */
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            404: components["responses"]["Error"];
+        };
+    };
+    payRecurringCharge: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                businessId: components["parameters"]["BusinessId"];
+                recurringId: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": {
+                    /**
+                     * Format: date
+                     * @description Fecha del cobro (pasado o el siguiente)
+                     */
+                    due_on: string;
+                    amount: number;
+                    /**
+                     * Format: date
+                     * @description Cuándo se pagó; por defecto la fecha del cobro
+                     */
+                    spent_on?: string;
+                };
+            };
+        };
+        responses: {
+            /** @description Creado */
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Expense"];
+                };
+            };
+            404: components["responses"]["Error"];
+            409: components["responses"]["Error"];
+            422: components["responses"]["Error"];
+        };
+    };
+    skipRecurringCharge: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                businessId: components["parameters"]["BusinessId"];
+                recurringId: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": {
+                    /** Format: date */
+                    due_on: string;
+                };
+            };
+        };
+        responses: {
+            /** @description Registrado */
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            404: components["responses"]["Error"];
+            409: components["responses"]["Error"];
+            422: components["responses"]["Error"];
         };
     };
     listPay: {

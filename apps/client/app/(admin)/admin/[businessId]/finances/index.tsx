@@ -54,6 +54,12 @@ export default function Finances() {
             <Text variant="footnote" color="labelSecondary">{t.incomeHint}</Text>
           </View>
 
+          {s.pending_recurring > 0 && (
+            <Group>
+              <Cell icon="time" tint={ui.warning} label={t.recurring.toConfirm(s.pending_recurring)} onPress={go('expenses?tab=recurring')} />
+            </Group>
+          )}
+
           {(kind === 'rental' || s.overdue.length > 0) && (
             <Group label={t.overdue}>
               {s.overdue.length === 0 ? <Cell icon="checkmark-circle" tint={ui.success} label={t.noOverdue} /> : null}

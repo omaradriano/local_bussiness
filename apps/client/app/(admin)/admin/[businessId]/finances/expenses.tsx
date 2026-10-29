@@ -1,5 +1,5 @@
 import type { components } from '@lb/api-client';
-import { formatMXN, parsePesos, strings, todayISO } from '@lb/shared';
+import { centavosToInput, formatMXN, parsePesos, strings, todayISO } from '@lb/shared';
 import { Stack, useFocusEffect, useLocalSearchParams } from 'expo-router';
 import { useCallback, useState } from 'react';
 import { ActivityIndicator, Pressable, View } from 'react-native';
@@ -12,6 +12,10 @@ import { Button, Cell, Chip, Chips, Field, Group, Screen, Segmented, Text, useTo
 type Expense = components['schemas']['Expense'];
 type Plan = components['schemas']['ExpensePlan'];
 type Category = components['schemas']['ExpenseCategory'];
+type Recurring = components['schemas']['RecurringExpense'];
+type Frequency = components['schemas']['Frequency'];
+const TABS = ['once', 'recurring', 'plans'] as const;
+type Tab = (typeof TABS)[number];
 const t = strings.finances;
 const ISO = /^\d{4}-\d{2}-\d{2}$/;
 const day = (iso: string) => new Date(`${iso.slice(0, 10)}T12:00:00Z`).toLocaleDateString('es-MX', { timeZone: 'UTC', day: 'numeric', month: 'short', year: 'numeric' });
@@ -29,7 +33,7 @@ function CategoryChips({ value, onChange }: { value: Category; onChange: (c: Cat
 
 /** Expenses of a period (add / delete) and purchases in installments. */
 export default function Expenses() {
-  const { businessId } = useLocalSearchParams<{ businessId: string }>();
+  const { businessId, tab: initialTab } = useLocalSearchParams<{ businessId: string; tab?: Tab }>();
   const ui = useUI();
   const toast = useToast();
   const [period, setPeriod] = useState<Period>(currentMonth);
@@ -40,7 +44,7 @@ export default function Expenses() {
   const [errors, setErrors] = useState<Record<string, string>>({});
   const [planErrors, setPlanErrors] = useState<Record<string, string>>({});
   const [busy, setBusy] = useState<'expense' | 'plan' | null>(null);
-  const [tab, setTab] = useState<'fixed' | 'plans'>('fixed');
+  const [tab, setTab] = useState<Tab>(initialTab ?? 'once');
   const path = { businessId };
 
   const load = useCallback(() => {
@@ -110,10 +114,12 @@ export default function Expenses() {
       <Stack.Screen options={{ title: t.sections.expenses }} />
       <Text variant="largeTitle" accessibilityRole="header" style={{ marginBottom: 16 }}>{t.expenses}</Text>
       <View style={{ marginBottom: 20 }}>
-        <Segmented options={(['fixed', 'plans'] as const).map((k) => ({ value: k, label: t.expenseTabs[k] }))} value={tab} onChange={setTab} />
+        <Segmented options={TABS.map((k) => ({ value: k, label: t.expenseTabs[k] }))} value={tab} onChange={setTab} />
       </View>
 
-      {tab === 'fixed' && <>
+      {tab === 'recurring' && <RecurringTab businessId={businessId} />}
+
+      {tab === 'once' && <>
       <Group label={t.addExpense} padded>
         <Field label={t.date} value={form.spentOn} onChangeText={(spentOn) => setForm({ ...form, spentOn })} error={errors.spent_on} />
         <CategoryChips value={form.category} onChange={(category) => setForm({ ...form, category })} />
@@ -158,5 +164,133 @@ export default function Expenses() {
       </Group>
       </>}
     </Screen>
+  );
+}
+
+const rt = t.recurring;
+const FREQUENCIES: Frequency[] = ['weekly', 'biweekly', 'monthly', 'yearly'];
+
+/**
+ * Recurring expenses (rent, internet, electricity): charges waiting for confirmation first (the real
+ * amount, or «No se pagó»), then the list, then the form to add one.
+ */
+function RecurringTab({ businessId }: { businessId: string }) {
+  const ui = useUI();
+  const toast = useToast();
+  const [list, setList] = useState<Recurring[] | null>(null);
+  const [form, setForm] = useState({ description: '', category: 'rent' as Category, amount: '', frequency: 'monthly' as Frequency, startsOn: todayISO(), endsOn: '' });
+  const [errors, setErrors] = useState<Record<string, string>>({});
+  // The charge being confirmed, with what was really paid.
+  const [open, setOpen] = useState<{ rec: Recurring; due: string; amount: string; paidOn: string } | null>(null);
+  const [busy, setBusy] = useState<'add' | 'pay' | 'skip' | null>(null);
+  const path = { businessId };
+
+  const load = useCallback(() => {
+    api.GET('/v1/b/{businessId}/finances/recurring', { params: { path } }).then(({ data }) => setList(data?.recurring ?? []));
+  }, [businessId]); // eslint-disable-line react-hooks/exhaustive-deps
+  useFocusEffect(load);
+
+  async function add() {
+    const amount = parsePesos(form.amount);
+    const local: Record<string, string> = {};
+    if (!ISO.test(form.startsOn)) local.starts_on = t.invalidDate;
+    if (form.endsOn && !ISO.test(form.endsOn)) local.ends_on = t.invalidDate;
+    if (!amount) local.amount = strings.catalog.invalidMoney;
+    if (Object.keys(local).length) return setErrors(local);
+    setBusy('add');
+    const { data, error, response } = await api.POST('/v1/b/{businessId}/finances/recurring', {
+      params: { path }, body: { description: form.description, category: form.category, amount: amount!, frequency: form.frequency,
+        starts_on: form.startsOn, ...(form.endsOn ? { ends_on: form.endsOn } : {}) },
+    });
+    setBusy(null);
+    if (!data) { setErrors(fieldErrors(error)); return toast(errorText(error, response.status), 'error'); }
+    setErrors({});
+    setForm({ ...form, description: '', amount: '', endsOn: '' });
+    toast(rt.saved);
+    load();
+  }
+
+  async function answer(kind: 'pay' | 'skip') {
+    if (!open) return;
+    const params = { path: { businessId, recurringId: open.rec.id } };
+    let res;
+    if (kind === 'pay') {
+      const amount = parsePesos(open.amount);
+      if (!amount) return setErrors({ paid_amount: strings.catalog.invalidMoney });
+      if (!ISO.test(open.paidOn)) return setErrors({ paid_on: t.invalidDate });
+      setBusy('pay');
+      res = await api.POST('/v1/b/{businessId}/finances/recurring/{recurringId}/charges', { params, body: { due_on: open.due, amount, spent_on: open.paidOn } });
+    } else {
+      setBusy('skip');
+      res = await api.POST('/v1/b/{businessId}/finances/recurring/{recurringId}/skips', { params, body: { due_on: open.due } });
+    }
+    setBusy(null);
+    if (!res.response.ok) return toast(errorText(res.error, res.response.status), 'error');
+    setErrors({});
+    setOpen(null);
+    toast(kind === 'pay' ? rt.confirmed : rt.skipped);
+    load();
+  }
+
+  async function remove(rec: Recurring) {
+    const res = await api.DELETE('/v1/b/{businessId}/finances/recurring/{recurringId}', { params: { path: { businessId, recurringId: rec.id } } });
+    if (!res.response.ok) return toast(errorText(res.error, res.response.status), 'error');
+    toast(rt.deleted);
+    load();
+  }
+
+  if (!list) return <ActivityIndicator />;
+  const pending = list.flatMap((rec) => rec.pending.map((due) => ({ rec, due: due.slice(0, 10) })));
+
+  return (
+    <>
+      {pending.length > 0 && (
+        <Group label={rt.pending} footer={rt.pendingHint}>
+          {pending.map(({ rec, due }) => (
+            <Cell key={`${rec.id}-${due}`} icon="time" tint={ui.warning} label={rec.description}
+              sublabel={`${day(due)} · ${rt.approx(formatMXN(rec.amount))}`}
+              onPress={() => { setErrors({}); setOpen({ rec, due, amount: centavosToInput(rec.amount), paidOn: due }); }} />
+          ))}
+        </Group>
+      )}
+      {open && (
+        <Group label={`${open.rec.description} · ${day(open.due)}`} padded>
+          <Field label={rt.paidAmount} value={open.amount} onChangeText={(amount) => setOpen({ ...open, amount })} keyboardType="decimal-pad" error={errors.paid_amount ?? errors.amount} />
+          <Field label={rt.paidOn} value={open.paidOn} onChangeText={(paidOn) => setOpen({ ...open, paidOn })} error={errors.paid_on ?? errors.spent_on} />
+          <View style={{ flexDirection: 'row', gap: 8 }}>
+            <View style={{ flex: 1 }}><Button variant="primary" icon="checkmark" busy={busy === 'pay'} onPress={() => answer('pay')}>{rt.confirm}</Button></View>
+            <View style={{ flex: 1 }}><Button busy={busy === 'skip'} onPress={() => answer('skip')}>{rt.skip}</Button></View>
+          </View>
+        </Group>
+      )}
+
+      <Group label={rt.title} footer={rt.hint}>
+        {list.length === 0 ? <Cell label={rt.empty} /> : null}
+        {list.map((rec) => (
+          <Cell key={rec.id} icon="repeat" tint={ui.indigo} label={rec.description}
+            sublabel={`${t.categories[rec.category]} · ${rec.next_due ? rt.next(day(rec.next_due)) : rt.ended}`}
+            value={`${formatMXN(rec.amount)} ${rt.per[rec.frequency]}`}
+            accessory={
+              <Pressable accessibilityRole="button" accessibilityLabel={`${t.remove} ${rec.description}`} hitSlop={10} onPress={() => remove(rec)}>
+                <Ionicons name="trash-outline" size={18} color={ui.danger} />
+              </Pressable>} />
+        ))}
+      </Group>
+
+      <Group label={rt.add} padded>
+        <Field label={rt.description} placeholder={rt.descriptionPlaceholder} value={form.description} onChangeText={(description) => setForm({ ...form, description })} error={errors.description} />
+        <CategoryChips value={form.category} onChange={(category) => setForm({ ...form, category })} />
+        <Field label={rt.amount} hint={rt.amountHint} value={form.amount} onChangeText={(amount) => setForm({ ...form, amount })} keyboardType="decimal-pad" error={errors.amount} />
+        <View style={{ gap: 6, marginBottom: 16 }}>
+          <Text variant="footnote" color="labelSecondary" style={{ fontWeight: '600', paddingHorizontal: 4 }}>{rt.frequency}</Text>
+          <Segmented options={FREQUENCIES.map((f) => ({ value: f, label: rt.frequencies[f] }))} value={form.frequency} onChange={(frequency) => setForm({ ...form, frequency })} />
+        </View>
+        <View style={{ flexDirection: 'row', gap: 12 }}>
+          <View style={{ flex: 1 }}><Field label={rt.startsOn} value={form.startsOn} onChangeText={(startsOn) => setForm({ ...form, startsOn })} error={errors.starts_on} /></View>
+          <View style={{ flex: 1 }}><Field label={rt.endsOn} value={form.endsOn} onChangeText={(endsOn) => setForm({ ...form, endsOn })} error={errors.ends_on} /></View>
+        </View>
+        <Button variant="primary" icon="add" busy={busy === 'add'} onPress={add}>{rt.add}</Button>
+      </Group>
+    </>
   );
 }
