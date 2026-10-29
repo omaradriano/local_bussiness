@@ -1,9 +1,10 @@
 import type { components } from '@lb/api-client';
 import { shiftsToWeek, strings, weekToShifts, type DayRow } from '@lb/shared';
-import { Stack, useLocalSearchParams } from 'expo-router';
+import { router, Stack, useLocalSearchParams, type Href } from 'expo-router';
 import { useEffect, useState } from 'react';
 import { Ionicons } from '@expo/vector-icons';
 import { ActivityIndicator, View } from 'react-native';
+import { ConfirmDialog } from '../../../../../components/ConfirmDialog';
 import { HoursEditor } from '../../../../../components/HoursEditor';
 import { api } from '../../../../../lib/api';
 import { errorText, fieldErrors } from '../../../../../lib/errors';
@@ -27,7 +28,18 @@ export default function StaffDetail() {
   const [week, setWeek] = useState<DayRow[] | null>(null);
   const [message, setMessage] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
+  const [removing, setRemoving] = useState(false);
   const path = { businessId, staffId };
+
+  async function remove() {
+    setBusy(true);
+    const { error, response } = await api.DELETE('/v1/b/{businessId}/staff/{staffId}/', { params: { path } });
+    setBusy(false);
+    if (!response.ok) return toast(errorText(error, response.status), 'error');
+    setRemoving(false);
+    toast(t.removed);
+    router.replace(`/admin/${businessId}/staff` as Href);
+  }
 
   useEffect(() => {
     Promise.all([
@@ -91,6 +103,9 @@ export default function StaffDetail() {
           {!person.is_owner && (
             <Button variant={person.active ? 'destructive' : 'secondary'} disabled={busy} onPress={() => save(!person.active)}>{person.active ? t.deactivate : t.activate}</Button>
           )}
+          {!person.is_owner && <Button variant="plain" icon="trash" disabled={busy} onPress={() => setRemoving(true)}>{t.remove}</Button>}
+          <ConfirmDialog open={removing} title={t.removeTitle(person.name)} body={t.removeBody} confirmLabel={t.remove}
+            busy={busy} onConfirm={remove} onClose={() => setRemoving(false)} />
         </View>
       )}
     </Screen>

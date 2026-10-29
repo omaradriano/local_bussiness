@@ -82,4 +82,36 @@ func TestIntegrationStaffServicesAndHours(t *testing.T) {
 	if err := r.Update(ctx, bizB, got); !errors.Is(err, ErrNotFound) {
 		t.Fatalf("update other business: %v", err)
 	}
+
+	// Deleting a person: gone from the list and the agenda (services, hours), not from other businesses.
+	if err := r.Delete(ctx, bizB, m.ID); !errors.Is(err, ErrNotFound) {
+		t.Fatalf("delete from another business: %v", err)
+	}
+	if err := r.Delete(ctx, bizA, m.ID); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := r.Get(ctx, bizA, m.ID); !errors.Is(err, ErrNotFound) {
+		t.Fatalf("deleted person still listed: %v", err)
+	}
+	var services, hours int
+	if err := tx.QueryRow(ctx, `select (select count(*) from public.staff_services where staff_id = $1), (select count(*) from public.business_hours where staff_id = $1)`, m.ID).Scan(&services, &hours); err != nil || services+hours != 0 {
+		t.Fatalf("deleted person keeps services %d / hours %d (%v)", services, hours, err)
+	}
+	if err := r.Delete(ctx, bizA, m.ID); !errors.Is(err, ErrNotFound) {
+		t.Fatalf("deleted twice: %v", err)
+	}
+	// The person linked to the owner can't be deleted.
+	if _, err := tx.Exec(ctx, `insert into auth.users (id, email, aud, role) values ('00000000-0000-0000-0000-0000000000d1', 'staff-owner@test.mx', 'authenticated', 'authenticated')`); err != nil {
+		t.Fatal(err)
+	}
+	owner, err := r.Create(ctx, bizA, Member{Name: "Dueña", Color: "#000000"})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, err := tx.Exec(ctx, `insert into public.business_members (business_id, user_id, role, staff_id) values ($1, '00000000-0000-0000-0000-0000000000d1', 'owner', $2)`, bizA, owner.ID); err != nil {
+		t.Fatal(err)
+	}
+	if err := r.Delete(ctx, bizA, owner.ID); !errors.Is(err, ErrOwnerStaff) {
+		t.Fatalf("deleted the owner: %v", err)
+	}
 }

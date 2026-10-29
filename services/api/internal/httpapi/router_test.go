@@ -175,6 +175,7 @@ func doBody(method, path, token string, body io.Reader, headers ...string) *http
 		Finances:       fakeFinances{},
 		Products:       fakeProducts{},
 		Plans:          fakePlans{},
+		DeleteBusiness: fakeDeleteBusiness,
 		Now:            func() time.Time { return fixedNow },
 		Photos:         &Photos{Media: fakeMedia{}, Files: fakeFiles{}, EnqueueImage: fakeEnqueue, CDNBase: "https://cdn.test"},
 		AllowedOrigins: []string{"http://localhost:8082", "https://local-bussiness-staging-*.vercel.app"},
@@ -1400,6 +1401,63 @@ func TestPlans(t *testing.T) {
 		{"fecha inválida", http.MethodPut, "/v1/admin/businesses/" + bizA + "/plan", "ok", `{"plan":"pro","ends_at":"mañana"}`, http.StatusUnprocessableEntity, `"ends_at"`},
 		{"negocio sin dueño", http.MethodPut, "/v1/admin/businesses/" + bizB + "/plan", "ok", `{"plan":"pro"}`, http.StatusNotFound, `"not_found"`},
 		{"solo superadmin asigna planes", http.MethodPut, "/v1/admin/businesses/" + bizA + "/plan", "staff", `{"plan":"business"}`, http.StatusForbidden, `"forbidden"`},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			rec := doBody(tc.method, tc.path, tc.token, strings.NewReader(tc.body))
+			if rec.Code != tc.code || !strings.Contains(rec.Body.String(), tc.want) {
+				t.Fatalf("got %d %s", rec.Code, rec.Body)
+			}
+		})
+	}
+}
+
+// staffID is the owner's own person; customerID stands for another person of the team.
+func (fakeStaff) Delete(_ context.Context, _, id string) error {
+	switch id {
+	case staffID:
+		return staff.ErrOwnerStaff
+	case customerID:
+		return nil
+	}
+	return staff.ErrNotFound
+}
+
+func (fakePlatform) Business(_ context.Context, id string) (platform.Business, error) {
+	switch id {
+	case bizA:
+		return platform.Business{ID: id, Name: "Uñas Bellas"}, nil
+	case bizExpired:
+		return platform.Business{ID: id, Name: "Vencido"}, nil
+	}
+	return platform.Business{}, platform.ErrNotFound
+}
+
+func fakeDeleteBusiness(_ context.Context, id string) error {
+	if id != bizA && id != bizExpired {
+		return businesses.ErrNotFound
+	}
+	return nil
+}
+
+func TestDeleting(t *testing.T) {
+	cases := []struct {
+		name, method, path, token, body string
+		code                            int
+		want                            string
+	}{
+		{"borrar a una persona del equipo", http.MethodDelete, "/v1/b/" + bizA + "/staff/" + customerID, "ok", "", http.StatusNoContent, ""},
+		{"no se borra al dueño", http.MethodDelete, "/v1/b/" + bizA + "/staff/" + staffID, "ok", "", http.StatusConflict, `"owner_staff"`},
+		{"persona que no existe", http.MethodDelete, "/v1/b/" + bizA + "/staff/" + bookingID, "ok", "", http.StatusNotFound, `"not_found"`},
+		{"el empleado no borra personas", http.MethodDelete, "/v1/b/" + bizA + "/staff/" + customerID, "staff", "", http.StatusForbidden, `"forbidden"`},
+		{"borrar negocio pide su nombre", http.MethodDelete, "/v1/b/" + bizA, "ok", `{"confirm":"otro"}`, http.StatusUnprocessableEntity, `"confirm"`},
+		{"el dueño borra su negocio", http.MethodDelete, "/v1/b/" + bizA, "ok", `{"confirm":"  uñas   bellas "}`, http.StatusNoContent, ""},
+		{"el empleado no borra el negocio", http.MethodDelete, "/v1/b/" + bizA, "staff", `{"confirm":"Uñas Bellas"}`, http.StatusForbidden, `"forbidden"`},
+		{"con la cuenta vencida también se puede borrar", http.MethodDelete, "/v1/b/" + bizExpired, "ok", `{"confirm":"Vencido"}`, http.StatusNoContent, ""},
+		{"superadmin borra un negocio", http.MethodDelete, "/v1/admin/businesses/" + bizA, "ok", `{"confirm":"Uñas Bellas"}`, http.StatusNoContent, ""},
+		{"superadmin: negocio que no existe", http.MethodDelete, "/v1/admin/businesses/" + bizB, "ok", `{"confirm":"x"}`, http.StatusNotFound, `"not_found"`},
+		{"superadmin: nombre equivocado", http.MethodDelete, "/v1/admin/businesses/" + bizA, "ok", `{"confirm":"Uñas"}`, http.StatusUnprocessableEntity, `"confirm"`},
+		{"solo el superadmin borra desde la plataforma", http.MethodDelete, "/v1/admin/businesses/" + bizA, "staff", `{"confirm":"Uñas Bellas"}`, http.StatusForbidden, `"forbidden"`},
 	}
 	for _, tc := range cases {
 		t.Run(tc.name, func(t *testing.T) {

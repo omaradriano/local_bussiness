@@ -59,6 +59,17 @@ Después, el dueño enciende o apaga las disponibles en **Ajustes → Funciones*
 
 Funciones existentes: equipo, inventario, aval del cliente, dirección obligatoria, documentos del cliente, clientes de confianza, clientes casuales, servicio a domicilio, iniciar servicio, documentos adicionales (pagaré), venta de productos.
 
+### 3.3 Borrar un negocio
+
+Al final de la ficha del negocio, en **Zona de peligro → Eliminar negocio**. Hay que escribir el nombre del negocio para confirmar. El dueño puede hacer lo mismo desde **Ajustes**, aunque su cuenta esté vencida.
+
+- **Base de datos:** se borra **todo** el negocio de una vez (citas, rentas, pedidos, clientes y sus documentos, catálogo, equipo, productos, finanzas, ajustes).
+- **Archivos en S3:** un trabajo del worker borra la carpeta del negocio (`{id}/`) en los tres buckets (fotos del catálogo, INE y documentos, evidencias de renta). En la bitácora de Railway del worker queda «purged business files».
+- **El plan de la cuenta del dueño se conserva:** si abre otro negocio, no vuelve a tener prueba.
+- **No se puede deshacer.**
+
+**Pendiente:** los buckets de INE (`private-docs`) y de evidencias (`rental-evidence`) tienen versionado. Al borrar queda una marca y la versión anterior se conserva. Falta una regla de ciclo de vida que elimine las versiones anteriores, p. ej. a los 30 días (cambio en `infra/aws/`, requiere aprobación). Ver §10.
+
 ## 4. Planes
 
 ### 4.1 Qué incluye cada plan
@@ -110,6 +121,14 @@ Recomendaciones:
 
 - **Etiqueta de tiempo:** en la barra lateral, en el encabezado del teléfono y en «Tus negocios»: «Prueba · 12 días», «Vence en 5 días» (planes con fecha, en la última semana) o «Solo lectura».
 - **Inicio del negocio:** un aviso con los días de prueba o con el estado de solo lectura.
+
+### 4.6 Personas del equipo
+
+En **Equipo → persona** el dueño puede:
+- **Desactivar:** deja de recibir citas, pero sigue en la lista.
+- **Eliminar persona:** sale de la lista, de la agenda y de Sueldos; sus citas y comisiones pasadas conservan su nombre.
+
+La persona ligada al dueño («Yo») no se puede eliminar. Eliminar personas libera lugar en el límite del plan.
 
 ## 5. Alta de un negocio piloto (paso a paso)
 
@@ -202,7 +221,8 @@ Recomendados antes del primer piloto:
 - [ ] **Invitar usuarios** al negocio (empleados con su propio acceso): hoy solo entra el dueño, así que el límite de «usuarios con acceso» todavía no aplica.
 - [ ] **Flujos propios de florería y uñas** antes de ponerlos en Público.
 - [ ] **Borrado automático de INE** N días después de cerrar la renta (job `purge_id_documents` del plan).
-- [ ] **Borrar la cuenta desde la app** (obligatorio para publicar en la App Store).
+- [ ] **Borrar la cuenta del usuario desde la app** (obligatorio para publicar en la App Store). Borrar negocios ya existe; falta borrar la cuenta en sí.
+- [ ] **Regla de ciclo de vida en S3** para que las versiones anteriores de INE y evidencias se borren (p. ej. 30 días) después de borrar un negocio o un documento.
 
 ### 10.4 Después (fases siguientes)
 

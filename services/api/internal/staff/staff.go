@@ -117,7 +117,7 @@ func (r Repo) List(ctx context.Context, businessID string) ([]Member, error) {
 		                 'closes_at', to_char(h.closes_at, 'HH24:MI')) order by h.weekday, h.opens_at)
 		                 from public.business_hours h where h.staff_id = s.id), '[]')
 		from public.staff s
-		where s.business_id = $1
+		where s.business_id = $1 and s.deleted_at is null
 		order by s.active desc, s.created_at`, businessID)
 	if err != nil {
 		return nil, err
@@ -271,4 +271,36 @@ func unique(ids []string) []string {
 		}
 	}
 	return out
+}
+
+// ErrOwnerStaff: the person linked to the owner's account (who attends in a one-person business).
+var ErrOwnerStaff = errors.New("the owner's own staff can't be deleted")
+
+// Delete takes a person out of the team: off the list, the agenda (services and hours) and new
+// bookings. The row stays (deleted_at) so past bookings and commissions keep their name.
+func (r Repo) Delete(ctx context.Context, businessID, staffID string) error {
+	return inTx(ctx, r.DB, func(tx pgx.Tx) error {
+		var owner bool
+		err := tx.QueryRow(ctx, `select exists (select 1 from public.business_members where staff_id = s.id and role = 'owner')
+			from public.staff s where s.business_id = $1 and s.id = $2 and s.deleted_at is null`, businessID, staffID).Scan(&owner)
+		if errors.Is(err, pgx.ErrNoRows) {
+			return ErrNotFound
+		}
+		if err != nil {
+			return err
+		}
+		if owner {
+			return ErrOwnerStaff
+		}
+		for _, q := range []string{
+			`delete from public.staff_services where staff_id = $1`,
+			`delete from public.business_hours where staff_id = $1`,
+			`update public.staff set active = false, deleted_at = now() where id = $1`,
+		} {
+			if _, err := tx.Exec(ctx, q, staffID); err != nil {
+				return err
+			}
+		}
+		return nil
+	})
 }

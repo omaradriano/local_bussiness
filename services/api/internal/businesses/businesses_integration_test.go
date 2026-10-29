@@ -83,4 +83,50 @@ func TestIntegrationCreateAppliesTemplate(t *testing.T) {
 	if !errors.Is(err, ErrSlugTaken) {
 		t.Fatalf("duplicate slug: got %v, want ErrSlugTaken", err)
 	}
+
+	// Deleting a business removes every row of it (all tables with business_id) and enqueues the purge
+	// of its files in the same transaction; another business of the same owner stays.
+	keep, err := Create(ctx, outer, user, Input{Name: "Se queda", Slug: "prueba-se-queda", Vertical: "barbershop"}.Normalize())
+	if err != nil {
+		t.Fatal(err)
+	}
+	gone, err := Create(ctx, outer, user, Input{Name: "Se va", Slug: "prueba-se-va", Vertical: "tool_rental"}.Normalize())
+	if err != nil {
+		t.Fatal(err)
+	}
+	var purged string
+	if err := Delete(ctx, outer, gone.ID, func(_ context.Context, _ pgx.Tx) error { purged = gone.ID; return nil }); err != nil {
+		t.Fatal(err)
+	}
+	if purged != gone.ID {
+		t.Fatal("files purge not enqueued")
+	}
+	rows, err := outer.Query(ctx, `select table_name from information_schema.columns where table_schema = 'public' and column_name = 'business_id'`)
+	if err != nil {
+		t.Fatal(err)
+	}
+	tables, err := pgx.CollectRows(rows, pgx.RowTo[string])
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, table := range append(tables, "businesses") {
+		col := "business_id"
+		if table == "businesses" {
+			col = "id"
+		}
+		var n int
+		if err := outer.QueryRow(ctx, `select count(*) from public.`+table+` where `+col+` = $1`, gone.ID).Scan(&n); err != nil {
+			t.Fatalf("%s: %v", table, err)
+		}
+		if n != 0 {
+			t.Errorf("%s still has %d rows of the deleted business", table, n)
+		}
+	}
+	var left int
+	if err := outer.QueryRow(ctx, `select count(*) from public.catalog_items where business_id = $1`, keep.ID).Scan(&left); err != nil || left == 0 {
+		t.Fatalf("the other business lost its catalog: %d %v", left, err)
+	}
+	if err := Delete(ctx, outer, gone.ID, func(context.Context, pgx.Tx) error { return nil }); !errors.Is(err, ErrNotFound) {
+		t.Fatalf("delete twice: %v", err)
+	}
 }

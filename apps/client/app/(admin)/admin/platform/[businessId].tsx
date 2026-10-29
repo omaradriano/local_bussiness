@@ -1,8 +1,9 @@
 import type { components } from '@lb/api-client';
 import { featureInfo, strings, verticalMap } from '@lb/shared';
-import { Stack, useLocalSearchParams } from 'expo-router';
+import { router, Stack, useLocalSearchParams } from 'expo-router';
 import { useEffect, useState } from 'react';
 import { ActivityIndicator, StyleSheet, View } from 'react-native';
+import { DeleteBusiness } from '../../../../components/DeleteBusiness';
 import { api } from '../../../../lib/api';
 import { errorText } from '../../../../lib/errors';
 import { Button, Field, Group, Notice, Screen, Segmented, Text, radius, useToast, useUI } from '../../../../ui';
@@ -70,6 +71,9 @@ export default function PlatformBusiness() {
             />
           </View>
         ))}
+      </View>
+      <View style={{ marginTop: 28 }}>
+        <DeleteBusiness businessId={businessId} name={b.name} asAdmin onDeleted={() => router.replace('/admin/platform')} />
       </View>
     </Screen>
   );

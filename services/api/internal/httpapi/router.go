@@ -54,6 +54,8 @@ type Deps struct {
 	Finances       FinancesRepo
 	Products       ProductsRepo
 	Plans          PlansRepo
+	// DeleteBusiness removes a business, its rows and (by a job) its files; businesses.ErrNotFound if missing.
+	DeleteBusiness func(ctx context.Context, businessID string) error
 	Now            func() time.Time // injectable clock; nil = time.Now
 }
 
@@ -143,6 +145,11 @@ func (d Deps) requireWritable(next http.Handler) http.Handler {
 			return
 		}
 		m, _ := auth.MemberFrom(r.Context())
+		// Deleting the business is allowed even when expired: their data, their call.
+		if r.Method == http.MethodDelete && strings.TrimSuffix(r.URL.Path, "/") == "/v1/b/"+m.BusinessID {
+			next.ServeHTTP(w, r)
+			return
+		}
 		a, err := d.Plans.ForBusiness(r.Context(), m.BusinessID)
 		if err != nil {
 			internalError(w, r, "account plan", err)
@@ -156,9 +163,42 @@ func (d Deps) requireWritable(next http.Handler) http.Handler {
 	})
 }
 
+// deleteBusiness: the business's name typed again confirms it (spaces and case don't matter).
+func (d Deps) deleteBusiness(w http.ResponseWriter, r *http.Request, businessID string) {
+	var body struct {
+		Confirm string `json:"confirm"`
+	}
+	if !decode(w, r, &body) {
+		return
+	}
+	b, err := d.Platform.Business(r.Context(), businessID)
+	if errors.Is(err, platform.ErrNotFound) {
+		notFound(w, "El negocio no existe.")
+		return
+	}
+	if err != nil {
+		internalError(w, r, "get business", err)
+		return
+	}
+	if !strings.EqualFold(strings.Join(strings.Fields(body.Confirm), " "), strings.Join(strings.Fields(b.Name), " ")) {
+		invalid(w, "Escribe el nombre del negocio para confirmar.", map[string]string{"confirm": "El nombre no coincide."})
+		return
+	}
+	switch err := d.DeleteBusiness(r.Context(), businessID); {
+	case errors.Is(err, businesses.ErrNotFound):
+		notFound(w, "El negocio no existe.")
+	case err != nil:
+		internalError(w, r, "delete business", err)
+	default:
+		slog.InfoContext(r.Context(), "business deleted", "business", businessID, "name", b.Name)
+		w.WriteHeader(http.StatusNoContent)
+	}
+}
+
 type PlatformRepo interface {
 	Businesses(ctx context.Context) ([]platform.Business, error)
 	SetGrant(ctx context.Context, id, feature string, grant *bool) (platform.Business, error)
+	Business(ctx context.Context, id string) (platform.Business, error)
 	Verticals(ctx context.Context) ([]platform.Vertical, error)
 	VerticalStatus(ctx context.Context, vertical string) (string, error)
 	SetVerticalStatus(ctx context.Context, vertical, status string) (platform.Vertical, error)
@@ -241,6 +281,7 @@ type StaffRepo interface {
 	SetServices(ctx context.Context, businessID, staffID string, itemIDs []string) error
 	SetHours(ctx context.Context, businessID, staffID string, hs []staff.Hours) error
 	BusinessHours(ctx context.Context, businessID string) ([]staff.Hours, error)
+	Delete(ctx context.Context, businessID, staffID string) error
 }
 
 type CatalogRepo interface {
@@ -430,6 +471,9 @@ func NewRouter(d Deps) http.Handler {
 				}
 				apierr.JSON(w, http.StatusOK, a.View(d.now()))
 			})
+			r.With(requireUUIDParam("businessId", "El negocio no existe.")).Delete("/businesses/{businessId}", func(w http.ResponseWriter, r *http.Request) {
+				d.deleteBusiness(w, r, chi.URLParam(r, "businessId"))
+			})
 			r.Get("/businesses", func(w http.ResponseWriter, r *http.Request) {
 				list, err := d.Platform.Businesses(r.Context())
 				if err != nil {
@@ -540,6 +584,10 @@ func NewRouter(d Deps) http.Handler {
 
 		r.Route("/b/{businessId}", func(r chi.Router) {
 			r.Use(auth.RequireMember(d.Store), d.requireWritable)
+			r.With(auth.RequireRole("owner")).Delete("/", func(w http.ResponseWriter, r *http.Request) {
+				m, _ := auth.MemberFrom(r.Context())
+				d.deleteBusiness(w, r, m.BusinessID)
+			})
 			r.Get("/", func(w http.ResponseWriter, r *http.Request) {
 				m, _ := auth.MemberFrom(r.Context())
 				apierr.JSON(w, http.StatusOK, map[string]string{"business_id": m.BusinessID, "role": m.Role})
@@ -1155,6 +1203,20 @@ func NewRouter(d Deps) http.Handler {
 
 			r.Route("/staff/{staffId}", func(r chi.Router) {
 				r.Use(auth.RequireRole("owner"), requireUUIDParam("staffId", "La persona no existe."))
+
+				r.Delete("/", func(w http.ResponseWriter, r *http.Request) {
+					m, _ := auth.MemberFrom(r.Context())
+					switch err := d.Staff.Delete(r.Context(), m.BusinessID, chi.URLParam(r, "staffId")); {
+					case errors.Is(err, staff.ErrNotFound):
+						notFound(w, "La persona no existe.")
+					case errors.Is(err, staff.ErrOwnerStaff):
+						apierr.Write(w, http.StatusConflict, "owner_staff", "No puedes borrar a la persona ligada a tu cuenta.")
+					case err != nil:
+						internalError(w, r, "delete staff", err)
+					default:
+						w.WriteHeader(http.StatusNoContent)
+					}
+				})
 
 				r.Patch("/", func(w http.ResponseWriter, r *http.Request) {
 					m, _ := auth.MemberFrom(r.Context())

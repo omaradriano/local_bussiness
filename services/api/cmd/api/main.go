@@ -12,6 +12,7 @@ import (
 	"time"
 	_ "time/tzdata" // business time zones must resolve in the distroless image too
 
+	"github.com/jackc/pgx/v5"
 	"github.com/jackc/pgx/v5/pgxpool"
 	"github.com/omaradriano/local_bussiness/services/api/internal/auth"
 	"github.com/omaradriano/local_bussiness/services/api/internal/availability"
@@ -67,6 +68,11 @@ func run(log *slog.Logger) error {
 	if err != nil {
 		return err
 	}
+	// Insert-only queue (no workers): the worker runs the jobs, e.g. purging a deleted business's files.
+	queue, err := jobs.NewClient(pool, nil, false)
+	if err != nil {
+		return err
+	}
 
 	srv := &http.Server{
 		Addr: ":" + port,
@@ -85,6 +91,12 @@ func run(log *slog.Logger) error {
 			Plans:        plans.Repo{DB: pool},
 			CreateBusiness: func(ctx context.Context, userID string, in businesses.Input) (businesses.Business, error) {
 				return businesses.Create(ctx, pool, userID, in)
+			},
+			DeleteBusiness: func(ctx context.Context, businessID string) error {
+				return businesses.Delete(ctx, pool, businessID, func(ctx context.Context, tx pgx.Tx) error {
+					_, err := queue.InsertTx(ctx, tx, jobs.PurgeBusinessFilesArgs{BusinessID: businessID}, nil)
+					return err
+				})
 			},
 			AllowedOrigins: strings.Split(env("CORS_ORIGINS", "http://localhost:8082"), ","),
 			Photos:         photos,

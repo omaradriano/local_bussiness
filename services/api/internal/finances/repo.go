@@ -90,6 +90,8 @@ type Pay struct {
 	Salary            int64   `json:"salary"`
 	SalaryPeriod      string  `json:"salary_period"` // weekly | biweekly | monthly
 	CommissionPercent float64 `json:"commission_percent"`
+	// Deleted from the team: still counted for the commissions of past periods, hidden in Sueldos.
+	Deleted bool `json:"deleted"`
 }
 
 func (p Pay) Validate() error {
@@ -173,7 +175,7 @@ func (r Repo) DeletePlan(ctx context.Context, businessID, id string) error {
 // Pays lists every team member with their pay (defaults when not set).
 func (r Repo) Pays(ctx context.Context, businessID string) ([]Pay, error) {
 	rows, err := r.DB.Query(ctx, `select s.id::text, s.name, s.active, coalesce(p.salary, 0), coalesce(p.salary_period, 'monthly'),
-		coalesce(p.commission_percent, 0)::float8
+		coalesce(p.commission_percent, 0)::float8, s.deleted_at is not null
 		from public.staff s left join public.staff_pay p on p.staff_id = s.id
 		where s.business_id = $1 order by s.active desc, s.created_at`, businessID)
 	if err != nil {
