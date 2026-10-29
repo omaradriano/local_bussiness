@@ -1,0 +1,20 @@
+{
+  "trial": { "days": 14, "as": "pro" },
+  "plans": {
+    "lite": {
+      "limits": { "businesses": 1, "members": 1, "staff": 1, "catalog_items": 30, "rental_units": 15, "photos_per_item": 3 },
+      "excluded_features": ["staff", "productSales", "bookingDocuments"],
+      "capabilities": ["expenses"]
+    },
+    "pro": {
+      "limits": { "businesses": 1, "members": 5, "staff": 10, "catalog_items": 200, "rental_units": 100, "photos_per_item": 10 },
+      "excluded_features": [],
+      "capabilities": ["expenses", "recurring_expenses", "installments", "payroll", "any_period"]
+    },
+    "business": {
+      "limits": { "businesses": 5, "members": null, "staff": null, "catalog_items": null, "rental_units": null, "photos_per_item": 10 },
+      "excluded_features": [],
+      "capabilities": ["expenses", "recurring_expenses", "installments", "payroll", "any_period", "compare_businesses"]
+    }
+  }
+}

@@ -136,6 +136,33 @@ paths:
                   businesses: { type: array, items: { $ref: "#/components/schemas/AdminBusiness" } }
         "403": { $ref: "#/components/responses/Error" }
 
+  /v1/admin/businesses/{businessId}/plan:
+    parameters:
+      - $ref: "#/components/parameters/BusinessId"
+    put:
+      operationId: adminSetPlan
+      summary: Asigna el plan a la cuenta del dueño del negocio (mientras no hay cobros)
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [plan]
+              properties:
+                plan: { $ref: "#/components/schemas/PlanKey" }
+                ends_at: { type: string, format: date, description: "Último día del plan; vacío = sin vencimiento (una prueba sin fecha dura lo normal desde hoy)" }
+                note: { type: string, maxLength: 200 }
+      responses:
+        "200":
+          description: OK
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/AccountPlan" }
+        "403": { $ref: "#/components/responses/Error" }
+        "404": { $ref: "#/components/responses/Error" }
+        "422": { $ref: "#/components/responses/Error" }
+
   /v1/admin/businesses/{businessId}/features/{feature}:
     parameters:
       - $ref: "#/components/parameters/BusinessId"
@@ -2101,7 +2128,7 @@ components:
 
     AdminBusiness:
       type: object
-      required: [business_id, slug, name, vertical, created_at, features]
+      required: [business_id, slug, name, vertical, created_at, features, account]
       properties:
         business_id: { type: string, format: uuid }
         slug: { type: string }
@@ -2109,6 +2136,21 @@ components:
         vertical: { $ref: "#/components/schemas/Vertical" }
         created_at: { type: string, format: date-time }
         features: { type: array, items: { $ref: "#/components/schemas/FeatureState" } }
+        account: { $ref: "#/components/schemas/AccountPlan" }
+
+    PlanKey:
+      type: string
+      enum: [trial, lite, pro, business]
+
+    AccountPlan:
+      type: object
+      description: "Plan de la cuenta del dueño (cubre todos sus negocios). Vencida = solo lectura (las escrituras responden 403 plan_expired)"
+      required: [plan, status, ends_at, days_left]
+      properties:
+        plan: { $ref: "#/components/schemas/PlanKey" }
+        status: { type: string, enum: [trial, active, expired] }
+        ends_at: { type: [string, "null"], format: date-time, description: "null = sin vencimiento (piloto o cortesía)" }
+        days_left: { type: integer, description: "Días que faltan, contando el empezado; -1 sin vencimiento" }
 
     DeliveryZone:
       type: object
@@ -2431,11 +2473,12 @@ components:
 
     Membership:
       type: object
-      required: [business_id, slug, name, vertical, role, features]
+      required: [business_id, slug, name, vertical, role, features, account]
       properties:
         business_id: { type: string, format: uuid }
         slug: { type: string }
         name: { type: string }
         vertical: { $ref: "#/components/schemas/Vertical" }
         role: { $ref: "#/components/schemas/Role" }
+        account: { $ref: "#/components/schemas/AccountPlan" }
         features: { type: array, items: { $ref: "#/components/schemas/Feature" }, description: "Funciones activas (disponibles y encendidas)" }

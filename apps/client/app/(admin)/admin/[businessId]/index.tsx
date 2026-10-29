@@ -2,6 +2,7 @@ import { strings, term } from '@lb/shared';
 import { router, Stack, useLocalSearchParams, type Href } from 'expo-router';
 import { ActivityIndicator, View } from 'react-native';
 import { useBusiness } from '../../../../lib/useMe';
+import { PlanBanner } from '../../../../components/PlanBanner';
 import { useNewAction } from '../../../../components/NewAction';
 import { useTexts } from '../../../../lib/useTexts';
 import { Button, Cell, Group, Screen, Text, useUI } from '../../../../ui';
@@ -24,6 +25,7 @@ export default function BusinessHome() {
     <Screen>
       <Stack.Screen options={{ title: business.name }} />
       <Text variant="largeTitle" accessibilityRole="header" style={{ marginBottom: 16 }}>{business.name}</Text>
+      <View style={{ marginBottom: 16 }}><PlanBanner businessId={businessId} /></View>
       <View ref={add.anchor} collapsable={false} style={{ marginBottom: 28 }}>
         <Button variant="primary" icon="add-circle" onPress={add.onPress}>{add.label}</Button>
       </View>

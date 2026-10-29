@@ -11,6 +11,7 @@ import (
 	"github.com/jackc/pgx/v5"
 
 	"github.com/omaradriano/local_bussiness/services/api/internal/features"
+	"github.com/omaradriano/local_bussiness/services/api/internal/plans"
 	"github.com/omaradriano/local_bussiness/services/api/internal/store"
 )
 
@@ -26,18 +27,30 @@ type Business struct {
 	Vertical  string           `json:"vertical"`
 	CreatedAt time.Time        `json:"created_at"`
 	Features  []features.State `json:"features"`
+	Account   plans.View       `json:"account"` // plan of the owner's account (covers all their businesses)
 }
 
 type Repo struct{ DB store.DB }
 
-const cols = `id::text, slug, name, vertical, created_at, feature_grants, settings`
+// The owner's account comes along; an owner without one predates plans (Pro, like plans.Repo).
+const cols = `b.id::text, b.slug, b.name, b.vertical, b.created_at, b.feature_grants, b.settings, ap.plan, ap.ends_at`
+const from = ` from public.businesses b
+	left join lateral (select user_id from public.business_members where business_id = b.id and role = 'owner' order by created_at limit 1) o on true
+	left join public.account_plans ap on ap.user_id = o.user_id`
 
 func scan(row pgx.Row) (Business, error) {
 	var b Business
 	var grants, settings []byte
-	if err := row.Scan(&b.ID, &b.Slug, &b.Name, &b.Vertical, &b.CreatedAt, &grants, &settings); err != nil {
+	var plan *string
+	var acct plans.Account
+	if err := row.Scan(&b.ID, &b.Slug, &b.Name, &b.Vertical, &b.CreatedAt, &grants, &settings, &plan, &acct.EndsAt); err != nil {
 		return b, err
 	}
+	acct.Plan = plans.Pro
+	if plan != nil {
+		acct.Plan = *plan
+	}
+	b.Account = acct.View(time.Now()) // display only; the API checks writes with its own clock
 	var s struct {
 		Features map[string]bool `json:"features"`
 	}
@@ -51,7 +64,7 @@ func scan(row pgx.Row) (Business, error) {
 
 // Businesses lists every business, newest first.
 func (r Repo) Businesses(ctx context.Context) ([]Business, error) {
-	rows, err := r.DB.Query(ctx, `select `+cols+` from public.businesses order by created_at desc limit 500`)
+	rows, err := r.DB.Query(ctx, `select `+cols+from+` order by b.created_at desc limit 500`)
 	if err != nil {
 		return nil, err
 	}
@@ -68,7 +81,7 @@ func (r Repo) Businesses(ctx context.Context) ([]Business, error) {
 }
 
 func (r Repo) Business(ctx context.Context, id string) (Business, error) {
-	b, err := scan(r.DB.QueryRow(ctx, `select `+cols+` from public.businesses where id = $1`, id))
+	b, err := scan(r.DB.QueryRow(ctx, `select `+cols+from+` where b.id = $1`, id))
 	if errors.Is(err, pgx.ErrNoRows) {
 		return b, ErrNotFound
 	}
