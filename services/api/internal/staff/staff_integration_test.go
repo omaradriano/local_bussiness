@@ -39,8 +39,12 @@ func TestIntegrationStaffServicesAndHours(t *testing.T) {
 	}
 	r := Repo{DB: tx}
 
+	if _, err := tx.Exec(ctx, `insert into public.business_hours (business_id, weekday, opens_at, closes_at) values ($1, 2, '10:00', '19:00')`, bizA); err != nil {
+		t.Fatal(err)
+	}
 	m, err := r.Create(ctx, bizA, Member{Name: "Karla", Color: "#E91E63"})
-	if err != nil || !m.Active {
+	// A new person can take appointments right away: every active service and the business hours.
+	if err != nil || !m.Active || len(m.ServiceIDs) != 1 || m.ServiceIDs[0] != svc || len(m.Hours) != 1 || m.Hours[0].OpensAt != "10:00" {
 		t.Fatalf("create: %+v %v", m, err)
 	}
 	if err := r.SetServices(ctx, bizA, m.ID, []string{svc, svc}); err != nil {

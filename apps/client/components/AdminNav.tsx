@@ -18,7 +18,7 @@ type Section = { path: string; label: string; icon: keyof typeof Ionicons.glyphM
  */
 export function AdminNav() {
   const { businessId, rest } = useCurrentBusinessId();
-  const { texts } = useTexts();
+  const { texts, has } = useTexts();
   const { business } = useBusiness(businessId ?? '');
   const { width } = useWindowDimensions();
   const insets = useSafeAreaInsets();
@@ -33,6 +33,7 @@ export function AdminNav() {
     { path: '/bookings', label: texts.bookings.plural, icon: 'list' },
     { path: '/customers', label: s.customers, icon: 'people' },
     { path: '/catalog', label: term(business.vertical, 'catalog') ?? s.catalog, icon: 'construct' },
+    ...(has('staff') ? [{ path: '/staff', label: s.staff, icon: 'people-circle' } as Section] : []),
   ];
   const more: Section[] = [
     { path: '/hours', label: s.hours, icon: 'time' },
