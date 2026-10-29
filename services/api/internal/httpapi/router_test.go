@@ -17,6 +17,7 @@ import (
 	"github.com/omaradriano/local_bussiness/services/api/internal/businesses"
 	"github.com/omaradriano/local_bussiness/services/api/internal/catalog"
 	"github.com/omaradriano/local_bussiness/services/api/internal/customers"
+	"github.com/omaradriano/local_bussiness/services/api/internal/exports"
 	"github.com/omaradriano/local_bussiness/services/api/internal/features"
 	"github.com/omaradriano/local_bussiness/services/api/internal/files"
 	"github.com/omaradriano/local_bussiness/services/api/internal/finances"
@@ -176,6 +177,7 @@ func doBody(method, path, token string, body io.Reader, headers ...string) *http
 		Products:       fakeProducts{},
 		Plans:          fakePlans{},
 		DeleteBusiness: fakeDeleteBusiness,
+		Exports:        fakeExports{},
 		Now:            func() time.Time { return fixedNow },
 		Photos:         &Photos{Media: fakeMedia{}, Files: fakeFiles{}, EnqueueImage: fakeEnqueue, CDNBase: "https://cdn.test"},
 		AllowedOrigins: []string{"http://localhost:8082", "https://local-bussiness-staging-*.vercel.app"},
@@ -1462,6 +1464,44 @@ func TestDeleting(t *testing.T) {
 	for _, tc := range cases {
 		t.Run(tc.name, func(t *testing.T) {
 			rec := doBody(tc.method, tc.path, tc.token, strings.NewReader(tc.body))
+			if rec.Code != tc.code || !strings.Contains(rec.Body.String(), tc.want) {
+				t.Fatalf("got %d %s", rec.Code, rec.Body)
+			}
+		})
+	}
+}
+
+type fakeExports struct{}
+
+func (fakeExports) Timezone(context.Context, string) (string, error) { return "America/Chihuahua", nil }
+func (fakeExports) Rows(_ context.Context, _, kind string, p *exports.Period) (any, error) {
+	if kind == "customers" {
+		return []exports.Customer{{Name: "Ana", Phone: "+526141234567"}}, nil
+	}
+	if p != nil {
+		return []string{p.From.Format("2006-01-02"), p.To.Format("2006-01-02")}, nil
+	}
+	return []string{"all"}, nil
+}
+
+func TestExports(t *testing.T) {
+	base := "/v1/b/" + bizA + "/export/"
+	cases := []struct {
+		name, path, token string
+		code              int
+		want              string
+	}{
+		{"clientes", base + "customers", "ok", http.StatusOK, `"rows":[{"name":"Ana"`},
+		{"reservas de un periodo", base + "bookings?from=2026-10-01&to=2026-10-31", "ok", http.StatusOK, `"rows":["2026-10-01","2026-10-31"]`},
+		{"sin periodo es todo", base + "expenses", "ok", http.StatusOK, `"rows":["all"]`},
+		{"periodo al revés", base + "sales?from=2026-12-01&to=2026-01-01", "ok", http.StatusUnprocessableEntity, `"from"`},
+		{"tipo desconocido", base + "passwords", "ok", http.StatusNotFound, `"not_found"`},
+		{"solo el dueño exporta", base + "customers", "staff", http.StatusForbidden, `"forbidden"`},
+		{"con la cuenta vencida también", "/v1/b/" + bizExpired + "/export/customers", "ok", http.StatusOK, `"Ana"`},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			rec := do(http.MethodGet, tc.path, tc.token)
 			if rec.Code != tc.code || !strings.Contains(rec.Body.String(), tc.want) {
 				t.Fatalf("got %d %s", rec.Code, rec.Body)
 			}

@@ -320,6 +320,30 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/v1/b/{businessId}/export/{kind}": {
+        parameters: {
+            query?: {
+                /** @description Con to: solo reservas, gastos y ventas del periodo; sin periodo = todo */
+                from?: string;
+                to?: string;
+            };
+            header?: never;
+            path: {
+                businessId: components["parameters"]["BusinessId"];
+                kind: "customers" | "bookings" | "expenses" | "sales" | "catalog" | "products";
+            };
+            cookie?: never;
+        };
+        /** Todo lo de un tipo, sin paginar, para el CSV del dueño (también con la cuenta vencida). Datos crudos: centavos, instantes UTC, claves de estado */
+        get: operations["exportRows"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/v1/b/{businessId}/staff/{staffId}/": {
         parameters: {
             query?: never;
@@ -2629,6 +2653,42 @@ export interface operations {
                 };
             };
             403: components["responses"]["Error"];
+            422: components["responses"]["Error"];
+        };
+    };
+    exportRows: {
+        parameters: {
+            query?: {
+                /** @description Con to: solo reservas, gastos y ventas del periodo; sin periodo = todo */
+                from?: string;
+                to?: string;
+            };
+            header?: never;
+            path: {
+                businessId: components["parameters"]["BusinessId"];
+                kind: "customers" | "bookings" | "expenses" | "sales" | "catalog" | "products";
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        /** @description Zona del negocio para mostrar las fechas */
+                        timezone: string;
+                        rows: {
+                            [key: string]: unknown;
+                        }[];
+                    };
+                };
+            };
+            403: components["responses"]["Error"];
+            404: components["responses"]["Error"];
             422: components["responses"]["Error"];
         };
     };
