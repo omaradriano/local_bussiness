@@ -26,6 +26,7 @@ import (
 	"github.com/omaradriano/local_bussiness/services/api/internal/httpapi"
 	"github.com/omaradriano/local_bussiness/services/api/internal/jobs"
 	"github.com/omaradriano/local_bussiness/services/api/internal/media"
+	"github.com/omaradriano/local_bussiness/services/api/internal/monitor"
 	"github.com/omaradriano/local_bussiness/services/api/internal/plans"
 	"github.com/omaradriano/local_bussiness/services/api/internal/platform"
 	"github.com/omaradriano/local_bussiness/services/api/internal/products"
@@ -50,6 +51,13 @@ func run(log *slog.Logger) error {
 	if supabaseURL == "" || dbURL == "" {
 		return errors.New("SUPABASE_URL and DATABASE_URL are required")
 	}
+
+	// Error reporting (Sentry) when SENTRY_DSN is set.
+	flush, err := monitor.Init("api")
+	if err != nil {
+		log.Error("monitoring off", "err", err)
+	}
+	defer flush()
 
 	ctx, stop := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM)
 	defer stop()

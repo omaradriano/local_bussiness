@@ -12,6 +12,7 @@ import (
 	"github.com/omaradriano/local_bussiness/services/api/internal/files"
 	"github.com/omaradriano/local_bussiness/services/api/internal/jobs"
 	"github.com/omaradriano/local_bussiness/services/api/internal/media"
+	"github.com/omaradriano/local_bussiness/services/api/internal/monitor"
 	"github.com/omaradriano/local_bussiness/services/api/internal/store"
 )
 
@@ -30,6 +31,13 @@ func run(log *slog.Logger) error {
 	if dbURL == "" || prefix == "" {
 		return errors.New("DATABASE_URL and S3_BUCKET_PREFIX are required")
 	}
+	// Error reporting (Sentry) when SENTRY_DSN is set.
+	flush, err := monitor.Init("worker")
+	if err != nil {
+		log.Error("monitoring off", "err", err)
+	}
+	defer flush()
+
 	ctx, stop := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM)
 	defer stop()
 

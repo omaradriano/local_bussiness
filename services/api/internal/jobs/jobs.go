@@ -13,12 +13,14 @@ import (
 	"github.com/jackc/pgx/v5/pgxpool"
 	"github.com/riverqueue/river"
 	"github.com/riverqueue/river/riverdriver/riverpgxv5"
+	"github.com/riverqueue/river/rivertype"
 
 	"github.com/omaradriano/local_bussiness/services/api/internal/auth"
 	"github.com/omaradriano/local_bussiness/services/api/internal/bookings"
 	"github.com/omaradriano/local_bussiness/services/api/internal/files"
 	"github.com/omaradriano/local_bussiness/services/api/internal/images"
 	"github.com/omaradriano/local_bussiness/services/api/internal/media"
+	"github.com/omaradriano/local_bussiness/services/api/internal/monitor"
 	"github.com/omaradriano/local_bussiness/services/api/internal/store"
 )
 
@@ -163,9 +165,22 @@ var periodic = []*river.PeriodicJob{
 		func() (river.JobArgs, *river.InsertOpts) { return MarkOverdueArgs{}, nil }, &river.PeriodicJobOpts{RunOnStart: true}),
 }
 
+// reportErrors sends failed and panicking jobs to monitoring (River retries them as usual).
+type reportErrors struct{}
+
+func (reportErrors) HandleError(ctx context.Context, job *rivertype.JobRow, err error) *river.ErrorHandlerResult {
+	monitor.Capture(ctx, err, "job "+job.Kind)
+	return nil
+}
+
+func (reportErrors) HandlePanic(ctx context.Context, job *rivertype.JobRow, panicVal any, trace string) *river.ErrorHandlerResult {
+	monitor.Capture(ctx, fmt.Errorf("panic: %v\n%s", panicVal, trace), "job "+job.Kind)
+	return nil
+}
+
 // NewClient: with run=false it only inserts (API); with run=true it also works the default queue (worker).
 func NewClient(pool *pgxpool.Pool, workers *river.Workers, run bool) (*river.Client[pgx.Tx], error) {
-	cfg := &river.Config{Schema: "river", Workers: workers}
+	cfg := &river.Config{Schema: "river", Workers: workers, ErrorHandler: reportErrors{}}
 	if run {
 		cfg.Queues = map[string]river.QueueConfig{river.QueueDefault: {MaxWorkers: 4}}
 		cfg.PeriodicJobs = periodic
