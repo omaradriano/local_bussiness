@@ -34,6 +34,7 @@ export function AdminNav() {
     { path: '/customers', label: s.customers, icon: 'people' },
     { path: '/catalog', label: term(business.vertical, 'catalog') ?? s.catalog, icon: 'construct' },
     ...(has('staff') ? [{ path: '/staff', label: s.staff, icon: 'people-circle' } as Section] : []),
+    ...(has('productSales') ? [{ path: '/products', label: strings.products.title, icon: 'pricetags' } as Section] : []),
   ];
   const more: Section[] = [
     ...(business.role === 'owner' ? [{ path: '/finances', label: strings.finances.title, icon: 'stats-chart' } as Section] : []),
