@@ -1,6 +1,6 @@
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { Ionicons } from '@expo/vector-icons';
-import { PLATFORM_RESPONSIBLE, strings } from '@lb/shared';
+import { PLATFORM_CONTACT, strings } from '@lb/shared';
 import { router } from 'expo-router';
 import { useEffect, useState } from 'react';
 import { Modal, Pressable, ScrollView, View } from 'react-native';
@@ -45,7 +45,7 @@ export function Welcome() {
                   </View>
                 </View>
               ))}
-              <Text variant="subhead" style={{ color: ui.accent, marginLeft: 36, marginTop: -10 }} selectable>{PLATFORM_RESPONSIBLE.email}</Text>
+              <Text variant="subhead" style={{ color: ui.accent, marginLeft: 36, marginTop: -10 }} selectable>{PLATFORM_CONTACT}</Text>
               <Button variant="primary" onPress={close}>{w.done}</Button>
               <Button variant="plain" size="sm" onPress={() => { close(); router.push('/privacidad'); }}>{w.privacy}</Button>
             </ScrollView>
