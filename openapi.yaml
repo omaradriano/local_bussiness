@@ -465,6 +465,54 @@ paths:
         "404": { $ref: "#/components/responses/Error" }
         "422": { $ref: "#/components/responses/Error" }
 
+  /v1/b/{businessId}/import/{kind}:
+    parameters:
+      - $ref: "#/components/parameters/BusinessId"
+      - { name: kind, in: path, required: true, schema: { type: string, enum: [customers, catalog, products] } }
+      - { name: apply, in: query, schema: { type: boolean }, description: "true guarda las filas válidas en una transacción; sin él solo es la vista previa" }
+    post:
+      operationId: importRows
+      summary: "Importa filas leídas de un CSV (clientes por teléfono, catálogo y productos por nombre): crea, actualiza o explica el error de cada fila"
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [rows]
+              properties:
+                rows:
+                  type: array
+                  maxItems: 2000
+                  description: "Clientes: CustomerInput. Catálogo: name, description, price, duration_minutes, price_unit, security_deposit, late_fee_per_day, active. Productos: name, price, cost, stock, active. Montos en centavos."
+                  items: { type: object, additionalProperties: true }
+      responses:
+        "200":
+          description: OK
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [results, created, updated, failed, applied]
+                properties:
+                  results:
+                    type: array
+                    items:
+                      type: object
+                      required: [row, name, action]
+                      properties:
+                        row: { type: integer, description: "Línea del archivo (1 es el encabezado)" }
+                        name: { type: string }
+                        action: { type: string, enum: [create, update, error] }
+                        errors: { type: object, additionalProperties: { type: string } }
+                  created: { type: integer }
+                  updated: { type: integer }
+                  failed: { type: integer }
+                  applied: { type: boolean }
+        "403": { $ref: "#/components/responses/Error" }
+        "404": { $ref: "#/components/responses/Error" }
+        "422": { $ref: "#/components/responses/Error" }
+
   /v1/b/{businessId}/staff/{staffId}/:
     parameters:
       - $ref: "#/components/parameters/BusinessId"

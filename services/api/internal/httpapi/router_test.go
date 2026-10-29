@@ -21,6 +21,7 @@ import (
 	"github.com/omaradriano/local_bussiness/services/api/internal/features"
 	"github.com/omaradriano/local_bussiness/services/api/internal/files"
 	"github.com/omaradriano/local_bussiness/services/api/internal/finances"
+	"github.com/omaradriano/local_bussiness/services/api/internal/imports"
 	"github.com/omaradriano/local_bussiness/services/api/internal/media"
 	"github.com/omaradriano/local_bussiness/services/api/internal/plans"
 	"github.com/omaradriano/local_bussiness/services/api/internal/platform"
@@ -178,6 +179,7 @@ func doBody(method, path, token string, body io.Reader, headers ...string) *http
 		Plans:          fakePlans{},
 		DeleteBusiness: fakeDeleteBusiness,
 		Exports:        fakeExports{},
+		Imports:        fakeImports{},
 		Now:            func() time.Time { return fixedNow },
 		Photos:         &Photos{Media: fakeMedia{}, Files: fakeFiles{}, EnqueueImage: fakeEnqueue, CDNBase: "https://cdn.test"},
 		AllowedOrigins: []string{"http://localhost:8082", "https://local-bussiness-staging-*.vercel.app"},
@@ -1502,6 +1504,48 @@ func TestExports(t *testing.T) {
 	for _, tc := range cases {
 		t.Run(tc.name, func(t *testing.T) {
 			rec := do(http.MethodGet, tc.path, tc.token)
+			if rec.Code != tc.code || !strings.Contains(rec.Body.String(), tc.want) {
+				t.Fatalf("got %d %s", rec.Code, rec.Body)
+			}
+		})
+	}
+}
+
+type fakeImports struct{}
+
+func fakeSummary(n int, apply bool) imports.Summary {
+	return imports.Summary{Results: []imports.Result{}, Created: n, Applied: apply}
+}
+func (fakeImports) Customers(_ context.Context, _ string, rows []customers.Input, _ time.Time, apply bool) (imports.Summary, error) {
+	return fakeSummary(len(rows), apply), nil
+}
+func (fakeImports) Catalog(_ context.Context, _ string, rows []imports.CatalogRow, apply bool) (imports.Summary, error) {
+	return fakeSummary(len(rows), apply), nil
+}
+func (fakeImports) Products(_ context.Context, _ string, rows []products.ProductInput, apply bool) (imports.Summary, error) {
+	return fakeSummary(len(rows), apply), nil
+}
+
+func TestImports(t *testing.T) {
+	base := "/v1/b/" + bizA + "/import/"
+	many := `{"rows":[` + strings.Repeat(`{"name":"x"},`, imports.MaxRows) + `{"name":"x"}]}`
+	cases := []struct {
+		name, path, token, body string
+		code                    int
+		want                    string
+	}{
+		{"vista previa de clientes", base + "customers", "ok", `{"rows":[{"name":"Ana","phone":"6141234567"}]}`, http.StatusOK, `"created":1,"updated":0,"failed":0,"applied":false`},
+		{"aplicar catálogo", base + "catalog?apply=true", "ok", `{"rows":[{"name":"Corte","price":15000},{"name":"Barba","price":10000}]}`, http.StatusOK, `"created":2,"updated":0,"failed":0,"applied":true`},
+		{"productos", base + "products", "ok", `{"rows":[{"name":"Cera","price":15000}]}`, http.StatusOK, `"created":1`},
+		{"sin filas", base + "customers", "ok", `{"rows":[]}`, http.StatusUnprocessableEntity, `"rows"`},
+		{"demasiadas filas", base + "customers", "ok", many, http.StatusUnprocessableEntity, `"rows"`},
+		{"tipo desconocido", base + "bookings", "ok", `{"rows":[{}]}`, http.StatusNotFound, `"not_found"`},
+		{"solo el dueño importa", base + "customers", "staff", `{"rows":[{"name":"Ana"}]}`, http.StatusForbidden, `"forbidden"`},
+		{"cuenta vencida no importa", "/v1/b/" + bizExpired + "/import/customers", "ok", `{"rows":[{"name":"Ana"}]}`, http.StatusForbidden, `"plan_expired"`},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			rec := doBody(http.MethodPost, tc.path, tc.token, strings.NewReader(tc.body))
 			if rec.Code != tc.code || !strings.Contains(rec.Body.String(), tc.want) {
 				t.Fatalf("got %d %s", rec.Code, rec.Body)
 			}
