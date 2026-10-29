@@ -7,7 +7,7 @@ export const nails = {
   terms: { booking: 'Cita', catalog_item: 'Servicio', catalog: 'Servicios', starts_at: 'Hora de la cita', ends_at: 'Hora de término' },
   settings: ['general', 'agenda'],
   features: ['staff', 'startService'],
-  optionalFeatures: ['walkIn', 'homeService'],
+  optionalFeatures: ['walkIn', 'homeService', 'productSales'],
   texts: {
     bookings: {
       plural: 'Citas',

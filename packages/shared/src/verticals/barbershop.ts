@@ -8,7 +8,7 @@ export const barbershop = {
   kind: 'service',
   terms: { booking: 'Cita', catalog_item: 'Servicio', catalog: 'Servicios', starts_at: 'Hora de la cita', ends_at: 'Hora de término' },
   settings: ['general', 'agenda'],
-  features: ['staff', 'walkIn'],
+  features: ['staff', 'walkIn', 'productSales'],
   optionalFeatures: ['homeService'],
   texts: {
     bookings: {

@@ -21,10 +21,11 @@ export type BookingStatus =
  * - homeService: the service can be at the customer's address
  * - startService: an "Iniciar" step before finishing an appointment (some salons track it; barbers don't)
  * - bookingDocuments: attach files with a name to a booking ("Documentos adicionales")
+ * - productSales: sell products with stock and cost (wax, screws), with their stats
  */
 export type Feature =
   | 'staff' | 'inventory' | 'guarantor' | 'customerAddress' | 'customerDocuments' | 'trustedCustomers'
-  | 'walkIn' | 'homeService' | 'startService' | 'bookingDocuments';
+  | 'walkIn' | 'homeService' | 'startService' | 'bookingDocuments' | 'productSales';
 
 /** Ajustes sections. "general" is shared by every business (advance and holds); "agenda" is the appointment engine's. */
 export type SettingsSection = 'general' | 'agenda' | 'rentals' | 'inspection' | 'documents' | 'delivery';
