@@ -11,6 +11,8 @@ import (
 	"time"
 
 	"github.com/jackc/pgx/v5/pgxpool"
+
+	"github.com/omaradriano/local_bussiness/services/api/internal/privacy"
 )
 
 // These tests commit for real (concurrency needs two transactions), so each one builds its own
@@ -255,6 +257,32 @@ func TestIntegrationCreateBooking(t *testing.T) {
 			StartsAt: at("2026-11-10T15:00:00Z"), EndsAt: at("2026-11-11T15:00:00Z"), Source: "admin"}, now)
 		if err != nil || b2.Customer.ID != b1.Customer.ID || b2.Customer.Name != "Ana" {
 			t.Fatalf("customer reuse: %+v %v", b2.Customer, err)
+		}
+		// Ticking the privacy box records date and version once; a later booking without it keeps them.
+		version := func() *string {
+			var v *string
+			if err := p.QueryRow(ctx, `select privacy_version from public.customers where id = $1`, b1.Customer.ID).Scan(&v); err != nil {
+				t.Fatal(err)
+			}
+			return v
+		}
+		if v := version(); v != nil {
+			t.Fatalf("recorded without accepting: %v", *v)
+		}
+		accepted := CustomerInput{Name: "Ana", Phone: "6145550001", PrivacyAccepted: true}
+		if _, _, err := Create(ctx, p, f.business, CreateInput{Customer: accepted, ItemID: f.item,
+			StartsAt: at("2026-11-20T15:00:00Z"), EndsAt: at("2026-11-21T15:00:00Z"), Source: "admin"}, now); err != nil {
+			t.Fatal(err)
+		}
+		if v := version(); v == nil || *v != privacy.Version {
+			t.Fatalf("acceptance not recorded: %v", v)
+		}
+		if _, _, err := Create(ctx, p, f.business, CreateInput{Customer: cust("6145550001"), ItemID: f.item,
+			StartsAt: at("2026-11-24T15:00:00Z"), EndsAt: at("2026-11-25T15:00:00Z"), Source: "admin"}, now); err != nil {
+			t.Fatal(err)
+		}
+		if v := version(); v == nil {
+			t.Fatal("acceptance erased")
 		}
 	})
 }

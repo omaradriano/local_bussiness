@@ -18,6 +18,7 @@ import (
 
 	"github.com/omaradriano/local_bussiness/services/api/internal/features"
 	"github.com/omaradriano/local_bussiness/services/api/internal/phone"
+	"github.com/omaradriano/local_bussiness/services/api/internal/privacy"
 	"github.com/omaradriano/local_bussiness/services/api/internal/store"
 )
 
@@ -37,17 +38,20 @@ type Document struct {
 }
 
 type Customer struct {
-	ID             string     `json:"id"`
-	Name           string     `json:"name"`
-	Phone          string     `json:"phone"` // E.164
-	Email          *string    `json:"email"`
-	Address        *string    `json:"address"`
-	GuarantorName  *string    `json:"guarantor_name"`
-	GuarantorPhone *string    `json:"guarantor_phone"`
-	Trusted        bool       `json:"trusted"`
-	Notes          *string    `json:"notes"`
-	Documents      []Document `json:"documents"`
-	CreatedAt      time.Time  `json:"created_at"`
+	ID             string  `json:"id"`
+	Name           string  `json:"name"`
+	Phone          string  `json:"phone"` // E.164
+	Email          *string `json:"email"`
+	Address        *string `json:"address"`
+	GuarantorName  *string `json:"guarantor_name"`
+	GuarantorPhone *string `json:"guarantor_phone"`
+	Trusted        bool    `json:"trusted"`
+	Notes          *string `json:"notes"`
+	// When the customer accepted the business's privacy notice, and which version (nil = not recorded).
+	PrivacyAcceptedAt *time.Time `json:"privacy_accepted_at"`
+	PrivacyVersion    *string    `json:"privacy_version"`
+	Documents         []Document `json:"documents"`
+	CreatedAt         time.Time  `json:"created_at"`
 }
 
 // HasDoc reports whether the customer has at least one document of that type on file.
@@ -70,6 +74,9 @@ type Input struct {
 	GuarantorPhone *string `json:"guarantor_phone"`
 	Trusted        *bool   `json:"trusted"`
 	Notes          *string `json:"notes"`
+	// true records the acceptance of the current notice; false or nil leave the record as it is
+	// (withdrawing consent is an ARCO request, not an unticked box).
+	PrivacyAccepted *bool `json:"privacy_accepted"`
 }
 
 func trimmed(p *string) *string {
@@ -83,8 +90,8 @@ func trimmed(p *string) *string {
 	return &s
 }
 
-// Apply merges the input into c, normalizing text and phones.
-func (c Customer) Apply(in Input) Customer {
+// Apply merges the input into c, normalizing text and phones; now dates a privacy acceptance.
+func (c Customer) Apply(in Input, now time.Time) Customer {
 	if in.Name != nil {
 		c.Name = strings.TrimSpace(*in.Name)
 	}
@@ -113,6 +120,11 @@ func (c Customer) Apply(in Input) Customer {
 	}
 	if in.Notes != nil {
 		c.Notes = trimmed(in.Notes)
+	}
+	// The same version accepted again keeps its first date; a newer notice is recorded anew.
+	if in.PrivacyAccepted != nil && *in.PrivacyAccepted && (c.PrivacyVersion == nil || *c.PrivacyVersion != privacy.Version) {
+		v := privacy.Version
+		c.PrivacyAcceptedAt, c.PrivacyVersion = &now, &v
 	}
 	return c
 }
@@ -167,11 +179,11 @@ func NewFileKey(businessID, customerID, ext string) string {
 
 type Repo struct{ DB store.DB }
 
-const cols = `id::text, name, phone, email, address, guarantor_name, guarantor_phone, trusted, notes, created_at`
+const cols = `id::text, name, phone, email, address, guarantor_name, guarantor_phone, trusted, notes, privacy_accepted_at, privacy_version, created_at`
 
 func scan(row pgx.Row) (Customer, error) {
 	var c Customer
-	err := row.Scan(&c.ID, &c.Name, &c.Phone, &c.Email, &c.Address, &c.GuarantorName, &c.GuarantorPhone, &c.Trusted, &c.Notes, &c.CreatedAt)
+	err := row.Scan(&c.ID, &c.Name, &c.Phone, &c.Email, &c.Address, &c.GuarantorName, &c.GuarantorPhone, &c.Trusted, &c.Notes, &c.PrivacyAcceptedAt, &c.PrivacyVersion, &c.CreatedAt)
 	if errors.Is(err, pgx.ErrNoRows) {
 		return c, ErrNotFound
 	}
@@ -254,9 +266,9 @@ func (r Repo) Get(ctx context.Context, businessID, id string) (Customer, error) 
 
 func (r Repo) Create(ctx context.Context, businessID string, c Customer) (Customer, error) {
 	created, err := scan(r.DB.QueryRow(ctx, `insert into public.customers
-		(business_id, name, phone, email, address, guarantor_name, guarantor_phone, trusted, notes)
-		values ($1, $2, $3, $4, $5, $6, $7, $8, $9) returning `+cols,
-		businessID, c.Name, c.Phone, c.Email, c.Address, c.GuarantorName, c.GuarantorPhone, c.Trusted, c.Notes))
+		(business_id, name, phone, email, address, guarantor_name, guarantor_phone, trusted, notes, privacy_accepted_at, privacy_version)
+		values ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11) returning `+cols,
+		businessID, c.Name, c.Phone, c.Email, c.Address, c.GuarantorName, c.GuarantorPhone, c.Trusted, c.Notes, c.PrivacyAcceptedAt, c.PrivacyVersion))
 	created.Documents = []Document{}
 	return created, err
 }
@@ -270,9 +282,9 @@ func (r Repo) IDByPhone(ctx context.Context, businessID, phone string) (string, 
 
 func (r Repo) Update(ctx context.Context, businessID string, c Customer) (Customer, error) {
 	if _, err := scan(r.DB.QueryRow(ctx, `update public.customers set name = $3, phone = $4, email = $5, address = $6,
-		guarantor_name = $7, guarantor_phone = $8, trusted = $9, notes = $10, updated_at = now()
+		guarantor_name = $7, guarantor_phone = $8, trusted = $9, notes = $10, privacy_accepted_at = $11, privacy_version = $12, updated_at = now()
 		where business_id = $1 and id = $2 returning `+cols,
-		businessID, c.ID, c.Name, c.Phone, c.Email, c.Address, c.GuarantorName, c.GuarantorPhone, c.Trusted, c.Notes)); err != nil {
+		businessID, c.ID, c.Name, c.Phone, c.Email, c.Address, c.GuarantorName, c.GuarantorPhone, c.Trusted, c.Notes, c.PrivacyAcceptedAt, c.PrivacyVersion)); err != nil {
 		return Customer{}, err
 	}
 	return r.Get(ctx, businessID, c.ID)

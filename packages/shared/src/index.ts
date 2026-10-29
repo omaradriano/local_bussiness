@@ -12,3 +12,4 @@ export * from './agenda';
 export * from './phone';
 export * from './period';
 export * from './install';
+export * from './privacy';

@@ -20,6 +20,23 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/v1/public/businesses/{slug}/privacy": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Datos del aviso de privacidad de un negocio (público, sin sesión) */
+        get: operations["getPrivacyNotice"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/v1/me": {
         parameters: {
             query?: never;
@@ -1254,6 +1271,8 @@ export interface components {
             guarantor_phone?: string;
             trusted?: boolean;
             notes?: string;
+            /** @description true registra que aceptó el aviso vigente; false no borra lo registrado */
+            privacy_accepted?: boolean;
         };
         Customer: {
             /** Format: uuid */
@@ -1267,6 +1286,13 @@ export interface components {
             /** @description No se le exigen documentos */
             trusted: boolean;
             notes: string | null;
+            /**
+             * Format: date-time
+             * @description Cuándo aceptó el aviso de privacidad del negocio
+             */
+            privacy_accepted_at: string | null;
+            /** @description Versión del aviso que aceptó */
+            privacy_version: string | null;
             /** Format: date-time */
             created_at: string;
             documents: {
@@ -1277,6 +1303,17 @@ export interface components {
                 /** Format: date-time */
                 created_at: string;
             }[];
+        };
+        PrivacyNotice: {
+            name: string;
+            /** @description Responsable; el nombre del negocio si no se capturó */
+            legal_name: string;
+            address: string;
+            email: string;
+            /** @description WhatsApp del negocio (E.164) o vacío */
+            phone: string;
+            /** @description Versión vigente del aviso (AAAA-MM-DD) */
+            version: string;
         };
         RetailProduct: {
             /** Format: uuid */
@@ -1448,6 +1485,12 @@ export interface components {
             delivery: {
                 delivery_zones: components["schemas"]["DeliveryZone"][];
             };
+            /** @description Responsable de los datos en el aviso de privacidad del negocio; vacío = nombre del negocio y su WhatsApp */
+            privacy: {
+                privacy_legal_name: string;
+                privacy_address: string;
+                privacy_email: string;
+            };
             rentals: {
                 /** @description Pedir depósito de garantía reembolsable */
                 security_deposit_enabled: boolean;
@@ -1495,6 +1538,8 @@ export interface components {
                 name?: string;
                 phone?: string;
                 email?: string;
+                /** @description El cliente aceptó el aviso de privacidad del negocio */
+                privacy_accepted?: boolean;
             };
             /** @description Lo que el cliente paga al crearla (solo mostrador). Sin `amount` = el total. */
             initial_payment?: {
@@ -1774,6 +1819,29 @@ export interface operations {
                     };
                 };
             };
+        };
+    };
+    getPrivacyNotice: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                slug: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["PrivacyNotice"];
+                };
+            };
+            404: components["responses"]["Error"];
         };
     };
     getMe: {
@@ -3043,6 +3111,11 @@ export interface operations {
                     };
                     delivery?: {
                         delivery_zones?: components["schemas"]["DeliveryZone"][];
+                    };
+                    privacy?: {
+                        privacy_legal_name?: string;
+                        privacy_address?: string;
+                        privacy_email?: string;
                     };
                     rentals?: {
                         security_deposit_enabled?: boolean;

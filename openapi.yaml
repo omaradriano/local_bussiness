@@ -29,6 +29,21 @@ paths:
                 properties:
                   status: { type: string, const: ok }
 
+  /v1/public/businesses/{slug}/privacy:
+    get:
+      operationId: getPrivacyNotice
+      summary: Datos del aviso de privacidad de un negocio (público, sin sesión)
+      security: []
+      parameters:
+        - { name: slug, in: path, required: true, schema: { type: string } }
+      responses:
+        "200":
+          description: OK
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/PrivacyNotice" }
+        "404": { $ref: "#/components/responses/Error" }
+
   /v1/me:
     get:
       operationId: getMe
@@ -910,6 +925,12 @@ paths:
                   type: object
                   properties:
                     delivery_zones: { type: array, maxItems: 30, items: { $ref: "#/components/schemas/DeliveryZone" } }
+                privacy:
+                  type: object
+                  properties:
+                    privacy_legal_name: { type: string, maxLength: 120 }
+                    privacy_address: { type: string, maxLength: 300 }
+                    privacy_email: { type: string, maxLength: 120 }
                 rentals:
                   type: object
                   properties:
@@ -1661,10 +1682,11 @@ components:
         guarantor_phone: { type: string }
         trusted: { type: boolean }
         notes: { type: string }
+        privacy_accepted: { type: boolean, description: "true registra que aceptó el aviso vigente; false no borra lo registrado" }
 
     Customer:
       type: object
-      required: [id, name, phone, email, address, guarantor_name, guarantor_phone, trusted, notes, documents, created_at]
+      required: [id, name, phone, email, address, guarantor_name, guarantor_phone, trusted, notes, privacy_accepted_at, privacy_version, documents, created_at]
       properties:
         id: { type: string, format: uuid }
         name: { type: string }
@@ -1675,6 +1697,8 @@ components:
         guarantor_phone: { type: [string, "null"] }
         trusted: { type: boolean, description: "No se le exigen documentos" }
         notes: { type: [string, "null"] }
+        privacy_accepted_at: { type: [string, "null"], format: date-time, description: "Cuándo aceptó el aviso de privacidad del negocio" }
+        privacy_version: { type: [string, "null"], description: "Versión del aviso que aceptó" }
         created_at: { type: string, format: date-time }
         documents:
           type: array
@@ -1686,6 +1710,17 @@ components:
               doc_type: { $ref: "#/components/schemas/DocType" }
               key: { type: string }
               created_at: { type: string, format: date-time }
+
+    PrivacyNotice:
+      type: object
+      required: [name, legal_name, address, email, phone, version]
+      properties:
+        name: { type: string }
+        legal_name: { type: string, description: "Responsable; el nombre del negocio si no se capturó" }
+        address: { type: string }
+        email: { type: string }
+        phone: { type: string, description: "WhatsApp del negocio (E.164) o vacío" }
+        version: { type: string, description: "Versión vigente del aviso (AAAA-MM-DD)" }
 
     RetailProduct:
       type: object
@@ -1873,7 +1908,7 @@ components:
 
     Settings:
       type: object
-      required: [general, agenda, rentals, delivery, features]
+      required: [general, agenda, rentals, delivery, privacy, features]
       description: "Todas las secciones; la app muestra las que le tocan al giro del negocio"
       properties:
         features: { type: array, items: { $ref: "#/components/schemas/FeatureState" }, description: "Funciones que admite su giro; el dueño solo cambia enabled" }
@@ -1894,6 +1929,14 @@ components:
           required: [delivery_zones]
           properties:
             delivery_zones: { type: array, items: { $ref: "#/components/schemas/DeliveryZone" } }
+        privacy:
+          type: object
+          description: "Responsable de los datos en el aviso de privacidad del negocio; vacío = nombre del negocio y su WhatsApp"
+          required: [privacy_legal_name, privacy_address, privacy_email]
+          properties:
+            privacy_legal_name: { type: string }
+            privacy_address: { type: string }
+            privacy_email: { type: string }
         rentals:
           type: object
           required: [security_deposit_enabled, late_fee_multiplier, rentals_span_closed_days, charge_closed_days, inspection_minutes]
@@ -1952,6 +1995,7 @@ components:
             name: { type: string }
             phone: { type: string }
             email: { type: string }
+            privacy_accepted: { type: boolean, description: "El cliente aceptó el aviso de privacidad del negocio" }
         initial_payment:
           type: object
           description: "Lo que el cliente paga al crearla (solo mostrador). Sin `amount` = el total."

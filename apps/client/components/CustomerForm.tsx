@@ -1,6 +1,7 @@
 import { Ionicons } from '@expo/vector-icons';
 import type { components } from '@lb/api-client';
-import { splitE164, strings, toE164, type CountryCode } from '@lb/shared';
+import { PRIVACY_VERSION, splitE164, strings, toE164, type CountryCode } from '@lb/shared';
+import { router, type Href } from 'expo-router';
 import { ZoomableImage } from './ZoomableImage';
 import { useEffect, useState } from 'react';
 import { Switch, View } from 'react-native';
@@ -8,6 +9,7 @@ import { Button, Cell, Field, Group, Text, useToast, useUI } from '../ui';
 import { api } from '../lib/api';
 import { errorText, fieldErrors } from '../lib/errors';
 import { pickPhotos, uploadCustomerDoc } from '../lib/photos';
+import { useBusiness } from '../lib/useMe';
 import { useTexts } from '../lib/useTexts';
 import { PhoneInput } from './PhoneInput';
 
@@ -25,14 +27,19 @@ export function CustomerForm({ businessId, customer, isOwner, onSaved, onExistin
 }) {
   // Guarantor, documents and "trusted" come with the giro (the API requires the guarantor only there).
   const { has } = useTexts();
+  const { business } = useBusiness(businessId);
   const p = splitE164(customer?.phone);
   const g = splitE164(customer?.guarantor_phone);
   const [f, setF] = useState({
     name: customer?.name ?? '', code: p.code, national: p.national, email: customer?.email ?? '', address: customer?.address ?? '',
     guarantorName: customer?.guarantor_name ?? '', gCode: g.code, gNational: g.national, trusted: customer?.trusted ?? false, notes: customer?.notes ?? '',
+    privacy: false,
   });
+  // Already accepted this version: show when, instead of asking again.
+  const accepted = customer?.privacy_version === PRIVACY_VERSION ? customer.privacy_accepted_at : null;
   const [errors, setErrors] = useState<Record<string, string>>({});
   const toast = useToast();
+  const ui = useUI();
   const [existing, setExisting] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
   const set = (patch: Partial<typeof f>) => setF({ ...f, ...patch });
@@ -50,6 +57,7 @@ export function CustomerForm({ businessId, customer, isOwner, onSaved, onExistin
     const body = {
       name: f.name, phone: phone!, email: f.email, address: f.address, guarantor_name: f.guarantorName, guarantor_phone: gPhone ?? '', notes: f.notes,
       ...(isOwner && has('trustedCustomers') ? { trusted: f.trusted } : {}),
+      ...(f.privacy ? { privacy_accepted: true } : {}),
     };
     const res = customer
       ? await api.PATCH('/v1/b/{businessId}/customers/{customerId}/', { params: { path: { businessId, customerId: customer.id } }, body })
@@ -82,6 +90,13 @@ export function CustomerForm({ businessId, customer, isOwner, onSaved, onExistin
           <Cell label={t.trustedShort} accessory={<Switch accessibilityLabel={t.trusted} value={f.trusted} onValueChange={(trusted) => set({ trusted })} />} />
         </Group>
       )}
+      <Group footer={accepted ? undefined : strings.privacy.customerHint}>
+        {accepted
+          ? <Cell icon="shield-checkmark" tint={ui.success} label={strings.privacy.customerAccepted(new Date(accepted).toLocaleDateString('es-MX', { day: 'numeric', month: 'long', year: 'numeric' }))} />
+          : <Cell label={strings.privacy.customer} accessory={
+              <Switch accessibilityLabel={strings.privacy.customer} value={f.privacy} onValueChange={(privacy) => set({ privacy })} />} />}
+        {business && <Cell icon="document-text" tint={ui.gray} label={strings.privacy.seeBusiness} onPress={() => router.push(`/${business.slug}/privacidad` as Href)} />}
+      </Group>
       {existing && onExisting && <Button onPress={() => onExisting(existing)} style={{ marginBottom: 8 }}>{t.openExisting}</Button>}
       <Button variant="primary" busy={busy} onPress={save}>{t.save}</Button>
     </View>
