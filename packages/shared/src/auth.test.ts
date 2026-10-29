@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { authErrorMessage, validateCredentials } from './auth';
+import { authErrorMessage, validateCredentials, validateNewPassword } from './auth';
 
 describe('authErrorMessage', () => {
   it('translates known Supabase codes', () => {
@@ -21,5 +21,13 @@ describe('validateCredentials', () => {
   it('rejects bad emails and short passwords', () => {
     expect(validateCredentials('ana@', '12345678')).toBe('Escribe un correo válido.');
     expect(validateCredentials('ana@correo.mx', '1234567')).toBe('La contraseña debe tener al menos 8 caracteres.');
+  });
+});
+
+describe('validateNewPassword', () => {
+  it('asks for 8 characters and the same password twice', () => {
+    expect(validateNewPassword('corta', 'corta')).toMatch(/8 caracteres/);
+    expect(validateNewPassword('larga-y-buena', 'larga-y-buena!')).toMatch(/no coinciden/);
+    expect(validateNewPassword('larga-y-buena', 'larga-y-buena')).toBeNull();
   });
 });

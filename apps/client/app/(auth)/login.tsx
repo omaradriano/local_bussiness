@@ -1,4 +1,5 @@
-import { authErrorMessage, PRIVACY_VERSION, strings, validateCredentials } from '@lb/shared';
+import { authErrorMessage, PRIVACY_VERSION, strings, validateCredentials, validateEmail } from '@lb/shared';
+import * as Linking from 'expo-linking';
 import { Redirect, router, Stack } from 'expo-router';
 import { useState } from 'react';
 import { Switch, View } from 'react-native';
@@ -12,7 +13,7 @@ const t = strings.auth;
 export default function Login() {
   const { session } = useSession();
   const ui = useUI();
-  const [mode, setMode] = useState<'login' | 'signup'>('login');
+  const [mode, setMode] = useState<'login' | 'signup' | 'forgot'>('login');
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [privacy, setPrivacy] = useState(false);
@@ -21,7 +22,21 @@ export default function Login() {
 
   if (session) return <Redirect href="/admin" />;
 
+  // Recovery: Supabase emails a link back to /reset, where the new password is set.
+  async function sendLink() {
+    const badEmail = validateEmail(email);
+    if (badEmail) return toast(badEmail, 'error');
+    setBusy(true);
+    const { error } = await supabase.auth.resetPasswordForEmail(email.trim(), { redirectTo: Linking.createURL('/reset') });
+    setBusy(false);
+    // Same answer whether the account exists or not (don't reveal who has an account).
+    if (error && error.code?.startsWith('over_')) return toast(authErrorMessage(error.code), 'error');
+    toast(t.linkSent, 'info');
+    setMode('login');
+  }
+
   async function submit() {
+    if (mode === 'forgot') return sendLink();
     const invalid = validateCredentials(email, password);
     if (invalid) return toast(invalid, 'error');
     if (mode === 'signup' && !privacy) return toast(strings.privacy.required, 'error');
@@ -41,15 +56,19 @@ export default function Login() {
     setBusy(false);
   }
 
-  const title = mode === 'login' ? t.loginTitle : t.signUpTitle;
+  const title = mode === 'login' ? t.loginTitle : mode === 'signup' ? t.signUpTitle : t.forgotTitle;
   return (
     <Screen>
       <Stack.Screen options={{ title, headerShadowVisible: false, headerStyle: { backgroundColor: ui.bg }, headerTitleStyle: { color: ui.label } }} />
       <View style={{ maxWidth: 420, width: '100%', alignSelf: 'center', paddingTop: 24 }}>
         <Text variant="largeTitle" accessibilityRole="header" style={{ marginBottom: 24 }}>{title}</Text>
-        <Field label={t.email} autoCapitalize="none" autoComplete="email" keyboardType="email-address" value={email} onChangeText={setEmail} />
-        <Field label={t.password} secureTextEntry autoComplete={mode === 'login' ? 'current-password' : 'new-password'}
-          value={password} onChangeText={setPassword} onSubmitEditing={submit} />
+        {mode === 'forgot' && <Text color="labelSecondary" style={{ marginBottom: 16 }}>{t.forgotHint}</Text>}
+        <Field label={t.email} autoCapitalize="none" autoComplete="email" keyboardType="email-address" value={email} onChangeText={setEmail}
+          onSubmitEditing={mode === 'forgot' ? submit : undefined} />
+        {mode !== 'forgot' && (
+          <Field label={t.password} secureTextEntry autoComplete={mode === 'login' ? 'current-password' : 'new-password'}
+            value={password} onChangeText={setPassword} onSubmitEditing={submit} />
+        )}
         {mode === 'signup' && (
           <View style={{ marginBottom: 16 }}>
             <View style={{ flexDirection: 'row', alignItems: 'center', gap: 12 }}>
@@ -59,9 +78,10 @@ export default function Login() {
             <Button variant="plain" size="sm" onPress={() => router.push('/privacidad')} style={{ alignSelf: 'flex-start' }}>{strings.privacy.read}</Button>
           </View>
         )}
-        <Button variant="primary" busy={busy} onPress={submit}>{mode === 'login' ? t.submitLogin : t.submitSignUp}</Button>
+        <Button variant="primary" busy={busy} onPress={submit}>{mode === 'login' ? t.submitLogin : mode === 'signup' ? t.submitSignUp : t.sendLink}</Button>
+        {mode === 'login' && <Button variant="plain" size="sm" onPress={() => setMode('forgot')} style={{ marginTop: 8 }}>{t.forgot}</Button>}
         <Button variant="plain" onPress={() => { setMode(mode === 'login' ? 'signup' : 'login'); }} style={{ marginTop: 8 }}>
-          {mode === 'login' ? t.toSignUp : t.toLogin}
+          {mode === 'login' ? t.toSignUp : mode === 'signup' ? t.toLogin : t.backToLogin}
         </Button>
         <Welcome />
       </View>

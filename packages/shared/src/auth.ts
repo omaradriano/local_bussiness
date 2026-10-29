@@ -14,8 +14,20 @@ export function authErrorMessage(code: string | undefined): string {
   return (code && AUTH_ERRORS[code]) || 'No se pudo completar. Intenta de nuevo.';
 }
 
+export function validateEmail(email: string): string | null {
+  return /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email.trim()) ? null : 'Escribe un correo válido.';
+}
+
 export function validateCredentials(email: string, password: string): string | null {
-  if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email.trim())) return 'Escribe un correo válido.';
+  const bad = validateEmail(email);
+  if (bad) return bad;
   if (password.length < 8) return 'La contraseña debe tener al menos 8 caracteres.';
+  return null;
+}
+
+// New password (recovery): same rule as sign-up, typed twice.
+export function validateNewPassword(password: string, confirm: string): string | null {
+  if (password.length < 8) return 'La contraseña debe tener al menos 8 caracteres.';
+  if (password !== confirm) return 'Las contraseñas no coinciden.';
   return null;
 }
