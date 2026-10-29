@@ -45,12 +45,12 @@ func (p *Photos) enabled(w http.ResponseWriter) bool {
 }
 
 // mountImages adds /catalog/{itemId}/images routes (owner only) inside a business group.
-func mountImages(r chi.Router, p *Photos) {
+func mountImages(r chi.Router, p *Photos, withinPlan func(http.Handler) http.Handler) {
 	r.Route("/catalog/{itemId}/images", func(r chi.Router) {
 		r.Use(auth.RequireRole("owner"), requireUUIDParam("itemId", "El artículo no existe."))
 
 		// 1) Register the photo and get a presigned PUT; the app uploads straight to S3.
-		r.Post("/", func(w http.ResponseWriter, r *http.Request) {
+		r.With(withinPlan).Post("/", func(w http.ResponseWriter, r *http.Request) {
 			if !p.enabled(w) {
 				return
 			}

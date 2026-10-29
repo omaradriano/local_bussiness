@@ -21,7 +21,7 @@ const EXPENSE_KEYS = ['payroll', 'commissions', 'merchandise', 'transport', 'sup
 export default function Finances() {
   const { businessId } = useLocalSearchParams<{ businessId: string }>();
   const ui = useUI();
-  const { texts, kind } = useTexts();
+  const { texts, kind, can } = useTexts();
   const [period, setPeriod] = useState<Period>(currentMonth);
   const [s, setS] = useState<Summary | null>(null);
   const [error, setError] = useState<string | null>(null);
@@ -38,7 +38,7 @@ export default function Finances() {
     <Screen>
       <Stack.Screen options={{ title: t.title }} />
       <Text variant="largeTitle" accessibilityRole="header" style={{ marginBottom: 16 }}>{t.title}</Text>
-      <View style={{ marginBottom: 20 }}><PeriodPicker value={period} onChange={setPeriod} /></View>
+      <View style={{ marginBottom: 20 }}><PeriodPicker value={period} onChange={setPeriod} monthOnly={!can('any_period')} /></View>
       {error && <Notice tone="warning">{error}</Notice>}
       {!s && !error && <ActivityIndicator />}
       {s && (
@@ -109,7 +109,7 @@ export default function Finances() {
 
           <Group separatorInset={58}>
             <Cell icon="receipt" tint={ui.warning} label={t.sections.expenses} sublabel={t.sectionHints.expenses} onPress={go('expenses')} />
-            <Cell icon="people" tint={ui.indigo} label={t.sections.pay} sublabel={t.sectionHints.pay} onPress={go('pay')} />
+            {can('payroll') && <Cell icon="people" tint={ui.indigo} label={t.sections.pay} sublabel={t.sectionHints.pay} onPress={go('pay')} />}
           </Group>
         </View>
       )}

@@ -21,7 +21,7 @@ type SectionGroup = { label: string; sections: Section[] };
 /** Every section of the current business, grouped (day to day, finances, the business), plus navigation helpers. */
 function useNav() {
   const { businessId, rest } = useCurrentBusinessId();
-  const { texts, has } = useTexts();
+  const { texts, has, can } = useTexts();
   const { business } = useBusiness(businessId ?? '');
   const add = useNewAction(businessId ?? '');
   if (!businessId || !business) return null;
@@ -39,7 +39,7 @@ function useNav() {
     ...(owner ? [{ label: strings.finances.title, sections: [
       { path: '/finances', label: strings.nav.summary, icon: 'stats-chart' },
       { path: '/finances/expenses', label: strings.finances.expenses, icon: 'receipt' },
-      { path: '/finances/pay', label: strings.nav.pay, icon: 'cash' },
+      ...(can('payroll') ? [{ path: '/finances/pay', label: strings.nav.pay, icon: 'cash' } as Section] : []),
     ] } as SectionGroup] : []),
     { label: strings.business.groups.business, sections: [
       { path: '/catalog', label: term(business.vertical, 'catalog') ?? s.catalog, icon: 'construct' },

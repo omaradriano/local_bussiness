@@ -57,6 +57,28 @@ func TestIntegrationAccountPlans(t *testing.T) {
 	if a, err := r.ForBusiness(ctx, second.ID); err != nil || a.Plan != plans.Lite || a.EndsAt != nil {
 		t.Fatalf("second business keeps the account's plan: %+v %v", a, err)
 	}
+	// Both businesses copy the account's plan (what the active features read).
+	var lite int
+	if err := tx.QueryRow(ctx, `select count(*) from public.businesses where id in ($1, $2) and plan = 'lite'`, first.ID, second.ID).Scan(&lite); err != nil || lite != 2 {
+		t.Fatalf("businesses.plan synced: %d %v", lite, err)
+	}
+	// Usage counts what the limits apply to: the template's active items, the businesses owned.
+	var items int
+	if err := tx.QueryRow(ctx, `select count(*) from public.catalog_items where business_id = $1 and active`, first.ID).Scan(&items); err != nil {
+		t.Fatal(err)
+	}
+	if n, err := r.Usage(ctx, first.ID, "catalog_items", ""); err != nil || n != items || n == 0 {
+		t.Fatalf("catalog usage %d (want %d) %v", n, items, err)
+	}
+	if _, err := tx.Exec(ctx, `update public.catalog_items set active = false where business_id = $1`, first.ID); err != nil {
+		t.Fatal(err)
+	}
+	if n, _ := r.Usage(ctx, first.ID, "catalog_items", ""); n != 0 {
+		t.Fatalf("deactivated items still count: %d", n)
+	}
+	if n, err := r.OwnedBusinesses(ctx, owner); err != nil || n != 2 {
+		t.Fatalf("owned: %d %v", n, err)
+	}
 	if o, err := r.OwnerOf(ctx, second.ID); err != nil || o != owner {
 		t.Fatalf("owner: %q %v", o, err)
 	}

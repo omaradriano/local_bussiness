@@ -11,6 +11,7 @@ import (
 	"github.com/omaradriano/local_bussiness/services/api/internal/apierr"
 	"github.com/omaradriano/local_bussiness/services/api/internal/auth"
 	"github.com/omaradriano/local_bussiness/services/api/internal/finances"
+	"github.com/omaradriano/local_bussiness/services/api/internal/plans"
 )
 
 type FinancesRepo interface {
@@ -80,6 +81,15 @@ func mountFinances(r chi.Router, d Deps) {
 		r.Get("/summary", func(w http.ResponseWriter, r *http.Request) {
 			m, _ := auth.MemberFrom(r.Context())
 			if from, to, ok := d.period(w, r); ok {
+				// Without "any_period" (Lite) the summary is one calendar month at a time.
+				a, ok := d.businessPlan(w, r)
+				if !ok {
+					return
+				}
+				if !plans.Get(a.Plan).Can("any_period") && !plans.IsCalendarMonth(from, to) {
+					planMissing(w, a)
+					return
+				}
 				s, err := d.Finances.Summary(r.Context(), m.BusinessID, from, to, d.now())
 				writeFinance(w, r, http.StatusOK, s, err)
 			}
@@ -117,12 +127,12 @@ func mountFinances(r chi.Router, d Deps) {
 			writeFinance(w, r, 0, nil, d.Finances.DeleteExpense(r.Context(), m.BusinessID, chi.URLParam(r, "expenseId")))
 		})
 
-		r.Get("/plans", func(w http.ResponseWriter, r *http.Request) {
+		r.With(d.requireCapability("installments")).Get("/plans", func(w http.ResponseWriter, r *http.Request) {
 			m, _ := auth.MemberFrom(r.Context())
 			list, err := d.Finances.Plans(r.Context(), m.BusinessID)
 			writeFinance(w, r, http.StatusOK, map[string]any{"plans": list}, err)
 		})
-		r.Post("/plans", func(w http.ResponseWriter, r *http.Request) {
+		r.With(d.requireCapability("installments")).Post("/plans", func(w http.ResponseWriter, r *http.Request) {
 			m, _ := auth.MemberFrom(r.Context())
 			var body struct {
 				Description       string `json:"description"`
@@ -147,19 +157,19 @@ func mountFinances(r chi.Router, d Deps) {
 			saved, err := d.Finances.AddPlan(r.Context(), m.BusinessID, p, m.UserID)
 			writeFinance(w, r, http.StatusCreated, saved, err)
 		})
-		r.With(requireUUIDParam("planId", "La compra no existe.")).Delete("/plans/{planId}", func(w http.ResponseWriter, r *http.Request) {
+		r.With(d.requireCapability("installments"), requireUUIDParam("planId", "La compra no existe.")).Delete("/plans/{planId}", func(w http.ResponseWriter, r *http.Request) {
 			m, _ := auth.MemberFrom(r.Context())
 			writeFinance(w, r, 0, nil, d.Finances.DeletePlan(r.Context(), m.BusinessID, chi.URLParam(r, "planId")))
 		})
 
 		mountRecurring(r, d)
 
-		r.Get("/pay", func(w http.ResponseWriter, r *http.Request) {
+		r.With(d.requireCapability("payroll")).Get("/pay", func(w http.ResponseWriter, r *http.Request) {
 			m, _ := auth.MemberFrom(r.Context())
 			list, err := d.Finances.Pays(r.Context(), m.BusinessID)
 			writeFinance(w, r, http.StatusOK, map[string]any{"pay": list}, err)
 		})
-		r.With(requireUUIDParam("staffId", "La persona no existe.")).Put("/pay/{staffId}", func(w http.ResponseWriter, r *http.Request) {
+		r.With(d.requireCapability("payroll"), requireUUIDParam("staffId", "La persona no existe.")).Put("/pay/{staffId}", func(w http.ResponseWriter, r *http.Request) {
 			m, _ := auth.MemberFrom(r.Context())
 			var p finances.Pay
 			if !decode(w, r, &p) {
@@ -178,6 +188,7 @@ func mountFinances(r chi.Router, d Deps) {
 
 // mountRecurring: recurring expenses and the answer to each charge (paid with its real amount, or not paid).
 func mountRecurring(r chi.Router, d Deps) {
+	r = r.With(d.requireCapability("recurring_expenses"))
 	today := func(w http.ResponseWriter, r *http.Request) (finances.Day, bool) {
 		m, _ := auth.MemberFrom(r.Context())
 		day, err := d.Finances.Today(r.Context(), m.BusinessID, d.now())

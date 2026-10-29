@@ -315,8 +315,9 @@ func (r Repo) DeleteDocument(ctx context.Context, businessID, customerID, docID 
 func (r Repo) Rules(ctx context.Context, businessID string) (Rules, error) {
 	var vertical string
 	var settings, grants []byte
-	err := r.DB.QueryRow(ctx, `select vertical, settings, feature_grants from public.businesses where id = $1`, businessID).
-		Scan(&vertical, &settings, &grants)
+	var plan string
+	err := r.DB.QueryRow(ctx, `select vertical, settings, feature_grants, plan from public.businesses where id = $1`, businessID).
+		Scan(&vertical, &settings, &grants, &plan)
 	if err != nil {
 		return Rules{}, err
 	}
@@ -324,6 +325,6 @@ func (r Repo) Rules(ctx context.Context, businessID string) (Rules, error) {
 		Features map[string]bool `json:"features"`
 	}
 	_ = json.Unmarshal(settings, &s)
-	active := features.Active(vertical, features.Parse(grants), s.Features)
+	active := features.Active(vertical, features.ParseForPlan(grants, plan), s.Features)
 	return Rules{RequireAddress: slices.Contains(active, "customerAddress"), RequireGuarantor: slices.Contains(active, "guarantor")}, nil
 }

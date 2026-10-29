@@ -65,3 +65,20 @@ func TestGiroFeaturesAreSupported(t *testing.T) {
 		}
 	}
 }
+
+func TestThePlanTurnsFeaturesOff(t *testing.T) {
+	// Lite has no team, product sales or extra documents; the platform admin's explicit gift still wins.
+	g := ParseForPlan([]byte(`{"productSales": true, "guarantor": false}`), "lite")
+	if v, ok := g["staff"]; !ok || v {
+		t.Fatalf("staff should be removed by the plan: %v", g)
+	}
+	if !g["productSales"] || g["guarantor"] || g["bookingDocuments"] {
+		t.Fatalf("grants: %v", g)
+	}
+	if active := Active("barbershop", ParseForPlan(nil, "lite"), nil); slices.Contains(active, "staff") || slices.Contains(active, "productSales") {
+		t.Fatalf("lite barbershop: %v", active)
+	}
+	if active := Active("barbershop", ParseForPlan(nil, "trial"), nil); !slices.Contains(active, "staff") {
+		t.Fatalf("the trial is Pro: %v", active)
+	}
+}

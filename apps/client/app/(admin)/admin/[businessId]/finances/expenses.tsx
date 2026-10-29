@@ -7,6 +7,7 @@ import { Ionicons } from '@expo/vector-icons';
 import { currentMonth, PeriodPicker, type Period } from '../../../../../components/PeriodPicker';
 import { api } from '../../../../../lib/api';
 import { errorText, fieldErrors } from '../../../../../lib/errors';
+import { useTexts } from '../../../../../lib/useTexts';
 import { Button, Cell, Chip, Chips, Field, Group, Screen, Segmented, Text, useToast, useUI } from '../../../../../ui';
 
 type Expense = components['schemas']['Expense'];
@@ -44,12 +45,15 @@ export default function Expenses() {
   const [errors, setErrors] = useState<Record<string, string>>({});
   const [planErrors, setPlanErrors] = useState<Record<string, string>>({});
   const [busy, setBusy] = useState<'expense' | 'plan' | null>(null);
+  const { can } = useTexts();
+  // Lite: only one-off expenses (recurring and installments come with Pro).
+  const tabs = TABS.filter((k) => (k === 'recurring' ? can('recurring_expenses') : k === 'plans' ? can('installments') : true));
   const [tab, setTab] = useState<Tab>(initialTab ?? 'once');
   const path = { businessId };
 
   const load = useCallback(() => {
     api.GET('/v1/b/{businessId}/finances/expenses', { params: { path, query: { from: period.from, to: period.to } } }).then(({ data }) => setList(data?.expenses ?? []));
-    api.GET('/v1/b/{businessId}/finances/plans', { params: { path } }).then(({ data }) => setPlans(data?.plans ?? []));
+    if (can('installments')) api.GET('/v1/b/{businessId}/finances/plans', { params: { path } }).then(({ data }) => setPlans(data?.plans ?? []));
   }, [businessId, period]); // eslint-disable-line react-hooks/exhaustive-deps
   useFocusEffect(load);
 
@@ -114,7 +118,7 @@ export default function Expenses() {
       <Stack.Screen options={{ title: t.sections.expenses }} />
       <Text variant="largeTitle" accessibilityRole="header" style={{ marginBottom: 16 }}>{t.expenses}</Text>
       <View style={{ marginBottom: 20 }}>
-        <Segmented options={TABS.map((k) => ({ value: k, label: t.expenseTabs[k] }))} value={tab} onChange={setTab} />
+        {tabs.length > 1 && <Segmented options={tabs.map((k) => ({ value: k, label: t.expenseTabs[k] }))} value={tab} onChange={setTab} />}
       </View>
 
       {tab === 'recurring' && <RecurringTab businessId={businessId} />}
