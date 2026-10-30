@@ -209,7 +209,7 @@ func Checkout(ctx context.Context, db store.DB, businessID, bookingID, condition
 	if err != nil {
 		return Booking{}, err
 	}
-	if b.kind != "rental" || !CanTransition(b.kind, b.status, "checked_out") {
+	if !hasCustody(b.kind) || !CanTransition(b.kind, b.status, "checked_out") {
 		return Booking{}, Invalid{"status", fmt.Sprintf("No se puede registrar la salida de una renta «%s».", label(b.status))}
 	}
 	if err := satisfyFromCustomer(ctx, tx, bookingID, now); err != nil {
@@ -268,7 +268,7 @@ func Return(ctx context.Context, db store.DB, businessID, bookingID, condition, 
 	if err != nil {
 		return Booking{}, err
 	}
-	if b.kind != "rental" || !CanTransition(b.kind, b.status, "returned") {
+	if !hasCustody(b.kind) || !CanTransition(b.kind, b.status, "returned") {
 		return Booking{}, Invalid{"status", fmt.Sprintf("No se puede registrar la devolución de una renta «%s».", label(b.status))}
 	}
 	if _, err := tx.Exec(ctx, `update public.rental_checkouts set returned_at = $2, return_condition = nullif($3, '')

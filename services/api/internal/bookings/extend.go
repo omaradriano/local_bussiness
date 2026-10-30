@@ -31,7 +31,7 @@ func Extend(ctx context.Context, db store.DB, businessID, id string, newEnd time
 	if err != nil {
 		return Booking{}, err
 	}
-	if b.kind != "rental" || !slices.Contains(extendable, b.status) {
+	if !hasCustody(b.kind) || !slices.Contains(extendable, b.status) {
 		return Booking{}, Invalid{"status", fmt.Sprintf("Una renta «%s» no se puede extender.", label(b.status))}
 	}
 	var start, end time.Time
@@ -52,11 +52,11 @@ func Extend(ctx context.Context, db store.DB, businessID, id string, newEnd time
 	if err != nil {
 		return Booking{}, err
 	}
-	hours, err := availability.Loader{DB: tx}.BusinessHours(ctx, businessID)
-	if err != nil {
-		return Booking{}, err
+	hours := func() ([]availability.Shift, error) {
+		return availability.Loader{DB: tx}.BusinessHours(ctx, businessID)
 	}
-	periods, err := rentalPeriods(loc, hours, settings.RentalsFrom(rawSettings), priceUnit, start, newEnd)
+	periods, err := rulesByKind[b.kind].pricing(periodQuery{loc: loc, hours: hours, rentals: settings.RentalsFrom(rawSettings),
+		priceUnit: priceUnit, start: start, end: &newEnd})
 	if err != nil {
 		return Booking{}, err
 	}

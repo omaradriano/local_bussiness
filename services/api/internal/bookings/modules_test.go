@@ -109,3 +109,16 @@ func TestPricingModules(t *testing.T) {
 		t.Fatalf("per day, 3 days: %d, %v", n, err)
 	}
 }
+
+func TestCustodyModule(t *testing.T) {
+	if !hasCustody(engines.Rental) || hasCustody(engines.Service) || hasCustody(engines.Product) || hasCustody("unknown") {
+		t.Fatal("only rentals go with the customer and come back")
+	}
+	// Without custody there are no deposit or late-fee timing rules.
+	if err := PaymentAllowed(engines.Service, "confirmed", "late_fee"); err != nil {
+		t.Fatalf("service late_fee: %v", err)
+	}
+	if err := PaymentAllowed(engines.Rental, "confirmed", "late_fee"); invalidField(err) != "type" {
+		t.Fatalf("rental late_fee before the return: %v", err)
+	}
+}

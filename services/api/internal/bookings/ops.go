@@ -92,7 +92,7 @@ func Transition(ctx context.Context, db store.DB, businessID, id, to, actor, not
 	if !ByPeople(to) || !CanTransition(b.kind, b.status, to) {
 		return Booking{}, Invalid{"status", fmt.Sprintf("No se puede pasar de «%s» a «%s».", statusLabel[b.status], label(to))}
 	}
-	if b.kind == "rental" && (to == "checked_out" || to == "returned") {
+	if hasCustody(b.kind) && (to == "checked_out" || to == "returned") {
 		return Booking{}, HandledElsewhere
 	}
 	ps, err := payments(ctx, tx, id)

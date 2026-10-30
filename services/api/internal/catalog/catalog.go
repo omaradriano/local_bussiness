@@ -95,14 +95,11 @@ func (it Item) Apply(p Patch) Item {
 func (it Item) Normalize() Item {
 	it.Name = strings.TrimSpace(it.Name)
 	it.Description = strings.TrimSpace(it.Description)
-	if it.Kind != "service" {
-		it.DurationMinutes, it.BufferMinutes = nil, 0
-	}
-	if it.Kind != "product" {
-		it.PrepHours, it.DailyCapacity = nil, nil
-	}
-	if it.Kind != "rental" {
-		it.PriceUnit, it.SecurityDeposit, it.LateFeePerDay = nil, nil, nil
+	own := rulesByKind[it.Kind].fields
+	for _, g := range fieldGroups {
+		if !slices.Contains(own, g) {
+			g.clear(&it)
+		}
 	}
 	return it
 }
@@ -121,35 +118,14 @@ func (it Item) Validate() map[string]string {
 	if it.Price < 0 || it.Price > maxPrice {
 		errs["price"] = "El precio debe estar entre $0 y $1,000,000."
 	}
-	money := func(field string, v *int64, label string) {
-		if v == nil || *v < 0 || *v > maxPrice {
-			errs[field] = label
-		}
-	}
-	switch it.Kind {
-	case engines.Service:
-		if it.DurationMinutes == nil || *it.DurationMinutes < 5 || *it.DurationMinutes > 600 {
-			errs["duration_minutes"] = "La duración debe ser de 5 a 600 minutos."
-		}
-		if it.BufferMinutes < 0 || it.BufferMinutes > 240 {
-			errs["buffer_minutes"] = "El margen entre citas debe ser de 0 a 240 minutos."
-		}
-	case engines.Product:
-		if it.PrepHours == nil || *it.PrepHours < 0 || *it.PrepHours > 720 {
-			errs["prep_hours"] = "La anticipación debe ser de 0 a 720 horas."
-		}
-		if it.DailyCapacity != nil && (*it.DailyCapacity < 1 || *it.DailyCapacity > 1000) {
-			errs["daily_capacity"] = "El cupo diario debe ser de 1 a 1000, o dejarse vacío."
-		}
-	case engines.Rental:
-		if it.PriceUnit == nil || !slices.Contains([]string{"day", "weekend", "week"}, *it.PriceUnit) {
-			errs["price_unit"] = "Elige si se cobra por día, fin de semana o semana."
-		}
-		money("security_deposit", it.SecurityDeposit, "Escribe el depósito de garantía (puede ser $0).")
-		money("late_fee_per_day", it.LateFeePerDay, "Escribe el recargo por día de retraso (puede ser $0).")
+	for _, g := range rulesByKind[it.Kind].fields {
+		g.validate(it, errs)
 	}
 	return errs
 }
+
+// HasUnits: the engine's items are physical units with a code each (created with the item).
+func HasUnits(kind string) bool { return rulesByKind[kind].units }
 
 // Repo reads and writes items; every query is scoped to the business.
 type Repo struct{ DB store.DB }
