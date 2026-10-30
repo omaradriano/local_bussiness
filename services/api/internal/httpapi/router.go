@@ -749,7 +749,7 @@ func NewRouter(d Deps) http.Handler {
 					internalError(w, r, "create catalog item", err)
 					return
 				}
-				for n := 1; created.Kind == "rental" && n <= body.Units; n++ {
+				for n := 1; catalog.HasUnits(created.Kind) && n <= body.Units; n++ {
 					u := catalog.Unit{ItemID: created.ID, Code: catalog.UnitCode(created.Name, n), Status: "available"}
 					if _, err := d.Catalog.CreateUnit(r.Context(), m.BusinessID, u); err != nil && !errors.Is(err, catalog.ErrCodeTaken) {
 						internalError(w, r, "create item units", err)

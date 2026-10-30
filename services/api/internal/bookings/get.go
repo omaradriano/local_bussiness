@@ -175,7 +175,7 @@ func Get(ctx context.Context, db store.DB, businessID, id string) (Booking, erro
 			b.Steps[i].Bucket = st.Bucket(b.Steps[i].Config)
 		}
 	}
-	if b.Kind == "rental" {
+	if hasCustody(b.Kind) {
 		var r RentalInfo
 		var dailyPrice int64
 		var qty int

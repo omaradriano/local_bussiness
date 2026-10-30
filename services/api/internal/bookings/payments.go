@@ -71,10 +71,10 @@ func ValidatePayment(p Payment, b Balance) error {
 	return nil
 }
 
-// PaymentAllowed: some rental charges only make sense at a given moment. The security deposit is
+// PaymentAllowed: some custody (rental) charges only make sense at a given moment. The security deposit is
 // taken until the tool comes back; late and damage fees only once it's back (that's when they're known).
 func PaymentAllowed(kind, status, typ string) error {
-	if kind != "rental" {
+	if !hasCustody(kind) {
 		return nil
 	}
 	returned := status == "returned" || status == "completed"

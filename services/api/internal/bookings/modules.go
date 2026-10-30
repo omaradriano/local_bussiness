@@ -15,19 +15,25 @@ import (
 
 // An engine is a combination of small modules shared by every engine: when it happens (timing),
 // where it's handed over (fulfillment), what it takes up (resource) and how many periods it
-// charges (pricing). A new engine picks existing modules and only writes the one that's missing.
+// charges (pricing), plus custody when it goes with the customer and comes back. A new engine
+// picks existing modules and only writes the one that's missing.
 type engineRules struct {
 	timing      func(*reservation) error
 	fulfillment func(*reservation) error
 	resource    resource
 	pricing     pricing
+	custody     bool
 }
 
 var rulesByKind = map[string]engineRules{
 	engines.Service: {timing: slotTiming, fulfillment: atPlaceOrHome, resource: staffSlot{}, pricing: fixedPrice},
 	engines.Product: {timing: dayTiming, fulfillment: pickupOrDelivery, resource: dailyCapacity{}, pricing: fixedPrice},
-	engines.Rental:  {timing: rangeTiming, fulfillment: atPlace, resource: units{}, pricing: perPeriod},
+	engines.Rental:  {timing: rangeTiming, fulfillment: atPlace, resource: units{}, pricing: perPeriod, custody: true},
 }
+
+// hasCustody: what's booked goes with the customer and comes back. It brings check-out and return
+// (Checkout, Return), Extend, the security deposit and late or damage fees after the return.
+func hasCustody(kind string) bool { return rulesByKind[kind].custody }
 
 // reservation is what the modules read and fill while a booking is created.
 type reservation struct {
