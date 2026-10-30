@@ -1,5 +1,5 @@
 import type { components } from '@lb/api-client';
-import { centavosToInput, kindFor, parsePesos, strings, term, type ItemKind } from '@lb/shared';
+import { centavosToInput, engineFor, kindFor, parsePesos, strings, term, type ItemKind } from '@lb/shared';
 import { router, Stack, useLocalSearchParams, usePathname } from 'expo-router';
 import { useCallback, useEffect, useState } from 'react';
 import { ActivityIndicator, Switch, View } from 'react-native';
@@ -39,21 +39,22 @@ function fromItem(it: Item): Form {
   };
 }
 
-/** Form -> API fields for the kind, or field errors for what can't be parsed. */
+/** Form -> API fields for the engine's modules, or field errors for what can't be parsed. */
 function toFields(f: Form, kind: ItemKind, depositEnabled: boolean): { fields?: Fields; errors?: Record<string, string> } {
+  const e = engineFor(kind);
   const errors: Record<string, string> = {};
   const money = (key: string, v: string) => { const c = parsePesos(v); if (c === null) errors[key] = t.invalidMoney; return c ?? 0; };
   const int = (key: string, v: string) => { if (!/^\d+$/.test(v.trim())) errors[key] = t.invalidNumber; return Number(v); };
 
   const fields: Fields = { name: f.name, description: f.description, price: money('price', f.price) };
-  if (kind === 'service') {
-    fields.duration_minutes = int('duration_minutes', f.duration);
-  } else if (kind === 'product') {
+  if (e.timing === 'slot') fields.duration_minutes = int('duration_minutes', f.duration);
+  if (e.timing === 'day') {
     fields.prep_hours = int('prep_hours', f.prepHours);
     fields.daily_capacity = f.dailyCapacity.trim() ? int('daily_capacity', f.dailyCapacity) : null;
-  } else {
-    // Rentals are priced per day; the late fee comes from the business multiplier (Ajustes), not per tool.
-    fields.price_unit = 'day';
+  }
+  // Priced per day; the late fee comes from the business multiplier (Ajustes), not per item.
+  if (e.pricing === 'perPeriod') fields.price_unit = 'day';
+  if (e.custody) {
     fields.security_deposit = depositEnabled ? money('security_deposit', f.deposit) : 0;
     fields.late_fee_per_day = 0;
   }
@@ -97,6 +98,7 @@ export default function CatalogItemForm() {
     return message ? <Text style={{ padding: 16 }}>{message}</Text> : <ActivityIndicator style={{ marginTop: 24 }} />;
   }
   const kind: ItemKind = item?.kind ?? kindFor(business.vertical);
+  const e = engineFor(kind);
   const set = (k: keyof Form) => (v: string) => setForm({ ...form, [k]: v });
 
   async function save() {
@@ -106,7 +108,7 @@ export default function CatalogItemForm() {
     setErrors({});
     setMessage(null);
     const res = isNew
-      ? await api.POST('/v1/b/{businessId}/catalog', { params: { path: { businessId } }, body: { ...fields, kind, name: fields.name!, price: fields.price!, ...(kind === 'rental' ? { units: Number(units) || 0 } : {}) } })
+      ? await api.POST('/v1/b/{businessId}/catalog', { params: { path: { businessId } }, body: { ...fields, kind, name: fields.name!, price: fields.price!, ...(e.resource === 'units' ? { units: Number(units) || 0 } : {}) } })
       : await api.PATCH('/v1/b/{businessId}/catalog/{itemId}', { params: { path: { businessId, itemId } }, body: fields });
     if (!res.data) {
       setBusy(false);
@@ -146,11 +148,11 @@ export default function CatalogItemForm() {
       <Group label={t.general} padded>
         {field('name', 'name', t.name)}
         {field('description', 'description', t.description)}
-        {field('price', 'price', kind === 'rental' ? t.pricePerDay : t.price, true, kind === 'rental' ? t.perDayNote(settings?.rentals.late_fee_multiplier ?? 1) : undefined)}
-        {kind === 'service' && field('duration', 'duration_minutes', t.duration, true, t.bufferInSettings)}
-        {kind === 'product' && (<>{field('prepHours', 'prep_hours', t.prepHours, true)}{field('dailyCapacity', 'daily_capacity', t.dailyCapacity, true)}</>)}
-        {kind === 'rental' && depositEnabled && field('deposit', 'security_deposit', t.deposit, true, t.depositHint)}
-        {kind === 'rental' && isNew && (
+        {field('price', 'price', e.pricing === 'perPeriod' ? t.pricePerDay : t.price, true, e.pricing === 'perPeriod' ? t.perDayNote(settings?.rentals.late_fee_multiplier ?? 1) : undefined)}
+        {e.timing === 'slot' && field('duration', 'duration_minutes', t.duration, true, t.bufferInSettings)}
+        {e.timing === 'day' && (<>{field('prepHours', 'prep_hours', t.prepHours, true)}{field('dailyCapacity', 'daily_capacity', t.dailyCapacity, true)}</>)}
+        {e.custody && depositEnabled && field('deposit', 'security_deposit', t.deposit, true, t.depositHint)}
+        {e.resource === 'units' && isNew && (
           <Field label={t.unitsToCreate} value={units} onChangeText={setUnits} keyboardType="numeric" error={errors.units} hint={t.unitsToCreateHint} />
         )}
       </Group>
@@ -168,7 +170,7 @@ export default function CatalogItemForm() {
       )}
       {message && form && item && <View style={{ marginBottom: 12 }}><Notice tone="warning">{message}</Notice></View>}
       {isOwner && <Button variant="primary" busy={busy} onPress={save} style={{ marginBottom: 28 }}>{t.save}</Button>}
-      {item && kind === 'rental' && <UnitsSection businessId={businessId} itemId={item.id} isOwner={isOwner} />}
+      {item && e.resource === 'units' && <UnitsSection businessId={businessId} itemId={item.id} isOwner={isOwner} />}
     </Screen>
   );
 }

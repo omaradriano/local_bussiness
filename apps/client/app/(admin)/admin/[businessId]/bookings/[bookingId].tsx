@@ -1,5 +1,5 @@
 import type { components } from '@lb/api-client';
-import { formatMXN, formatPhone, strings, term } from '@lb/shared';
+import { engineFor, formatMXN, formatPhone, strings, term } from '@lb/shared';
 import { router, Stack, useLocalSearchParams } from 'expo-router';
 import { useCallback, useEffect, useState } from 'react';
 import { ActivityIndicator, Linking, View } from 'react-native';
@@ -25,7 +25,7 @@ const when = (iso: string) =>
 function suggestedPayment(b: Booking, security: number): { type: PaymentType; cents: number } {
   const lateFee = b.status === 'returned' ? b.rental?.late_fee_suggested ?? 0 : 0;
   if (b.status === 'pending_deposit' && b.balance.paid < b.deposit_required) return { type: 'advance', cents: b.deposit_required - b.balance.paid };
-  if (b.kind === 'rental' && b.status === 'confirmed' && b.balance.deposit_held < security) return { type: 'security_deposit', cents: security - b.balance.deposit_held };
+  if (engineFor(b.kind).custody && b.status === 'confirmed' && b.balance.deposit_held < security) return { type: 'security_deposit', cents: security - b.balance.deposit_held };
   if (lateFee > 0 && b.balance.extra_charges < lateFee) return { type: 'late_fee', cents: lateFee - b.balance.extra_charges };
   if (b.balance.due > 0) return { type: 'balance', cents: b.balance.due };
   if (b.balance.deposit_held > 0 && b.status === 'returned') return { type: 'refund', cents: b.balance.deposit_held };
@@ -82,9 +82,10 @@ export default function BookingDetail() {
   b.balance ??= { paid: 0, due: b.total, deposit_held: 0, extra_charges: 0 };
   const security = Number(b.items[0]?.options?.security_deposit ?? 0);
   const bookingTerm = term(business.vertical, 'booking') ?? t.detail;
-  // Rental check-out/return have their own flow; the rest are plain status moves.
+  const e = engineFor(b.kind);
+  // Check-out/return (custody) have their own flow; the rest are plain status moves.
   // "Iniciar" only where the business tracks the start (feature startService); otherwise it's finished directly.
-  const actions = b.next.filter((s) => !(b.kind === 'rental' && (s === 'checked_out' || s === 'returned')) && !(s === 'in_progress' && !has('startService')));
+  const actions = b.next.filter((s) => !(e.custody && (s === 'checked_out' || s === 'returned')) && !(s === 'in_progress' && !has('startService')));
   const waText = t.whatsappText(b.customer.name, bookingTerm, when(b.starts_at), texts.bookings.status[b.status]);
   const editable = !['cancelled', 'expired', 'no_show', 'completed'].includes(b.status);
   const f = t.detailFlow;
@@ -148,14 +149,14 @@ export default function BookingDetail() {
               onPress={() => Linking.openURL(`https://wa.me/${b.customer.phone.replace(/\D/g, '')}?text=${encodeURIComponent(waText)}`)} />
           ) : null}
           <Cell icon="arrow-up-circle" tint={ui.accent} label={term(business.vertical, 'starts_at') ?? ''} value={when(b.starts_at)} />
-          {b.kind === 'rental' && b.ends_at ? <Cell icon="arrow-down-circle" tint={ui.warning} label={term(business.vertical, 'ends_at') ?? ''} value={when(b.ends_at)} /> : null}
+          {e.timing === 'range' && b.ends_at ? <Cell icon="arrow-down-circle" tint={ui.warning} label={term(business.vertical, 'ends_at') ?? ''} value={when(b.ends_at)} /> : null}
           {b.staff.length > 0 ? <Cell icon="person-circle" tint={ui.gray} label={t.attendedBy} value={b.staff.map((x) => x.name).join(', ')} /> : null}
-          {b.fulfillment === 'delivery' ? <Cell icon={b.kind === 'service' ? 'home' : 'car'} tint={ui.gray} label={b.kind === 'service' ? t.homeService : t.delivery} sublabel={b.delivery_address ?? ''} /> : null}
+          {b.fulfillment === 'delivery' ? <Cell icon={e.fulfillment === 'atPlaceOrHome' ? 'home' : 'car'} tint={ui.gray} label={e.fulfillment === 'atPlaceOrHome' ? t.homeService : t.delivery} sublabel={b.delivery_address ?? ''} /> : null}
           {b.hold_expires_at ? <Cell icon="hourglass" tint={ui.warning} label={t.holdUntil} value={when(b.hold_expires_at)} /> : null}
           {b.notes ? <Cell icon="document-text" tint={ui.gray} label={b.notes} /> : null}
         </Group>
 
-        {b.kind === 'rental' && !closedNote ? (
+        {e.custody && !closedNote ? (
           <>
             <Step n={1} title={f.confirm.title} description={f.confirm.description} state={stepState(0)}>
               {rentalStep === 0 && (
@@ -242,7 +243,7 @@ export default function BookingDetail() {
         )}
 
         {/* After the check-out (and for other kinds) the documents stay at hand in their own section. */}
-        {(b.kind !== 'rental' || rentalStep > 1 || closedNote) && (additional.length > 0 || has('bookingDocuments')) && (
+        {(!e.custody || rentalStep > 1 || closedNote) && (additional.length > 0 || has('bookingDocuments')) && (
           <View>
             <Text variant="footnote" color="labelSecondary" style={{ marginHorizontal: 16, marginBottom: 6 }}>{t.docs.section.toUpperCase()}</Text>
             <View style={{ gap: 10 }}>
