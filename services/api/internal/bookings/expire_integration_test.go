@@ -143,10 +143,15 @@ func TestIntegrationDiscount(t *testing.T) {
 		t.Fatalf("set amount: %+v %v", b, err)
 	}
 
-	// Never below what was already charged.
-	AddPayment(ctx, p, f.business, b.ID, Payment{Type: "balance", Method: "cash", Amount: 65000}, "", now, noFiles)
-	if _, err := SetDiscount(ctx, p, f.business, b.ID, Discount{Type: "percent", Value: 20}, ""); err == nil {
+	// Never below what was already charged: 30 % of $900 leaves $630 < $650 paid; 20 % leaves $720.
+	if _, err := AddPayment(ctx, p, f.business, b.ID, Payment{Type: "balance", Method: "cash", Amount: 65000}, "", now, noFiles); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := SetDiscount(ctx, p, f.business, b.ID, Discount{Type: "percent", Value: 30}, ""); err == nil {
 		t.Fatal("discount below what was paid was accepted")
+	}
+	if b, err = SetDiscount(ctx, p, f.business, b.ID, Discount{Type: "percent", Value: 20}, ""); err != nil || b.Total != 72000 {
+		t.Fatalf("20%%: %d %v", b.Total, err)
 	}
 
 	// Removing it gives the full total back.
