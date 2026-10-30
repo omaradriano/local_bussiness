@@ -21,7 +21,7 @@ const byEnv = {
   production: {
     SUPABASE_URL: "https://jailduoohibtqdjamlgv.supabase.co",
     CORS_ORIGINS: ["https://khronno.com", "https://www.khronno.com"],
-    CATALOG_CDN_URL: "https://PROD_CDN.cloudfront.net",
+    CATALOG_CDN_URL: "https://d1jgdqhrvt024a.cloudfront.net",
   },
 }[ENV];
 const photos = {
