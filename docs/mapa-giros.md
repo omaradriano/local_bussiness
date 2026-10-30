@@ -86,7 +86,74 @@ Desde 2026-10-28 cada giro es **un archivo de mapa** (`packages/shared/src/verti
 2. **Funciones por negocio (hecho, 2026-10-28).** `settings.features` permite que el superadministrador encienda o apague una función para un negocio concreto, por encima de lo que trae su giro (por ejemplo, documentos del cliente en un lavado de salas).
 3. **Panel de superadministrador** (ver plan): lista de negocios, su giro, plan, funciones y ajustes; entrar como el negocio con bitácora de auditoría.
 4. **Giros en la base (`business_types`).** Cuando haya varios giros y el panel de superadministrador, los mapas pasan a una tabla editable desde ese panel, validada contra los motores; `businesses.vertical` apunta a esa tabla en lugar del `check`. Los motores, los tipos de paso y los tipos de sección de Ajustes siguen en código.
-5. **Motores nuevos** según los giros que entren: modalidad a domicilio sobre `service` (lavado de salas, autos a domicilio) y `sale` sin fecha (tienda).
+5. **Motores nuevos** según los giros que entren: modalidad a domicilio sobre `service` (lavado de salas, autos a domicilio), `sale` sin fecha (tienda) y membresías (gimnasio). Antes del cuarto motor, aplicar «Motores detrás de una interfaz» (abajo).
+
+## Motores detrás de una interfaz (futuro)
+
+**Hoy:** cada motor es un `switch`/`if kind == "rental"` repartido en Go (`bookings/create.go`, `quote.go`, `ops.go`, `get.go`, `availability/query.go`, `catalog/catalog.go`, `httpapi/router.go`, más su tabla en `machine.go`) y en ~15 archivos del cliente (calendario, nueva reserva, detalle, catálogo, finanzas, `agenda.ts`, `period.ts`). Con tres motores funciona; un cuarto toca todos esos lugares.
+
+**Objetivo:** agregar un motor = implementar una interfaz y registrarla, igual que un tipo de paso (`internal/steps`). Ninguna pantalla ni handler vuelve a preguntar por el motor; preguntan al registro.
+
+**Cuándo:** al entrar el primer cliente que necesite un cuarto motor (tienda o gimnasio), no antes.
+
+### Go: `internal/engines`
+
+```go
+type Engine interface {
+	Kind() string                                    // "service", "product", "rental"…
+	Transitions() map[string][]string                // su tabla de estados
+	ValidateItem(item catalog.Item) error            // campos obligatorios del artículo (duración, unidades, existencias…)
+	Availability(ctx context.Context, q Query) (Answer, error)
+	Quote(q QuoteInput) (Quote, error)               // precio, anticipo y depósito en centavos
+	Reserve(ctx context.Context, tx pgx.Tx, b Booking) error // apartar: horario, cupo, unidades o existencias
+	Release(ctx context.Context, tx pgx.Tx, b Booking) error // devolverlo al cancelar o expirar
+}
+
+var registry = map[string]Engine{} // Register(e) desde cada motor; Get(kind) en handlers
+```
+
+- `machine.go` sigue siendo la única puerta de los estados (`CanTransition`), pero lee la tabla de `engines.Get(kind).Transitions()`.
+- Los handlers dejan de tener `switch kind`: `engines.Get(item.Kind).Quote(…)`.
+- Cada motor vive en su carpeta (`engines/service`, `engines/rental`…) con sus tests.
+
+### Cliente: `packages/shared/src/engines/<motor>.ts`
+
+```ts
+export const rental = {
+  kind: 'rental',
+  period: 'range',          // 'slot' | 'day' | 'range' | 'none': qué pide el calendario y la nueva reserva
+  resource: 'units',        // 'person' | 'capacity' | 'units' | 'stock' | 'none'
+  pricing: 'perDay',        // 'fixed' | 'perDay' | 'recurring'
+  itemFields: ['units', 'securityDeposit'],
+  detailFlow: ['confirm', 'checkout', 'inUse', 'close'], // secciones del detalle, cada una un componente registrado
+} satisfies EngineMap;
+```
+
+- Las pantallas usan `engineFor(kind).period` en vez de `kind === 'rental'`; TypeScript exige que el mapa esté completo.
+- Las secciones del detalle se registran como los `stepRenderers`: un motor nuevo reusa las existentes y solo agrega las suyas.
+- Un test verifica que los motores de TS y de Go sean los mismos (como `maps match the API templates`).
+
+### Piezas combinables (lo que lo hace barato)
+
+Un motor es una combinación de **tiempo × recurso × cobro**. Cada pieza se escribe una vez, con sus tests, y los motores las reúsan:
+
+| Motor | Tiempo | Recurso | Cobro |
+| --- | --- | --- | --- |
+| `service` | horario (`slot`) | persona | fijo |
+| `product` | día | cupo diario | fijo |
+| `rental` | rango | unidades | por día |
+| `sale` (tienda, POS) | ninguno | existencias | fijo |
+| `membership` (gimnasio) | rango (vigencia) | ninguno | recurrente |
+| clases con cupo | horario | cupo por horario | fijo o membresía |
+
+Así, `sale` solo agrega la pieza «existencias» (que ya existe en `productSales`) y `membership` solo agrega «cobro recurrente»; el resto es configuración.
+
+### Pasos de migración
+
+1. Extraer la interfaz con los tres motores actuales, **sin cambiar comportamiento**: los tests existentes son la red.
+2. Mover uno a uno los `switch` de Go al registro; luego los del cliente a `engineFor()`.
+3. Agregar el test de paridad Go ↔ TS y actualizar la regla de `CLAUDE.md` («la máquina de estados vive solo en `machine.go`») para decir que las tablas viven en cada motor y `machine.go` es la única puerta.
+4. Recién entonces, el cuarto motor.
 
 ## Vista pública y landing personalizada
 
