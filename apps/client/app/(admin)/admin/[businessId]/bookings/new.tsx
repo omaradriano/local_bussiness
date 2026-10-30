@@ -1,5 +1,5 @@
 import type { components } from '@lb/api-client';
-import { addDays, firstOfMonth, futureTime, nextHour, parsePesos, formatMXN, hhmm, lastOfMonth, localToISO, strings, term, todayISO } from '@lb/shared';
+import { addDays, engineFor, firstOfMonth, futureTime, nextHour, parsePesos, formatMXN, hhmm, lastOfMonth, localToISO, strings, term, todayISO } from '@lb/shared';
 import { router, Stack, useLocalSearchParams } from 'expo-router';
 import { useEffect, useMemo, useState } from 'react';
 import { ActivityIndicator, Switch, View } from 'react-native';
@@ -37,6 +37,11 @@ export default function NewBooking() {
   const [staff, setStaff] = useState<{ id: string; name: string; service_ids: string[]; active: boolean }[]>([]);
   const [itemId, setItemId] = useState<string | null>(null);
   const item = items?.find((i) => i.id === itemId) ?? null;
+  // The form follows the item's engine modules, not its name (see engines.json).
+  const e = item ? engineFor(item.kind) : null;
+  const isSlot = e?.timing === 'slot'; // pick a time slot (and who attends)
+  const isDay = e?.timing === 'day'; // pick a day and a time
+  const isRange = e?.timing === 'range'; // pick from–to and check the exact range
 
   // What's being booked (kept as typed; converted on save).
   const [month, setMonth] = useState(firstOfMonth(today));
@@ -86,7 +91,7 @@ export default function NewBooking() {
   useEffect(() => {
     setDays({});
     setDaysState('loading');
-    if (!item || item.kind === 'service') return;
+    if (!item || isSlot) return;
     const start = month < today ? today : month;
     const end = lastOfMonth(month);
     if (start > end) return setDaysState('ready');
@@ -107,7 +112,7 @@ export default function NewBooking() {
   // Services: slots of the chosen day (for the chosen person, if any).
   useEffect(() => {
     setSlots(null); setSlot(null);
-    if (!item || item.kind !== 'service' || !from) return;
+    if (!item || !isSlot || !from) return;
     api.GET('/v1/b/{businessId}/availability', { params: { path: { businessId }, query: { item_id: item.id, date: from, ...(staffId ? { staff_id: staffId } : {}) } } })
       .then(({ data, error, response }) => (data ? setSlots(data.slots ?? []) : setMessage(errorText(error, response.status))));
   }, [businessId, item, from, staffId, refresh]);
@@ -118,7 +123,7 @@ export default function NewBooking() {
   const backISO = to ? localToISO(to, backTime) : null;
   useEffect(() => {
     setExact(null);
-    if (!item || item.kind !== 'rental' || !outISO || !backISO) return;
+    if (!item || !isRange || !outISO || !backISO) return;
     if (backISO <= outISO) return setMessage(t.sameInstant);
     setMessage(null);
     api.GET('/v1/b/{businessId}/availability', { params: { path: { businessId }, query: { item_id: item.id, from: outISO, to: backISO, quantity: qty } } })
@@ -127,30 +132,30 @@ export default function NewBooking() {
 
   // Price as soon as the dates (or the slot) are known: the API applies the same rules as when creating.
   const [quote, setQuote] = useState<Quote | null>(null);
-  const quoteStart = item?.kind === 'service' ? slot?.starts_at : outISO;
-  const quoteReady = !!item && !!quoteStart && (item.kind !== 'rental' || !!exact?.available);
+  const quoteStart = isSlot ? slot?.starts_at : outISO;
+  const quoteReady = !!item && !!quoteStart && (!isRange || !!exact?.available);
   useEffect(() => {
     setQuote(null);
     if (!item || !quoteReady || !quoteStart) return;
     api.GET('/v1/b/{businessId}/quote', {
-      params: { path: { businessId }, query: { item_id: item.id, quantity: qty, starts_at: quoteStart, ...(item.kind === 'rental' && backISO ? { ends_at: backISO } : {}) } },
+      params: { path: { businessId }, query: { item_id: item.id, quantity: qty, starts_at: quoteStart, ...(isRange && backISO ? { ends_at: backISO } : {}) } },
     }).then(({ data }) => setQuote(data ?? null));
   }, [businessId, item, qty, quoteStart, backISO, quoteReady]);
 
   function dayInfo(date: string): DayInfo {
     if (date < today) return { disabled: true };
-    if (!item || item.kind === 'service') return {};
+    if (!item || isSlot) return {};
     const d = days[date];
     if (!d) return { disabled: true }; // not loaded yet or outside the range
     if (d.closed) return { disabled: true, badge: t.closedBadge }; // no pick-up/return, but a rental can span it
     if (!d.available) return { disabled: true };
-    if (item.kind === 'rental') return { badge: t.freeBadge(d.remaining) };
+    if (e?.resource === 'units') return { badge: t.freeBadge(d.remaining) };
     return d.remaining >= 0 ? { badge: t.countBadge(d.remaining) } : {};
   }
 
   function pick(date: string) {
     setMessage(null);
-    if (item?.kind !== 'rental') return setFrom(date);
+    if (!isRange) return setFrom(date);
     if (!from || to || date < from) { setFrom(date); setTo(null); return; }
     // A rental range can't cross a day without free units; a closed day in between is fine (the tool
     // stays with the customer). Only the visible month is loaded; the exact check of the whole range runs right after.
@@ -164,9 +169,9 @@ export default function NewBooking() {
 
   async function save() {
     if (!item) return;
-    const startsAt = item.kind === 'service' ? slot?.starts_at : outISO;
-    if (!startsAt) return toast(item.kind === 'rental' ? t.pickRange : t.pickDay, 'error');
-    if (item.kind === 'rental' && !backISO) return toast(t.pickReturn, 'error');
+    const startsAt = isSlot ? slot?.starts_at : outISO;
+    if (!startsAt) return toast(isRange ? t.pickRange : t.pickDay, 'error');
+    if (isRange && !backISO) return toast(t.pickReturn, 'error');
     if (!customer) return toast(strings.customers.pick, 'error');
     const partial = payMode === 'partial' ? parsePesos(payAmount) : null;
     if (payMode === 'partial' && !partial) return setErrors({ amount: t.invalidAmount });
@@ -180,10 +185,10 @@ export default function NewBooking() {
         item_id: item.id,
         quantity: qty,
         starts_at: startsAt,
-        ...(item.kind === 'rental' && backISO ? { ends_at: backISO } : {}),
+        ...(isRange && backISO ? { ends_at: backISO } : {}),
         ...(staffId ? { staff_id: staffId } : {}),
-        ...(item.kind === 'product' ? { fulfillment, delivery_address: address, delivery_zone: zone } : {}),
-        ...(item.kind === 'service' && atHome ? { fulfillment: 'delivery' as const, delivery_address: address } : {}),
+        ...(e?.fulfillment === 'pickupOrDelivery' ? { fulfillment, delivery_address: address, delivery_zone: zone } : {}),
+        ...(e?.fulfillment === 'atPlaceOrHome' && atHome ? { fulfillment: 'delivery' as const, delivery_address: address } : {}),
         notes,
         ...(payMode !== 'none' ? { initial_payment: { method: payMethod, ...(partial ? { amount: partial } : {}) } } : {}),
       },
@@ -199,7 +204,7 @@ export default function NewBooking() {
 
   if (!business || !items) return <ActivityIndicator style={{ marginTop: 24 }} />;
   const bookingTerm = term(business.vertical, 'booking') ?? '';
-  const canSave = !!item && (item.kind === 'service' ? !!slot : item.kind === 'product' ? !!from && !!outISO : !!exact?.available);
+  const canSave = !!item && (isSlot ? !!slot : isDay ? !!from && !!outISO : !!exact?.available);
   const paidNow = payMode === 'total' ? quote?.total ?? 0 : payMode === 'partial' ? parsePesos(payAmount) ?? 0 : 0;
   const remaining = quote ? Math.max(quote.total - paidNow, 0) : null;
   // Each step is done once its data is there; the first one not done is the current one.
@@ -218,23 +223,23 @@ export default function NewBooking() {
               <Chip key={i.id} selected={i.id === itemId} onPress={() => setItemId(i.id)}>{`${i.name} · ${formatMXN(i.price)}`}</Chip>
             ))}
           </Chips>
-          {item && item.kind !== 'service' && (
+          {item && !isSlot && (
             <Field label={t.quantity} value={quantity} onChange={setQuantity} keyboard="numeric" error={errors.quantity} />
           )}
         </Step>
 
-        <Step inline n={2} title={item?.kind === 'rental' ? s.dates.title : s.when.title}
-          description={item?.kind === 'rental' ? s.dates.description : s.when.description} state={state(1)}>
+        <Step inline n={2} title={isRange ? s.dates.title : s.when.title}
+          description={isRange ? s.dates.description : s.when.description} state={state(1)}>
           {item && (
             <>
               <Text variant="subhead" color="labelSecondary">
-                {item.kind === 'rental' ? (from && !to ? t.pickReturn : t.pickRange) : t.pickDay}
+                {isRange ? (from && !to ? t.pickReturn : t.pickRange) : t.pickDay}
               </Text>
-              <Calendar month={month} onMonthChange={setMonth} minMonth={firstOfMonth(today)} from={from} to={item.kind === 'rental' ? to : null}
+              <Calendar month={month} onMonthChange={setMonth} minMonth={firstOfMonth(today)} from={from} to={isRange ? to : null}
                 onSelect={pick} dayInfo={dayInfo} />
-              {item.kind === 'rental' && (settings?.rentals.rentals_span_closed_days ?? true) && <Text variant="footnote" color="labelSecondary">{t.closedDayHint}</Text>}
+              {isRange && (settings?.rentals.rentals_span_closed_days ?? true) && <Text variant="footnote" color="labelSecondary">{t.closedDayHint}</Text>}
               {daysState !== 'loading' && daysState !== 'ready' && <Notice tone="warning">{daysState}</Notice>}
-              {item.kind === 'rental' && daysState === 'ready' && Object.values(days).every((d) => d.remaining === 0) && (
+              {e?.resource === 'units' && daysState === 'ready' && Object.values(days).every((d) => d.remaining === 0) && (
                 <View style={{ gap: 8 }}>
                   <Notice tone="warning">{t.noUnits}</Notice>
                   <Button size="sm" onPress={() => router.push({ pathname: '/admin/[businessId]/catalog/[itemId]', params: { businessId, itemId: item.id } })}>{t.goToUnits}</Button>
@@ -243,7 +248,7 @@ export default function NewBooking() {
             </>
           )}
 
-          {item?.kind === 'service' && attendants.length > 1 && (
+          {e?.resource === 'staff' && attendants.length > 1 && (
             <View style={{ gap: 8 }}>
               <Text variant="subhead" color="labelSecondary">{t.whoAttends}</Text>
               <Chips>
@@ -252,9 +257,9 @@ export default function NewBooking() {
               </Chips>
             </View>
           )}
-          {item?.kind === 'service' && from && (
+          {isSlot && from && (
             <>
-              {has('homeService') && (
+              {e?.fulfillment === 'atPlaceOrHome' && has('homeService') && (
                 <View style={{ gap: 8 }}>
                   <View style={{ flexDirection: 'row', alignItems: 'center', gap: 12 }}>
                     <Text style={{ flex: 1 }}>{t.homeService}</Text>
@@ -279,11 +284,11 @@ export default function NewBooking() {
             </>
           )}
 
-          {item?.kind === 'product' && from && (
+          {isDay && from && (
             <>
               <Field label={t.deliveryTime} value={time} onChange={setTime} error={errors.starts_at} onBlur={() => from && setTime(futureTime(from, time))} />
-              <Segmented options={[{ value: 'pickup', label: t.pickup }, { value: 'delivery', label: t.delivery }]} value={fulfillment} onChange={setFulfillment} />
-              {fulfillment === 'delivery' && (
+              {e?.fulfillment === 'pickupOrDelivery' && <Segmented options={[{ value: 'pickup', label: t.pickup }, { value: 'delivery', label: t.delivery }]} value={fulfillment} onChange={setFulfillment} />}
+              {e?.fulfillment === 'pickupOrDelivery' && fulfillment === 'delivery' && (
                 <>
                   <Field label={t.address} value={address} onChange={setAddress} error={errors.delivery_address} />
                   <Field label={t.zone} value={zone} onChange={setZone} error={errors.delivery_zone} />
@@ -292,19 +297,19 @@ export default function NewBooking() {
             </>
           )}
 
-          {item?.kind === 'rental' && from && (
+          {isRange && from && (
             <View style={{ flexDirection: 'row', gap: 12 }}>
               <View style={{ flex: 1 }}><Field label={t.outTime} value={time} onChange={setTime} hint={s.dates.timeHint} onBlur={() => from && setTime(futureTime(from, time))} /></View>
               {to && <View style={{ flex: 1 }}><Field label={t.backTime} value={backTime} onChange={setBackTime} error={errors.ends_at} /></View>}
             </View>
           )}
-          {item?.kind === 'rental' && to && !exact && !message && <Text color="labelSecondary">{t.checking}</Text>}
-          {item?.kind === 'rental' && exact && (
+          {isRange && to && !exact && !message && <Text color="labelSecondary">{t.checking}</Text>}
+          {isRange && exact && (
             <Notice tone={exact.available ? 'success' : 'warning'}>{exact.available ? t.free(exact.free_units?.length ?? 0) : t.notEnough}</Notice>
           )}
           {quote && (
             <View style={{ gap: 6 }}>
-              {item?.kind === 'rental' && <Row label={s.dates.days} value={String(quote.periods)} />}
+              {e?.pricing === 'perPeriod' && <Row label={s.dates.days} value={String(quote.periods)} />}
               <Row label={t.total} value={formatMXN(quote.total)} strong />
               {quote.security_deposit > 0 && <Row label={s.dates.deposit} value={formatMXN(quote.security_deposit)} />}
             </View>

@@ -57,7 +57,13 @@ Un giro es un tipo de negocio montado sobre un motor (`service`, `product` o `re
 2. **Plantilla (Go):** `services/api/internal/businesses/templates/<giro>.json` con el mismo `kind` y `features`, más los datos de alta (ajustes, horario, catálogo y pasos de ejemplo). El test `maps match the API templates` verifica que coincidan.
 3. **Base:** migración que agregue el giro al `check` de `businesses.vertical` (y de `notification_templates`), hasta que los giros vivan en `business_types`.
 4. **Funciones:** las pantallas preguntan `has('<función>')` (hook `useTexts()`, funciones activas del negocio), nunca por el giro. Una función nueva: agregarla a `services/api/internal/features/features.json` (con los motores que la admiten), a `Feature` en `verticals/types.ts` y su nombre en `verticals/features.ts`. El superadministrador la da o quita por negocio y el dueño la enciende en Ajustes.
-5. **Motor nuevo** (otra forma de apartar) sí es código: disponibilidad, estados en `machine.go`, precio y su flujo de detalle, empezando por sus tests.
+5. **Motor nuevo** (otra forma de apartar): se arma con módulos (tiempo, entrega, recurso, cobro, custodia). Agregarlo a `engines.Kinds` y a `services/api/internal/engines/engines.json`, al `check` de `kind` en la base, y llenar cada tabla por motor (`availability.answerers`, `bookings.transitions`, `bookings.rulesByKind`, `catalog.rulesByKind`) reusando módulos; solo se escribe, empezando por sus tests, el módulo que falte. Los tests de cobertura reprueban en cada capa que no lo tenga.
+
+## Reglas de motores
+
+- Nadie pregunta por un motor por su nombre (`kind == "rental"`, `kind === 'rental'`): Go usa la tabla de su capa (`engines.Get`, que falla con un motor desconocido) y la app pregunta por módulo con `engineFor(kind)` (`timing === 'range'`, `custody`).
+- Un módulo nuevo se registra en `engines.json` y en la tabla de su capa; los tests de paridad comparan Go, `engines.json` y TS.
+- Diseño completo: `docs/mapa-giros.md` → «Motores detrás de una interfaz».
 
 ## Receta: tipo de paso nuevo (workflow steps)
 
@@ -66,4 +72,4 @@ Un giro es un tipo de negocio montado sobre un motor (`service`, `product` o `re
 3. **Cliente:** registrar en `stepRenderers` el componente de captura y el de configuración (si no, se genera un formulario desde el JSON Schema).
 4. **Tests** del tipo (config válida e inválida, datos completos e incompletos) y activarlo solo para el negocio que lo pidió con `settings.features`.
 
-Reglas: la máquina de estados vive solo en `internal/bookings/machine.go`; ningún flujo revisa un tipo de paso por nombre, todo pasa por el registro; las plantillas por giro viven en `packages/shared/templates/`.
+Reglas: la máquina de estados vive solo en `internal/bookings/machine.go` (una tabla por motor, `CanTransition` como única puerta); ningún flujo revisa un tipo de paso por nombre, todo pasa por el registro; las plantillas por giro viven en `packages/shared/templates/`.
