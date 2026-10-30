@@ -142,7 +142,7 @@ Así, `sale` solo agrega la pieza «existencias» (que ya existe en `productSale
 ### Pasos de migración
 
 1. **(Hecho, 2026-10-30)** Lista única `internal/engines`; disponibilidad y estados en tablas con test de cobertura; reservas, catálogo y filtros ya no caen en renta por omisión: un motor desconocido es un error. Las plantillas de giro y `features.json` solo pueden nombrar motores de la lista.
-2. Reservas: reglas por motor (preparar, revisar disponibilidad, apartar recursos, periodos y cobros) en una tabla de `bookings`, en lugar de los `switch` de `create.go`, `quote.go` y `payments.go`.
+2. **(Hecho, 2026-10-30)** Reservas armadas con módulos compartidos (`bookings/modules.go`): **tiempo** (`slotTiming`, `dayTiming`, `rangeTiming`), **entrega** (`atPlaceOrHome`, `pickupOrDelivery`, `atPlace`), **recurso** (`staffSlot`, `dailyCapacity`, `units`) y **cobro** (`fixedPrice`, `perPeriod`, que también usa la cotización). Cada motor es una fila de `rulesByKind`. Pendiente en esta capa: cobros y operaciones de salida y devolución (`payments.go`, `ops.go`, `rental.go`, `extend.go`) como un módulo de «custodia».
 3. Catálogo: campos, validación y limpieza por motor en una tabla de `catalog`.
 4. Cliente: `packages/shared/src/engines` con `engineFor(kind)`, las pantallas dejan de preguntar `kind === '…'`, y test de paridad Go ↔ TS.
 5. Batería de contrato común por motor y actualizar la regla de `CLAUDE.md`.

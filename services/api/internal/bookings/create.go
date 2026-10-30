@@ -172,52 +172,17 @@ func Create(ctx context.Context, db store.DB, businessID string, in CreateInput,
 		return Booking{}, false, err
 	}
 
-	start := *in.StartsAt
-	var end *time.Time
-	periods := int64(1)
-	var deliveryFee int64
-	switch it.Kind {
-	case engines.Service:
-		e := start.Add(time.Duration(it.DurationMinutes) * time.Minute)
-		end = &e
-		// At the customer's place only if the business gives home service.
-		if in.Fulfillment == "delivery" {
-			if !slices.Contains(active, "homeService") {
-				return Booking{}, false, Invalid{"fulfillment", "Este negocio no tiene servicio a domicilio."}
-			}
-			if in.DeliveryAddress = strings.TrimSpace(in.DeliveryAddress); in.DeliveryAddress == "" {
-				return Booking{}, false, Invalid{"delivery_address", "Escribe la dirección del servicio."}
-			}
-		} else {
-			in.Fulfillment, in.DeliveryAddress = "", ""
-		}
-	case engines.Product:
-		if in.Fulfillment == "" {
-			in.Fulfillment = "pickup"
-		}
-		if in.Fulfillment != "pickup" && in.Fulfillment != "delivery" {
-			return Booking{}, false, Invalid{"fulfillment", "Elige si se recoge o se entrega."}
-		}
-		if in.Fulfillment == "delivery" {
-			if in.DeliveryAddress = strings.TrimSpace(in.DeliveryAddress); in.DeliveryAddress == "" {
-				return Booking{}, false, Invalid{"delivery_address", "Escribe la dirección de entrega."}
-			}
-			if len(set.DeliveryZones) > 0 {
-				i := slices.IndexFunc(set.DeliveryZones, func(z zone) bool { return z.Name == in.DeliveryZone })
-				if i < 0 {
-					return Booking{}, false, Invalid{"delivery_zone", "Elige la zona de entrega."}
-				}
-				deliveryFee = set.DeliveryZones[i].Fee
-			}
-		}
-	case engines.Rental:
-		if in.EndsAt == nil || !in.EndsAt.After(start) {
-			return Booking{}, false, Invalid{"ends_at", "El regreso debe ser después de la salida."}
-		}
-		end = in.EndsAt
-		in.Fulfillment, in.DeliveryAddress = "", ""
-	default:
-		return Booking{}, false, engines.ErrUnknown{Kind: it.Kind}
+	rules, err := engines.Get(rulesByKind, it.Kind)
+	if err != nil {
+		return Booking{}, false, err
+	}
+	r := &reservation{ctx: ctx, tx: tx, loader: availability.Loader{DB: tx}, businessID: businessID, in: &in, item: it,
+		set: set, rentals: rentals, active: active, loc: loc, now: now, start: *in.StartsAt}
+	if err := rules.timing(r); err != nil {
+		return Booking{}, false, err
+	}
+	if err := rules.fulfillment(r); err != nil {
+		return Booking{}, false, err
 	}
 
 	optsExtra, answers, err := checkOptions(ctx, tx, businessID, in.ItemID, in.Options)
@@ -226,54 +191,14 @@ func Create(ctx context.Context, db store.DB, businessID string, in CreateInput,
 	}
 
 	// Availability, re-checked inside the transaction.
-	loader := availability.Loader{DB: tx}
-	var candidates []string // staff ids (service) or unit ids (rental) that are free, in preference order
-	switch it.Kind {
-	case engines.Service:
-		res, err := loader.Answer(ctx, businessID, availability.Request{ItemID: in.ItemID, Date: start.In(loc).Format("2006-01-02"), StaffID: in.StaffID}, now)
-		if err != nil {
-			return Booking{}, false, err
-		}
-		i := slices.IndexFunc(res.Slots, func(s availability.Slot) bool { return s.Start.Equal(start) })
-		if i < 0 {
-			return Booking{}, false, ErrSlotTaken
-		}
-		candidates = res.Slots[i].StaffIDs
-	case engines.Product:
-		day := start.In(loc).Format("2006-01-02")
-		// Serialize orders of this business for this day so two can't take the last spot.
-		if _, err := tx.Exec(ctx, `select pg_advisory_xact_lock(hashtextextended($1 || $2, 0))`, businessID, day); err != nil {
-			return Booking{}, false, err
-		}
-		res, err := loader.Answer(ctx, businessID, availability.Request{ItemID: in.ItemID, From: day, To: day, Quantity: in.Quantity}, now)
-		if err != nil {
-			return Booking{}, false, err
-		}
-		if len(res.Days) != 1 || !res.Days[0].Available {
-			return Booking{}, false, ErrSlotTaken
-		}
-	case engines.Rental:
-		res, err := loader.Answer(ctx, businessID, availability.Request{ItemID: in.ItemID,
-			From: start.Format(time.RFC3339), To: end.Format(time.RFC3339), Quantity: in.Quantity}, now)
-		if err != nil {
-			return Booking{}, false, err
-		}
-		if !res.Available {
-			return Booking{}, false, ErrSlotTaken
-		}
-		// No pick-up or return on a closed day (spanning one is fine).
-		hours, err := loader.BusinessHours(ctx, businessID)
-		if err != nil {
-			return Booking{}, false, err
-		}
-		if !availability.OpenOn(loc, start, hours) {
-			return Booking{}, false, Invalid{"starts_at", "El negocio está cerrado ese día; elige otro día de salida."}
-		}
-		if periods, err = rentalPeriods(loc, hours, rentals, it.PriceUnit, start, *end); err != nil {
-			return Booking{}, false, err
-		}
-		candidates = res.FreeUnits
+	if err := rules.resource.check(r); err != nil {
+		return Booking{}, false, err
 	}
+	periods, err := rules.pricing(periodQuery{loc: loc, hours: r.businessHours, rentals: rentals, priceUnit: it.PriceUnit, start: r.start, end: r.end})
+	if err != nil {
+		return Booking{}, false, err
+	}
+	start, end, deliveryFee := r.start, r.end, r.deliveryFee
 
 	customerID, err := upsertCustomer(ctx, tx, businessID, in.Customer)
 	if err != nil {
@@ -335,20 +260,8 @@ func Create(ctx context.Context, db store.DB, businessID string, in CreateInput,
 		return Booking{}, false, err
 	}
 
-	switch it.Kind {
-	case engines.Service:
-		occupied := end.Add(time.Duration(set.BufferMinutes) * time.Minute)
-		if !claim(ctx, tx, `insert into public.booking_resources (business_id, booking_id, staff_id, during) values ($1, $2, $3, tstzrange($4, $5))`,
-			businessID, bookingID, candidates, 1, start, occupied) {
-			return Booking{}, false, ErrSlotTaken
-		}
-	case engines.Rental:
-		// shortcut: the inspection gap is enforced by the availability check, not by the exclusion constraint;
-		// a race inside that gap is possible. Store [start, end + gap) if it ever matters.
-		if !claim(ctx, tx, `insert into public.booking_resources (business_id, booking_id, item_unit_id, during) values ($1, $2, $3, tstzrange($4, $5))`,
-			businessID, bookingID, candidates, in.Quantity, start, *end) {
-			return Booking{}, false, ErrSlotTaken
-		}
+	if err := rules.resource.claim(r, bookingID); err != nil {
+		return Booking{}, false, err
 	}
 
 	if _, err := tx.Exec(ctx, `insert into public.booking_events (business_id, booking_id, from_status, to_status, actor, note)
