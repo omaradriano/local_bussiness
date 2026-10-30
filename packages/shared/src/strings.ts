@@ -410,6 +410,8 @@ export const strings = {
       pricesPending: 'Precios y pagos aún no definidos.',
       trial: (days: number) => `Cada cuenta nueva empieza con ${days} días de prueba gratis del plan Pro, sin tarjeta.`,
       current: 'Tu plan',
+      included: 'Incluido',
+      notIncluded: 'No incluido',
       blurbs: {
         lite: 'Para empezar: un negocio y lo básico para operar.',
         pro: 'Para el negocio que ya crece: equipo, sueldos y finanzas completas.',
