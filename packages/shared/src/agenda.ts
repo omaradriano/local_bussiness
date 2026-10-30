@@ -1,6 +1,8 @@
 import { bookingDays } from './datetime';
+import { engineFor } from './engines';
+import type { ItemKind } from './verticals/types';
 
-type Row = { kind: 'service' | 'product' | 'rental'; status: string; starts_at: string; ends_at: string | null };
+type Row = { kind: ItemKind; status: string; starts_at: string; ends_at: string | null };
 
 export type AgendaGroup = 'overdue' | 'awaitingDeposit' | 'appointments' | 'deliveries' | 'goingOut' | 'comingBack';
 
@@ -14,10 +16,11 @@ export function agendaGroups<T extends Row>(rows: T[], today: string): Record<Ag
   for (const b of rows) {
     if (b.status === 'overdue') { g.overdue.push(b); continue; }
     if (b.status === 'pending_deposit') g.awaitingDeposit.push(b);
-    if (b.kind === 'service' && day(b.starts_at) === today) g.appointments.push(b);
-    if (b.kind === 'product' && day(b.starts_at) === today) g.deliveries.push(b);
-    if (b.kind === 'rental' && day(b.starts_at) === today && b.status !== 'checked_out') g.goingOut.push(b);
-    if (b.kind === 'rental' && b.ends_at && day(b.ends_at) === today && (b.status === 'checked_out' || b.status === 'confirmed')) g.comingBack.push(b);
+    const e = engineFor(b.kind);
+    if (e.timing === 'slot' && day(b.starts_at) === today) g.appointments.push(b);
+    if (e.timing === 'day' && day(b.starts_at) === today) g.deliveries.push(b);
+    if (e.custody && day(b.starts_at) === today && b.status !== 'checked_out') g.goingOut.push(b);
+    if (e.custody && b.ends_at && day(b.ends_at) === today && (b.status === 'checked_out' || b.status === 'confirmed')) g.comingBack.push(b);
   }
   for (const k of Object.keys(g) as AgendaGroup[]) g[k].sort((a, b) => a.starts_at.localeCompare(b.starts_at));
   return g;
