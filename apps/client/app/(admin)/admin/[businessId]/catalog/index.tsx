@@ -1,5 +1,5 @@
 import type { components } from '@lb/api-client';
-import { formatMXN, strings, term } from '@lb/shared';
+import { engineFor, formatMXN, strings, term } from '@lb/shared';
 import { router, Stack, useFocusEffect, useLocalSearchParams } from 'expo-router';
 import { useCallback, useState } from 'react';
 import { Ionicons } from '@expo/vector-icons';
@@ -14,8 +14,9 @@ type Item = components['schemas']['CatalogItem'];
 const t = strings.catalog;
 
 function detail(it: Item): string {
-  if (it.kind === 'service') return `${it.duration_minutes} min`;
-  if (it.kind === 'product') return `${it.prep_hours} h de anticipación`;
+  const e = engineFor(it.kind);
+  if (e.timing === 'slot') return `${it.duration_minutes} min`;
+  if (e.timing === 'day') return `${it.prep_hours} h de anticipación`;
   const unit = `por ${t.priceUnits[it.price_unit ?? 'day'].toLowerCase()}`;
   return it.security_deposit ? `${unit} · depósito ${formatMXN(it.security_deposit)}` : unit;
 }

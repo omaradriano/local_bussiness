@@ -1,5 +1,5 @@
 import type { components } from '@lb/api-client';
-import { formatMXN, strings } from '@lb/shared';
+import { engineFor, formatMXN, strings } from '@lb/shared';
 import { router, Stack, useFocusEffect, useLocalSearchParams, type Href } from 'expo-router';
 import { useCallback, useState } from 'react';
 import { ActivityIndicator, View } from 'react-native';
@@ -60,7 +60,7 @@ export default function Finances() {
             </Group>
           )}
 
-          {(kind === 'rental' || s.overdue.length > 0) && (
+          {(engineFor(kind).custody || s.overdue.length > 0) && (
             <Group label={t.overdue}>
               {s.overdue.length === 0 ? <Cell icon="checkmark-circle" tint={ui.success} label={t.noOverdue} /> : null}
               {s.overdue.map((o) => (

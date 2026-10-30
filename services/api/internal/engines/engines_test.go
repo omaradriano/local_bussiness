@@ -30,3 +30,9 @@ func TestCoversReportsMissingAndExtra(t *testing.T) {
 		t.Fatalf("full table: missing %v, extra %v", missing, extra)
 	}
 }
+
+func TestModulesDescribeEveryEngine(t *testing.T) {
+	if missing, extra := Covers(ModulesOf); missing != nil || extra != nil {
+		t.Fatalf("engines.json: missing %v, extra %v", missing, extra)
+	}
+}

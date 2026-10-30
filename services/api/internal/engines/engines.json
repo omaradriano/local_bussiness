@@ -1,0 +1,5 @@
+{
+  "service": { "timing": "slot", "fulfillment": "atPlaceOrHome", "resource": "staff", "pricing": "fixed", "custody": false },
+  "product": { "timing": "day", "fulfillment": "pickupOrDelivery", "resource": "dailyCapacity", "pricing": "fixed", "custody": false },
+  "rental": { "timing": "range", "fulfillment": "atPlace", "resource": "units", "pricing": "perPeriod", "custody": true }
+}

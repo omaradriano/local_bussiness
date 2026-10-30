@@ -2,6 +2,7 @@ package bookings
 
 import (
 	"errors"
+	"reflect"
 	"testing"
 	"time"
 
@@ -120,5 +121,21 @@ func TestCustodyModule(t *testing.T) {
 	}
 	if err := PaymentAllowed(engines.Rental, "confirmed", "late_fee"); invalidField(err) != "type" {
 		t.Fatalf("rental late_fee before the return: %v", err)
+	}
+}
+
+// The modules in rulesByKind are the ones engines.json (read by the app) says.
+func TestModulesMatchEnginesJSON(t *testing.T) {
+	fn := func(f any) uintptr { return reflect.ValueOf(f).Pointer() }
+	timing := map[string]uintptr{"slot": fn(slotTiming), "day": fn(dayTiming), "range": fn(rangeTiming)}
+	fulfillment := map[string]uintptr{"atPlaceOrHome": fn(atPlaceOrHome), "pickupOrDelivery": fn(pickupOrDelivery), "atPlace": fn(atPlace)}
+	resources := map[string]resource{"staff": staffSlot{}, "dailyCapacity": dailyCapacity{}, "units": units{}}
+	pricings := map[string]uintptr{"fixed": fn(fixedPrice), "perPeriod": fn(perPeriod)}
+	for kind, m := range engines.ModulesOf {
+		r := rulesByKind[kind]
+		if fn(r.timing) != timing[m.Timing] || fn(r.fulfillment) != fulfillment[m.Fulfillment] ||
+			r.resource != resources[m.Resource] || fn(r.pricing) != pricings[m.Pricing] || r.custody != m.Custody {
+			t.Errorf("%s: rulesByKind doesn't match engines.json %+v", kind, m)
+		}
 	}
 }

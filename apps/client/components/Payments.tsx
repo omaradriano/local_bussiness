@@ -1,5 +1,5 @@
 import type { components } from '@lb/api-client';
-import { centavosToInput, formatMXN, parsePesos, strings } from '@lb/shared';
+import { centavosToInput, engineFor, formatMXN, parsePesos, strings } from '@lb/shared';
 import { useEffect, useState } from 'react';
 import { Pressable, View } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
@@ -19,7 +19,7 @@ const t = strings.bookings;
  * comes back, late/damage fees only after it's back, a refund only while a deposit is held.
  */
 export function paymentTypesFor(b: Booking, security: number): PaymentType[] {
-  if (b.kind !== 'rental') return ['advance', 'balance'];
+  if (!engineFor(b.kind).custody) return ['advance', 'balance'];
   const back = b.status === 'returned' || b.status === 'completed';
   const out: PaymentType[] = [];
   if (b.status === 'pending_deposit' || b.status === 'confirmed') out.push('advance');

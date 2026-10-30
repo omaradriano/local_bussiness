@@ -1,5 +1,5 @@
 import type { components } from '@lb/api-client';
-import { bookingDays, firstOfMonth, monthWindow, strings, todayISO } from '@lb/shared';
+import { bookingDays, engineFor, firstOfMonth, monthWindow, strings, todayISO } from '@lb/shared';
 import { Stack, useFocusEffect, useLocalSearchParams } from 'expo-router';
 import { useCallback, useMemo, useState } from 'react';
 import { ActivityIndicator, View } from 'react-native';
@@ -71,7 +71,7 @@ export default function BookingCalendar() {
             {list && selected.length === 0 ? <Cell label={texts.bookings.noneThatDay} /> : null}
             {selected.map((b) => (
               <BookingCell key={b.id} businessId={businessId} b={b}
-                time={b.kind === 'rental' && b.ends_at ? `${when(b.starts_at)} → ${when(b.ends_at)}` : when(b.starts_at)} />
+                time={engineFor(b.kind).timing === 'range' && b.ends_at ? `${when(b.starts_at)} → ${when(b.ends_at)}` : when(b.starts_at)} />
             ))}
           </Group>
         </>

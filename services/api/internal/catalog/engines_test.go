@@ -21,3 +21,11 @@ func TestEveryEngineHasItemFields(t *testing.T) {
 		t.Fatal("only rentals have units")
 	}
 }
+
+func TestUnitsMatchEnginesJSON(t *testing.T) {
+	for kind, m := range engines.ModulesOf {
+		if HasUnits(kind) != (m.Resource == "units") {
+			t.Errorf("%s: units %v, engines.json resource %q", kind, HasUnits(kind), m.Resource)
+		}
+	}
+}

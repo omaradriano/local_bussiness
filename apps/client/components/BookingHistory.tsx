@@ -1,5 +1,5 @@
 import type { components } from '@lb/api-client';
-import { strings } from '@lb/shared';
+import { engineFor, strings } from '@lb/shared';
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { ActivityIndicator, View } from 'react-native';
 import { api } from '../lib/api';
@@ -69,7 +69,7 @@ export function BookingHistory({ businessId, customerId, compact }: { businessId
         <Group key={month} label={month}>
           {list.map((b) => (
             <BookingCell key={b.id} businessId={businessId} b={b}
-              time={b.kind === 'rental' && b.ends_at ? `${day(b.starts_at)} → ${day(b.ends_at)}` : day(b.starts_at)} />
+              time={engineFor(b.kind).timing === 'range' && b.ends_at ? `${day(b.starts_at)} → ${day(b.ends_at)}` : day(b.starts_at)} />
           ))}
         </Group>
       ))}

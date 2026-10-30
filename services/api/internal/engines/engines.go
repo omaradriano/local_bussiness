@@ -3,14 +3,40 @@
 // by these kinds, and a test in each one checks the table covers exactly this list. So a new
 // engine starts here, fails those tests until every layer implements it, and an unknown kind is an
 // error instead of falling into another engine's rules. The database checks the same list
-// (catalog_items.kind, bookings.kind), and packages/shared mirrors it.
+// (catalog_items.kind, bookings.kind).
+//
+// engines.json names the modules each engine is made of; the app reads it (packages/shared
+// engineFor) and the Go layers have tests that their tables match it.
 package engines
 
 import (
+	_ "embed"
+	"encoding/json"
 	"fmt"
 	"maps"
 	"slices"
 )
+
+// Modules an engine is made of (see bookings/modules.go and catalog/fields.go).
+type Modules struct {
+	Timing      string `json:"timing"`      // slot | day | range
+	Fulfillment string `json:"fulfillment"` // atPlaceOrHome | pickupOrDelivery | atPlace
+	Resource    string `json:"resource"`    // staff | dailyCapacity | units
+	Pricing     string `json:"pricing"`     // fixed | perPeriod
+	Custody     bool   `json:"custody"`     // goes with the customer and comes back
+}
+
+//go:embed engines.json
+var modulesJSON []byte
+
+// ModulesOf lists the modules of every engine.
+var ModulesOf = func() map[string]Modules {
+	var m map[string]Modules
+	if err := json.Unmarshal(modulesJSON, &m); err != nil {
+		panic(err)
+	}
+	return m
+}()
 
 const (
 	Service = "service" // a person's time slot (duration + buffer)

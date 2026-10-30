@@ -1,5 +1,5 @@
 import type { components } from '@lb/api-client';
-import { shiftsToWeek, strings, weekToShifts, type DayRow } from '@lb/shared';
+import { engineFor, shiftsToWeek, strings, weekToShifts, type DayRow } from '@lb/shared';
 import { router, Stack, useLocalSearchParams, type Href } from 'expo-router';
 import { useEffect, useState } from 'react';
 import { Ionicons } from '@expo/vector-icons';
@@ -52,7 +52,7 @@ export default function StaffDetail() {
       setName(p.name);
       setSelected(new Set(p.service_ids));
       setWeek(shiftsToWeek(p.hours));
-      setServices(cat.data?.items.filter((i) => i.kind === 'service') ?? []);
+      setServices(cat.data?.items.filter((i) => engineFor(i.kind).resource === 'staff') ?? []);
     });
   }, [businessId, staffId]);
 
