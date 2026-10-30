@@ -5,6 +5,9 @@
   "buildCommand": "pnpm run build",
   "outputDirectory": "dist",
   "git": { "deploymentEnabled": false },
+  "redirects": [
+    { "source": "/(.*)", "has": [{ "type": "host", "value": "www.khronno.com" }], "destination": "https://khronno.com/$1", "permanent": true }
+  ],
   "rewrites": [{ "source": "/(.*)", "destination": "/index.html" }],
   "headers": [
     { "source": "/sw.js", "headers": [{ "key": "Cache-Control", "value": "no-cache" }] },
