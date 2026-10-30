@@ -1,7 +1,11 @@
 // Visible UI text (es-MX) shared by every type of business. Text that changes with the type
 // ("Rentas" / "Citas" / "Pedidos", gendered states) lives in verticalTexts.ts.
+// Nombre y dominio de la plataforma (también en apps/client/app.json, public/manifest.json y public/index.html).
+export const APP_NAME = 'Khronno';
+export const APP_DOMAIN = 'khronno.com';
+
 export const strings = {
-  appName: 'Mi negocio',
+  appName: APP_NAME,
   common: {
     loading: 'Cargando…',
     retry: 'Reintentar',
@@ -50,7 +54,7 @@ export const strings = {
     title: 'Registra tu negocio',
     name: 'Nombre del negocio',
     slug: 'Dirección de tu catálogo',
-    slugHint: 'Así te encontrarán tus clientes: tudominio.com/',
+    slugHint: `Así te encontrarán tus clientes: ${APP_DOMAIN}/`,
     vertical: '¿A qué se dedica?',
     submit: 'Crear negocio',
     templateNote: 'Te dejamos un catálogo y horario de ejemplo; los puedes cambiar después.',
@@ -371,8 +375,8 @@ export const strings = {
   },
   confirm: { cancel: 'Cancelar' },
   welcome: {
-    title: 'Bienvenido a Mi negocio',
-    open: '¿Qué es Mi negocio?',
+    title: `Bienvenido a ${APP_NAME}`,
+    open: `¿Qué es ${APP_NAME}?`,
     done: 'Entendido',
     privacy: 'Aviso de privacidad',
     terms: 'Términos y condiciones',
