@@ -1321,6 +1321,26 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/v1/b/{businessId}/bookings/{bookingId}/discount": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                businessId: components["parameters"]["BusinessId"];
+                bookingId: string;
+            };
+            cookie?: never;
+        };
+        get?: never;
+        /** Pone, cambia o quita (value 0) el descuento; recalcula total y anticipo; no baja de lo ya cobrado */
+        put: operations["setBookingDiscount"];
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/v1/b/{businessId}/bookings/{bookingId}/return": {
         parameters: {
             query?: never;
@@ -1830,6 +1850,7 @@ export interface components {
                 /** @description El cliente aceptó el aviso de privacidad del negocio */
                 privacy_accepted?: boolean;
             };
+            discount?: components["schemas"]["Discount"];
             /** @description Lo que el cliente paga al crearla (solo mostrador). Sin `amount` = el total. */
             initial_payment?: {
                 /** @enum {string} */
@@ -1865,6 +1886,13 @@ export interface components {
             };
             notes?: string;
         };
+        /** @enum {string} */
+        DiscountType: "amount" | "percent";
+        /** @description Descuento del negocio (solo mostrador): cantidad fija en centavos o porcentaje entero del total. `value` 0 = sin descuento. */
+        Discount: {
+            type: components["schemas"]["DiscountType"];
+            value: number;
+        };
         Booking: {
             /** Format: uuid */
             id: string;
@@ -1899,6 +1927,17 @@ export interface components {
             delivery_address?: string | null;
             /** Format: int64 */
             subtotal: number;
+            discount_type: components["schemas"]["DiscountType"] | null;
+            /**
+             * Format: int64
+             * @description Centavos o porcentaje, según discount_type
+             */
+            discount_value: number;
+            /**
+             * Format: int64
+             * @description Lo que el descuento quita del total
+             */
+            discount: number;
             /** Format: int64 */
             deposit_required: number;
             /** Format: int64 */
@@ -3029,6 +3068,8 @@ export interface operations {
                 quantity?: number;
                 starts_at: string;
                 ends_at?: string;
+                discount_type?: components["schemas"]["DiscountType"];
+                discount_value?: number;
             };
             header?: never;
             path: {
@@ -3046,6 +3087,8 @@ export interface operations {
                 content: {
                     "application/json": {
                         subtotal: number;
+                        /** @description Lo que el descuento quita del total */
+                        discount: number;
                         total: number;
                         deposit_required: number;
                         security_deposit: number;
@@ -4558,6 +4601,35 @@ export interface operations {
                 };
             };
             409: components["responses"]["Error"];
+            422: components["responses"]["Error"];
+        };
+    };
+    setBookingDiscount: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                businessId: components["parameters"]["BusinessId"];
+                bookingId: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["Discount"];
+            };
+        };
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Booking"];
+                };
+            };
+            404: components["responses"]["Error"];
             422: components["responses"]["Error"];
         };
     };

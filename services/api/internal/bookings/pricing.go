@@ -48,10 +48,12 @@ type QuoteInput struct {
 	DeliveryFee     int64
 	DepositPercent  int64 // advance the business asks for, % of total
 	SecurityDeposit int64 // per unit, refundable (rentals)
+	Discount        Discount
 }
 
 type Quote struct {
 	Subtotal        int64 `json:"subtotal"`
+	Discount        int64 `json:"discount"` // taken off the total
 	Total           int64 `json:"total"`
 	Advance         int64 `json:"deposit_required"`
 	SecurityDeposit int64 `json:"security_deposit"`
@@ -60,9 +62,12 @@ type Quote struct {
 func Compute(in QuoteInput) Quote {
 	sub := (in.UnitPrice + in.OptionsExtra) * in.Quantity * max(in.Periods, 1)
 	total := sub + in.DeliveryFee
+	off := in.Discount.Of(total)
+	total -= off
 	pct := min(max(in.DepositPercent, 0), 100)
 	return Quote{
 		Subtotal:        sub,
+		Discount:        off,
 		Total:           total,
 		Advance:         (total*pct + 50) / 100, // rounded to whole centavos
 		SecurityDeposit: in.SecurityDeposit * in.Quantity,

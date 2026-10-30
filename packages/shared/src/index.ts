@@ -4,6 +4,7 @@ export * from './strings';
 export * from './auth';
 export * from './slug';
 export * from './money';
+export * from './discount';
 export * from './hours';
 export * from './image';
 export * from './nav';
