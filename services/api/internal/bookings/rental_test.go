@@ -37,3 +37,23 @@ func TestFileKeysStayInsideTheBooking(t *testing.T) {
 		t.Fatal("keys must be unique")
 	}
 }
+
+// With «el día de regreso cuenta completo» a return any time on the due day isn't late.
+func TestLateDaysByCalendarDay(t *testing.T) {
+	loc, _ := time.LoadLocation("America/Chihuahua")
+	due := time.Date(2026, 11, 4, 14, 0, 0, 0, loc)
+	cases := []struct {
+		returned time.Time
+		want     int64
+	}{
+		{due.Add(-3 * time.Hour), 0},
+		{time.Date(2026, 11, 4, 23, 59, 0, 0, loc), 0},
+		{time.Date(2026, 11, 5, 0, 30, 0, 0, loc), 1},
+		{time.Date(2026, 11, 6, 9, 0, 0, 0, loc), 2},
+	}
+	for _, tc := range cases {
+		if got := LateDaysByDay(loc, due, tc.returned); got != tc.want {
+			t.Errorf("returned %v: %d days, want %d", tc.returned, got, tc.want)
+		}
+	}
+}

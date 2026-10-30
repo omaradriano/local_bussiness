@@ -1789,6 +1789,8 @@ export interface components {
                 charge_closed_days: boolean;
                 /** @description Revisión entre rentas de una unidad (0 = sin revisión; la app la captura en horas) */
                 inspection_minutes: number;
+                /** @description El día de regreso cuenta completo (hasta las 11:59 pm): se cobra y se atrasa por día de calendario */
+                return_by_end_of_day: boolean;
             };
         };
         Availability: {
@@ -3853,6 +3855,7 @@ export interface operations {
                         rentals_span_closed_days?: boolean;
                         charge_closed_days?: boolean;
                         inspection_minutes?: number;
+                        return_by_end_of_day?: boolean;
                     };
                 };
             };

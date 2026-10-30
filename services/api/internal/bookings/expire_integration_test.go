@@ -68,3 +68,40 @@ func TestIntegrationRentasVencidas(t *testing.T) {
 		t.Fatalf("return overdue: %v %+v %v", got.Status, got.Rental, err)
 	}
 }
+
+// «El día de regreso cuenta completo»: returning later that same day is no extra day and isn't late.
+func TestIntegrationReturnByEndOfDay(t *testing.T) {
+	p := pool(t)
+	ctx := context.Background()
+	f := setup(t, p, "tool_rental", `{"return_by_end_of_day": true}`)
+	p.Exec(ctx, `delete from public.workflow_steps where business_id = $1`, f.business)
+	// Monday 2 pm → Tuesday 10 pm (Chihuahua, UTC−6): 32 h, but one calendar day.
+	out, back := at("2026-11-02T20:00:00Z"), at("2026-11-04T04:00:00Z")
+	q, err := QuoteBooking(ctx, p, f.business, QuoteRequest{ItemID: f.item, StartsAt: *out, EndsAt: back})
+	if err != nil || q.Periods != 1 {
+		t.Fatalf("quote: %d periods, %v", q.Periods, err)
+	}
+	b, _, err := Create(ctx, p, f.business, CreateInput{Customer: cust("6149990005"), ItemID: f.item, StartsAt: out, EndsAt: back, Source: "admin"}, now)
+	if err != nil || b.Total != 30000 {
+		t.Fatalf("create: total %d, %v", b.Total, err)
+	}
+	AddPayment(ctx, p, f.business, b.ID, Payment{Type: "security_deposit", Method: "cash", Amount: 100000}, "", now, noFiles)
+	if _, err := Checkout(ctx, p, f.business, b.ID, "", "", now); err != nil {
+		t.Fatal(err)
+	}
+	// Tuesday 11:30 pm local: past the return time but still that day.
+	MarkOverdue(ctx, p, *at("2026-11-04T05:30:00Z"))
+	if got, _ := Get(ctx, p, f.business, b.ID); got.Status != "checked_out" {
+		t.Fatalf("late before the day ended: %s", got.Status)
+	}
+	// Wednesday 2 am local (past the grace): late.
+	MarkOverdue(ctx, p, *at("2026-11-04T08:00:00Z"))
+	if got, _ := Get(ctx, p, f.business, b.ID); got.Status != "overdue" {
+		t.Fatalf("not overdue the next day: %s", got.Status)
+	}
+	// Returned Wednesday 9 am local: one late day.
+	got, err := Return(ctx, p, f.business, b.ID, "", "", *at("2026-11-04T15:00:00Z"))
+	if err != nil || got.Rental.LateDays != 1 {
+		t.Fatalf("return: %+v %v", got.Rental, err)
+	}
+}

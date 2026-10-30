@@ -21,6 +21,25 @@ func RentalPeriods(unit string, d time.Duration) int64 {
 	return int64((d + size - 1) / size)
 }
 
+// CalendarDays counts the local dates from start's to end's (0 = same day), in the business's zone.
+func CalendarDays(loc *time.Location, start, end time.Time) int64 {
+	date := func(t time.Time) time.Time {
+		y, m, d := t.In(loc).Date()
+		return time.Date(y, m, d, 0, 0, 0, 0, time.UTC)
+	}
+	return int64(date(end).Sub(date(start)) / (24 * time.Hour))
+}
+
+// RentalPeriodsByDay: price units when the return day counts whole (until 11:59 pm): a day, a
+// weekend (3 days) or a week (7) per period; a same-day rental is one.
+func RentalPeriodsByDay(unit string, days int64) int64 {
+	size := map[string]int64{"day": 1, "weekend": 3, "week": 7}[unit]
+	if size == 0 || days <= 0 {
+		return 1
+	}
+	return (days + size - 1) / size
+}
+
 type QuoteInput struct {
 	UnitPrice       int64 // item price per unit (and per period for rentals)
 	OptionsExtra    int64 // extra per unit for the chosen options

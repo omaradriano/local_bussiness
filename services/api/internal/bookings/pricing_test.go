@@ -89,3 +89,29 @@ func TestInitialStatus(t *testing.T) {
 		t.Fatalf("default hold: %v", hold)
 	}
 }
+
+// With «el día de regreso cuenta completo» a rental charges calendar days in the business's zone.
+func TestRentalPeriodsByCalendarDay(t *testing.T) {
+	loc, _ := time.LoadLocation("America/Chihuahua")
+	at := func(d, h int) time.Time { return time.Date(2026, 11, d, h, 0, 0, 0, loc) }
+	cases := []struct {
+		name       string
+		unit       string
+		start, end time.Time
+		want       int64
+	}{
+		{"same day", "day", at(2, 9), at(2, 18), 1},
+		{"next day, same hour", "day", at(2, 14), at(3, 14), 1},
+		{"next day, late at night: no extra day", "day", at(2, 14), at(3, 22), 1},
+		{"next day 11:59 pm", "day", at(2, 14), time.Date(2026, 11, 3, 23, 59, 0, 0, loc), 1},
+		{"two days later", "day", at(2, 14), at(4, 9), 2},
+		{"weekend: up to 3 days", "weekend", at(6, 10), at(9, 20), 1},
+		{"weekend: a 4th day", "weekend", at(6, 10), at(10, 9), 2},
+		{"week", "week", at(2, 10), at(9, 22), 1},
+	}
+	for _, tc := range cases {
+		if got := RentalPeriodsByDay(tc.unit, CalendarDays(loc, tc.start, tc.end)); got != tc.want {
+			t.Errorf("%s: %d, want %d", tc.name, got, tc.want)
+		}
+	}
+}
