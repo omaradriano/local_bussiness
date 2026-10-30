@@ -133,8 +133,8 @@ func TestIntegrationDiscount(t *testing.T) {
 
 	// Extending recalculates a percent discount on the new total (3 days: $900 − 10%).
 	b, err = Extend(ctx, p, f.business, b.ID, *at("2026-11-05T15:00:00Z"), "", now)
-	if err != nil || b.Discount != 9000 || b.Total != 81000 {
-		t.Fatalf("extend: %d %d %v", b.Discount, b.Total, err)
+	if err != nil || b.Discount != 9000 || b.Total != 81000 || b.DepositRequired != 40500 {
+		t.Fatalf("extend: %d %d %d %v", b.Discount, b.Total, b.DepositRequired, err)
 	}
 
 	// A fixed amount from the detail; the advance keeps its half.

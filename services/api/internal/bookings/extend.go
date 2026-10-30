@@ -84,8 +84,9 @@ func Extend(ctx context.Context, db store.DB, businessID, id string, newEnd time
 	if _, err := tx.Exec(ctx, `update public.booking_items set options = $2 where booking_id = $1`, id, opts); err != nil {
 		return Booking{}, err
 	}
-	if _, err := tx.Exec(ctx, `update public.bookings set ends_at = $2, subtotal = $3, discount = $4, total = $5, updated_at = now() where id = $1`,
-		id, newEnd, q.Subtotal, q.Discount, q.Total); err != nil {
+	// The advance keeps its proportion of the new total.
+	if _, err := tx.Exec(ctx, `update public.bookings set ends_at = $2, subtotal = $3, discount = $4, total = $5, deposit_required = $6, updated_at = now() where id = $1`,
+		id, newEnd, q.Subtotal, q.Discount, q.Total, rescaleAdvance(b.depositRequired, b.total, q.Total)); err != nil {
 		return Booking{}, err
 	}
 	note := fmt.Sprintf("Renta extendida hasta %s; nuevo total %s", newEnd.In(loc).Format("02/01/2006 15:04"), mxn(q.Total))
