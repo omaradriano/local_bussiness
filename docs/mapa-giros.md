@@ -155,6 +155,22 @@ Así, `sale` solo agrega la pieza «existencias» (que ya existe en `productSale
 3. Agregar el test de paridad Go ↔ TS y actualizar la regla de `CLAUDE.md` («la máquina de estados vive solo en `machine.go`») para decir que las tablas viven en cada motor y `machine.go` es la única puerta.
 4. Recién entonces, el cuarto motor.
 
+### No romper a los demás negocios
+
+Ya protege hoy:
+
+- **Datos aislados:** RLS por `business_id` (probado con `supabase test db` en CI); un negocio nuevo no ve ni toca los de otros.
+- **Giros como datos:** un giro nuevo sobre un motor existente no cambia código de los demás; TypeScript exige su mapa completo y `maps match the API templates` que coincida con su plantilla.
+- **Funciones por negocio:** una función nueva solo llega a quien la tiene activa (`has()`, `settings.features`).
+- **Reglas en Go con tests** y CI (lint, typecheck, tests unitarios, integración contra Postgres) antes de cada merge.
+
+Huecos que cierra la interfaz:
+
+- **Caída silenciosa al motor de renta:** `availability/query.go` y `bookings/create.go` usan `default:` como renta. Un motor nuevo mal cableado se trataría como renta en vez de fallar. Con el registro, un `kind` desconocido es un error (falla cerrado).
+- **Test de contrato común:** una sola batería que corre contra cada motor registrado (estados alcanzables, `Release` devuelve lo que `Reserve` apartó, precios en centavos sin negativos). Un motor nuevo no entra si no la pasa, y los existentes la siguen pasando.
+- **Red de los motores actuales:** antes del paso 1, tests de caracterización (resultados fijos de disponibilidad, cotización y transiciones de `service`, `product` y `rental`) para detectar cualquier cambio de comportamiento al mover código.
+- **Cliente:** las pantallas de `apps/client` no tienen tests; la lógica por motor que se mueva a `packages/shared/src/engines` debe llevar los suyos.
+
 ## Vista pública y landing personalizada
 
 - **Vista genérica por giro (base, incluida en todos los planes):** catálogo `/<slug>` armado con la plantilla visual del giro, con logo, colores y portada del negocio.
