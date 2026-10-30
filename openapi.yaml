@@ -1242,6 +1242,7 @@ paths:
                     rentals_span_closed_days: { type: boolean }
                     charge_closed_days: { type: boolean }
                     inspection_minutes: { type: integer, minimum: 0, maximum: 10080 }
+                    return_by_end_of_day: { type: boolean }
       responses:
         "200":
           description: OK
@@ -2311,13 +2312,14 @@ components:
             privacy_email: { type: string }
         rentals:
           type: object
-          required: [security_deposit_enabled, late_fee_multiplier, rentals_span_closed_days, charge_closed_days, inspection_minutes]
+          required: [security_deposit_enabled, late_fee_multiplier, rentals_span_closed_days, charge_closed_days, inspection_minutes, return_by_end_of_day]
           properties:
             security_deposit_enabled: { type: boolean, description: "Pedir depósito de garantía reembolsable" }
             late_fee_multiplier: { type: number, description: "Un día atrasado cuesta el precio por día × esto" }
             rentals_span_closed_days: { type: boolean, description: "Una renta puede incluir días cerrados" }
             charge_closed_days: { type: boolean, description: "Esos días cerrados se cobran" }
             inspection_minutes: { type: integer, description: "Revisión entre rentas de una unidad (0 = sin revisión; la app la captura en horas)" }
+            return_by_end_of_day: { type: boolean, description: "El día de regreso cuenta completo (hasta las 11:59 pm): se cobra y se atrasa por día de calendario" }
 
     Availability:
       type: object

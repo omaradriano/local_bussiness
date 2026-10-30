@@ -25,6 +25,7 @@ type Rentals struct {
 	SpanClosedDays         bool    `json:"rentals_span_closed_days"` // a rental may include days the business is closed
 	ChargeClosedDays       bool    `json:"charge_closed_days"`       // those days are charged
 	InspectionMinutes      int     `json:"inspection_minutes"`       // check-up gap between two rentals of a unit
+	ReturnByEndOfDay       bool    `json:"return_by_end_of_day"`     // the return day counts whole (until 11:59 pm): charge and lateness by calendar day
 }
 
 func DefaultRentals() Rentals {
@@ -45,6 +46,7 @@ type RentalsPatch struct {
 	SpanClosedDays         *bool    `json:"rentals_span_closed_days"`
 	ChargeClosedDays       *bool    `json:"charge_closed_days"`
 	InspectionMinutes      *int     `json:"inspection_minutes"`
+	ReturnByEndOfDay       *bool    `json:"return_by_end_of_day"`
 }
 
 func (r Rentals) Apply(p RentalsPatch) Rentals {
@@ -62,6 +64,9 @@ func (r Rentals) Apply(p RentalsPatch) Rentals {
 	}
 	if p.InspectionMinutes != nil {
 		r.InspectionMinutes = *p.InspectionMinutes
+	}
+	if p.ReturnByEndOfDay != nil {
+		r.ReturnByEndOfDay = *p.ReturnByEndOfDay
 	}
 	return r
 }

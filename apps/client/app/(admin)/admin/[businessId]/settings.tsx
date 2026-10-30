@@ -123,6 +123,11 @@ export default function SettingsScreen() {
             <Switch accessibilityLabel={t.chargeClosed} value={r.charge_closed_days} disabled={!isOwner || !r.rentals_span_closed_days}
               onValueChange={(v) => set({ charge_closed_days: v })} />} />
         </Group>
+        <Group label={t.chargeByDay} footer={t.endOfDayHint}>
+          <Cell label={t.endOfDay} accessory={
+            <Switch accessibilityLabel={t.endOfDay} value={r.return_by_end_of_day} disabled={!isOwner}
+              onValueChange={(v) => set({ return_by_end_of_day: v })} />} />
+        </Group>
         <Group label={t.late} padded>
           <Field label={t.lateMultiplier} value={multiplier} onChangeText={setMultiplier} keyboardType="decimal-pad" editable={isOwner}
             hint={t.lateMultiplierHint} error={errors.late_fee_multiplier} />

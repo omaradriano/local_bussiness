@@ -21,9 +21,14 @@ func ExpireHolds(ctx context.Context, db store.DB, now time.Time) (int, error) {
 
 // MarkOverdue flags rentals that should be back by now (plus grace) and aren't.
 func MarkOverdue(ctx context.Context, db store.DB, now time.Time) (int, error) {
-	return sweep(ctx, db, `select id::text, business_id::text, status, kind from public.bookings
-		where kind = 'rental' and status = 'checked_out' and ends_at <= $1
-		order by ends_at limit 500 for update skip locked`, now.Add(-OverdueGrace), "overdue", "No regresó a tiempo")
+	// With «el día de regreso cuenta completo» it's late only once that local day is over.
+	return sweep(ctx, db, `select bk.id::text, bk.business_id::text, bk.status, bk.kind from public.bookings bk
+		join public.businesses b on b.id = bk.business_id
+		where bk.kind = 'rental' and bk.status = 'checked_out'
+		  and case when coalesce((b.settings->>'return_by_end_of_day')::boolean, false)
+		      then (date_trunc('day', bk.ends_at at time zone b.timezone) + interval '1 day') at time zone b.timezone
+		      else bk.ends_at end <= $1
+		order by bk.ends_at limit 500 for update of bk skip locked`, now.Add(-OverdueGrace), "overdue", "No regresó a tiempo")
 }
 
 // sweep moves every selected booking to `to` in one transaction; rows locked by someone else are skipped.

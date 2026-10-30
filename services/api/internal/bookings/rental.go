@@ -299,6 +299,11 @@ func LateDays(due, returned time.Time) int64 {
 	return int64((late + 24*time.Hour - 1) / (24 * time.Hour))
 }
 
+// LateDaysByDay: late days when the return day counts whole: any time on the due date is on time.
+func LateDaysByDay(loc *time.Location, due, returned time.Time) int64 {
+	return max(0, CalendarDays(loc, due, returned))
+}
+
 // satisfyFromCustomer completes the pending "customer document" steps (config.customer_doc) with
 // what's already in the customer's profile; a trusted customer satisfies them all.
 func satisfyFromCustomer(ctx context.Context, tx pgx.Tx, bookingID string, now time.Time) error {

@@ -22,6 +22,9 @@ func rentalPeriods(loc *time.Location, hours []availability.Shift, r settings.Re
 		return 0, Invalid{"ends_at", "El negocio está cerrado ese día; elige otro día de regreso."}
 	}
 	periods := RentalPeriods(priceUnit, end.Sub(start))
+	if r.ReturnByEndOfDay {
+		periods = RentalPeriodsByDay(priceUnit, CalendarDays(loc, start, end))
+	}
 	if closed := availability.ClosedDaysBetween(loc, start, end, hours); closed > 0 {
 		if !r.SpanClosedDays {
 			return 0, Invalid{"ends_at", "El negocio no renta sobre días cerrados; elige fechas sin días cerrados en medio."}
