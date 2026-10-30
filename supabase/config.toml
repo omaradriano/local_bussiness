@@ -441,15 +441,16 @@ verify_enabled = true
 [remotes.staging.storage.vector]
 enabled = false
 
-# Producción: descomentar al crear el proyecto (docs/produccion.md) con su ref y la URL de Vercel.
-# Se aplica con `supabase config push` estando ligado a ese proyecto (requiere aprobación).
-# [remotes.production]
-# project_id = "PROD_REF"
-#
-# [remotes.production.auth]
-# site_url = "https://khronno.com"
-# additional_redirect_urls = ["https://khronno.com/**", "https://www.khronno.com/**", "localbussiness://**"]
-#
-# [remotes.production.auth.email]
-# enable_confirmations = true
-# max_frequency = "1m0s"
+# Producción (local-bussiness-production, us-west-2). Se aplica sin cambiar el proyecto ligado:
+#   supabase config push --project-ref jailduoohibtqdjamlgv   (requiere aprobación)
+# El SMTP (Resend) se configura en el dashboard; no volver a hacer push sin revisar que no lo apague.
+[remotes.production]
+project_id = "jailduoohibtqdjamlgv"
+
+[remotes.production.auth]
+site_url = "https://khronno.com"
+additional_redirect_urls = ["https://khronno.com/**", "https://www.khronno.com/**", "localbussiness://**"]
+
+[remotes.production.auth.email]
+enable_confirmations = true
+max_frequency = "1m0s"

@@ -19,7 +19,7 @@ const byEnv = {
   },
   // Pendiente: llenar al crear el proyecto de Supabase, el de Vercel y el CloudFront de producción (docs/produccion.md).
   production: {
-    SUPABASE_URL: "https://PROD_REF.supabase.co",
+    SUPABASE_URL: "https://jailduoohibtqdjamlgv.supabase.co",
     CORS_ORIGINS: ["https://khronno.com", "https://www.khronno.com"],
     CATALOG_CDN_URL: "https://PROD_CDN.cloudfront.net",
   },

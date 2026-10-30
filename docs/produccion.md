@@ -26,6 +26,8 @@ Los valores exactos los da cada servicio al agregar el dominio; la tabla es la g
 
 ## 1. Supabase
 
+Hecho: `local-bussiness-production`, ref **`jailduoohibtqdjamlgv`**, us-west-2 (Oregon).
+
 1. **[Tú]** En el dashboard de Supabase, crea el proyecto `local-bussiness-production`:
    - región **West US (Oregon)**, igual que staging;
    - una contraseña de base de datos fuerte, guardada en tu gestor de contraseñas.
