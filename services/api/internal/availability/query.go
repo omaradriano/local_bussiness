@@ -4,6 +4,8 @@ import (
 	"context"
 	"slices"
 	"time"
+
+	"github.com/omaradriano/local_bussiness/services/api/internal/engines"
 )
 
 // BadRequest is a parameter problem worth showing to the user (es-MX).
@@ -41,14 +43,18 @@ func (l Loader) Answer(ctx context.Context, businessID string, req Request, now 
 	if req.Quantity <= 0 {
 		req.Quantity = 1
 	}
-	switch item.Kind {
-	case "service":
-		return l.service(ctx, businessID, biz, item, req, now)
-	case "product":
-		return l.product(ctx, businessID, biz, item, req, now)
-	default:
-		return l.rental(ctx, businessID, biz, item, req, now)
+	answer, err := engines.Get(answerers, item.Kind)
+	if err != nil {
+		return Response{}, err
 	}
+	return answer(l, ctx, businessID, biz, item, req, now)
+}
+
+// answerers: the availability rule of each engine.
+var answerers = map[string]func(Loader, context.Context, string, Business, Item, Request, time.Time) (Response, error){
+	engines.Service: Loader.service,
+	engines.Product: Loader.product,
+	engines.Rental:  Loader.rental,
 }
 
 func (l Loader) service(ctx context.Context, businessID string, biz Business, item Item, req Request, now time.Time) (Response, error) {
