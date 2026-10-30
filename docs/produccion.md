@@ -39,6 +39,8 @@ Las migraciones **no** se corren a mano: las aplica el flujo de producción (§6
 
 ## 2. AWS (archivos)
 
+Hecho (2026-10-29): buckets `local-bussiness-production-*`, CloudFront `https://d1jgdqhrvt024a.cloudfront.net`, usuario IAM `local-bussiness-production-api`; la regla de 30 días también quedó en staging.
+
 1. **[Tú]** `aws login --profile local-bussiness --region us-west-2`.
 2. **[Claude]** Plan sin cambios:
    ```sh
