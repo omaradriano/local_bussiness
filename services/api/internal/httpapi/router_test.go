@@ -139,6 +139,10 @@ func (fakeCatalog) CreateUnit(_ context.Context, _ string, u catalog.Unit) (cata
 	return u, nil
 }
 
+func (fakeCatalog) Delete(context.Context, string, string) error { return nil }
+
+func (fakeCatalog) DeleteUnit(context.Context, string, string, string) error { return nil }
+
 func (fakeCatalog) UpdateUnit(_ context.Context, _ string, u catalog.Unit) (catalog.Unit, error) {
 	return u, nil
 }

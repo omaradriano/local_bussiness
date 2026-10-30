@@ -331,6 +331,8 @@ type CatalogRepo interface {
 	GetUnit(ctx context.Context, businessID, itemID, unitID string) (catalog.Unit, error)
 	CreateUnit(ctx context.Context, businessID string, u catalog.Unit) (catalog.Unit, error)
 	UpdateUnit(ctx context.Context, businessID string, u catalog.Unit) (catalog.Unit, error)
+	Delete(ctx context.Context, businessID, itemID string) error
+	DeleteUnit(ctx context.Context, businessID, itemID, unitID string) error
 }
 
 func notFound(w http.ResponseWriter, what string) {
@@ -790,6 +792,15 @@ func NewRouter(d Deps) http.Handler {
 					return
 				}
 				apierr.JSON(w, http.StatusOK, updated)
+			})
+
+			r.With(auth.RequireRole("owner")).Delete("/catalog/{itemId}", func(w http.ResponseWriter, r *http.Request) {
+				m, _ := auth.MemberFrom(r.Context())
+				err := error(catalog.ErrNotFound)
+				if itemID := chi.URLParam(r, "itemId"); auth.IsUUID(itemID) {
+					err = d.Catalog.Delete(r.Context(), m.BusinessID, itemID)
+				}
+				writeDeleted(w, r, err, "El artículo no existe.", "Tiene reservas activas o próximas; complétalas o cancélalas antes de borrarlo.")
 			})
 
 			mountImages(r, d.Photos, d.withinPlan("photos_per_item"))
@@ -1478,10 +1489,34 @@ func NewRouter(d Deps) http.Handler {
 				updated, err := d.Catalog.UpdateUnit(r.Context(), m.BusinessID, u)
 				writeUnit(w, r, http.StatusOK, updated, err)
 			})
+
+			r.With(auth.RequireRole("owner")).Delete("/catalog/{itemId}/units/{unitId}", func(w http.ResponseWriter, r *http.Request) {
+				m, _ := auth.MemberFrom(r.Context())
+				itemID, unitID := chi.URLParam(r, "itemId"), chi.URLParam(r, "unitId")
+				err := error(catalog.ErrNotFound)
+				if auth.IsUUID(itemID) && auth.IsUUID(unitID) {
+					err = d.Catalog.DeleteUnit(r.Context(), m.BusinessID, itemID, unitID)
+				}
+				writeDeleted(w, r, err, "La herramienta o la unidad no existe.", "La unidad tiene rentas activas o próximas; complétalas o cancélalas antes de borrarla.")
+			})
 		})
 	})
 
 	return r
+}
+
+// writeDeleted answers a catalog delete: 204, 404 or 409 while it has active bookings.
+func writeDeleted(w http.ResponseWriter, r *http.Request, err error, notFoundMsg, inUseMsg string) {
+	switch {
+	case errors.Is(err, catalog.ErrNotFound):
+		notFound(w, notFoundMsg)
+	case errors.Is(err, catalog.ErrInUse):
+		apierr.Write(w, http.StatusConflict, "in_use", inUseMsg)
+	case err != nil:
+		internalError(w, r, "delete catalog", err)
+	default:
+		w.WriteHeader(http.StatusNoContent)
+	}
 }
 
 func writeUnit(w http.ResponseWriter, r *http.Request, status int, u catalog.Unit, err error) {

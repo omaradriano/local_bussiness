@@ -67,6 +67,10 @@ export const strings = {
   },
   catalog: {
     add: 'Agregar',
+    remove: (term: string) => `Borrar ${term.toLowerCase()}`,
+    removeTitle: (name: string) => `¿Borrar «${name}»?`,
+    removeBody: 'Desaparece del catálogo junto con sus unidades y ya no se puede apartar. Las reservas pasadas conservan su nombre.',
+    removed: 'Borrado.',
     empty: 'Todavía no hay artículos en el catálogo.',
     inactive: 'Inactivo',
     activate: 'Activar',
@@ -104,6 +108,12 @@ export const strings = {
     add: 'Agregar unidad',
     empty: 'Sin unidades: agrega al menos una para poder rentar esta herramienta.',
     status: { available: 'Disponible', maintenance: 'En mantenimiento', retired: 'Dada de baja' },
+    editCode: 'Editar clave',
+    saveCode: 'Guardar clave',
+    remove: 'Borrar',
+    removeTitle: (code: string) => `¿Borrar la unidad ${code}?`,
+    removeBody: 'Ya no se podrá rentar. Las rentas pasadas conservan su clave y la clave queda libre para otra unidad.',
+    removed: 'Unidad borrada.',
   },
   photos: {
     title: 'Fotos',

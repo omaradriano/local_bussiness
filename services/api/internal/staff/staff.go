@@ -189,7 +189,7 @@ func (r Repo) SetServices(ctx context.Context, businessID, staffID string, itemI
 			return err
 		}
 		var valid int
-		if err := tx.QueryRow(ctx, `select count(*) from public.catalog_items where business_id = $1 and kind = 'service' and id::text = any($2)`,
+		if err := tx.QueryRow(ctx, `select count(*) from public.catalog_items where business_id = $1 and kind = 'service' and deleted_at is null and id::text = any($2)`,
 			businessID, itemIDs).Scan(&valid); err != nil {
 			return err
 		}

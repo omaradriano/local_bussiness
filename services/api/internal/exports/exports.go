@@ -132,7 +132,7 @@ func (r Repo) Rows(ctx context.Context, businessID, kind string, p *Period) (any
 			from public.sales s where s.business_id = $1 and s.sold_at >= $2 and s.sold_at < $3 order by s.sold_at limit $4`, businessID, start, end, maxRows)
 	case "catalog":
 		return collect[CatalogItem](ctx, r.DB, `select kind, name, price, price_unit, duration_minutes, security_deposit, late_fee_per_day, active
-			from public.catalog_items where business_id = $1 order by kind, sort, name limit $2`, businessID, maxRows)
+			from public.catalog_items where business_id = $1 and deleted_at is null order by kind, sort, name limit $2`, businessID, maxRows)
 	case "products":
 		return collect[Product](ctx, r.DB, `select name, price, cost, stock, active from public.retail_products
 			where business_id = $1 order by name limit $2`, businessID, maxRows)

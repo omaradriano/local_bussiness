@@ -338,6 +338,14 @@ paths:
         "403": { $ref: "#/components/responses/Error" }
         "404": { $ref: "#/components/responses/Error" }
         "422": { $ref: "#/components/responses/Error" }
+    delete:
+      operationId: deleteCatalogItem
+      summary: Borra el artículo y sus unidades (solo dueño); las reservas pasadas conservan su nombre. 409 si tiene reservas activas o próximas
+      responses:
+        "204": { description: Borrado }
+        "403": { $ref: "#/components/responses/Error" }
+        "404": { $ref: "#/components/responses/Error" }
+        "409": { $ref: "#/components/responses/Error" }
 
   /v1/b/{businessId}/catalog/{itemId}/units:
     parameters:
@@ -404,6 +412,14 @@ paths:
         "404": { $ref: "#/components/responses/Error" }
         "409": { $ref: "#/components/responses/Error" }
         "422": { $ref: "#/components/responses/Error" }
+    delete:
+      operationId: deleteUnit
+      summary: Borra la unidad (solo dueño); su clave se puede volver a usar. 409 si tiene rentas activas o próximas
+      responses:
+        "204": { description: Borrada }
+        "403": { $ref: "#/components/responses/Error" }
+        "404": { $ref: "#/components/responses/Error" }
+        "409": { $ref: "#/components/responses/Error" }
 
   /v1/b/{businessId}/staff:
     parameters:
