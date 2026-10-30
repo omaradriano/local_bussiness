@@ -7,7 +7,7 @@ export const tool_rental = {
   terms: { booking: 'Renta', catalog_item: 'Herramienta', catalog: 'Herramientas', starts_at: 'Fecha de salida', ends_at: 'Fecha de regreso' },
   settings: ['general', 'rentals', 'inspection', 'documents'],
   features: ['inventory', 'guarantor', 'customerAddress', 'customerDocuments', 'trustedCustomers', 'bookingDocuments', 'productSales'],
-  optionalFeatures: [],
+  optionalFeatures: ['staff'],
   texts: {
     bookings: {
       plural: 'Rentas',

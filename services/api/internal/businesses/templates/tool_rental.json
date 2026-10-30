@@ -9,7 +9,7 @@
     "bookingDocuments",
     "productSales"
   ],
-  "optional_features": [],
+  "optional_features": ["staff"],
   "settings": {
     "deposit_percent": 0,
     "cancel_hours": 24,

@@ -1,7 +1,9 @@
 {
   "staff": {
     "engines": [
-      "service"
+      "service",
+      "product",
+      "rental"
     ]
   },
   "inventory": {

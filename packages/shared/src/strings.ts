@@ -580,6 +580,7 @@ export const strings = {
     emptyExpenses: 'Sin gastos registrados en este periodo.',
     emptyPlans: 'Sin compras a plazos.',
     payHint: 'Lo que gana cada persona. El sueldo cuenta como gasto día a día; la comisión es un porcentaje de lo que se cobra de sus servicios.',
+    payHintSalaryOnly: 'Lo que gana cada persona. El sueldo cuenta como gasto día a día.',
     salaryPeriod: { weekly: 'Semanal', biweekly: 'Quincenal', monthly: 'Mensual' } as Record<string, string>,
     commissionPercent: 'Comisión (% de sus servicios)',
     paySaved: 'Paga guardada.',

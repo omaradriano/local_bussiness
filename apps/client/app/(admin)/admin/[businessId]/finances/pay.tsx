@@ -1,10 +1,11 @@
 import type { components } from '@lb/api-client';
-import { centavosToInput, parsePesos, strings } from '@lb/shared';
+import { centavosToInput, engineFor, parsePesos, strings } from '@lb/shared';
 import { Stack, useLocalSearchParams } from 'expo-router';
 import { useEffect, useState } from 'react';
 import { ActivityIndicator, StyleSheet, View } from 'react-native';
 import { api } from '../../../../../lib/api';
 import { errorText, fieldErrors } from '../../../../../lib/errors';
+import { useTexts } from '../../../../../lib/useTexts';
 import { Button, EmptyState, Field, Screen, Segmented, Text, radius, useToast, useUI } from '../../../../../ui';
 
 type Pay = components['schemas']['StaffPay'];
@@ -12,7 +13,7 @@ type PeriodKey = Pay['salary_period'];
 const t = strings.finances;
 
 /** One person's pay: fixed salary per period and/or commission. */
-function PayCard({ businessId, pay, first }: { businessId: string; pay: Pay; first: boolean }) {
+function PayCard({ businessId, pay, first, commissions }: { businessId: string; pay: Pay; first: boolean; commissions: boolean }) {
   const ui = useUI();
   const toast = useToast();
   const [salary, setSalary] = useState(pay.salary ? centavosToInput(pay.salary) : '');
@@ -40,7 +41,7 @@ function PayCard({ businessId, pay, first }: { businessId: string; pay: Pay; fir
       <Text variant="headline" style={{ marginBottom: 8 }}>{pay.name}</Text>
       <View style={{ flexDirection: 'row', gap: 12 }}>
         <View style={{ flex: 1 }}><Field label={t.salary} value={salary} onChangeText={setSalary} keyboardType="decimal-pad" placeholder="0" error={errors.salary} /></View>
-        <View style={{ flex: 1 }}><Field label={t.commissionPercent} value={commission} onChangeText={setCommission} keyboardType="decimal-pad" placeholder="0" error={errors.commission_percent} /></View>
+        {commissions && <View style={{ flex: 1 }}><Field label={t.commissionPercent} value={commission} onChangeText={setCommission} keyboardType="decimal-pad" placeholder="0" error={errors.commission_percent} /></View>}
       </View>
       <View style={{ marginBottom: 12 }}>
         <Segmented options={(['weekly', 'biweekly', 'monthly'] as PeriodKey[]).map((k) => ({ value: k, label: t.salaryPeriod[k] }))} value={period} onChange={setPeriod} />
@@ -53,6 +54,8 @@ function PayCard({ businessId, pay, first }: { businessId: string; pay: Pay; fir
 export default function PayScreen() {
   const { businessId } = useLocalSearchParams<{ businessId: string }>();
   const ui = useUI();
+  // A commission is a percent of the person's services: only where people attend appointments.
+  const commissions = engineFor(useTexts().kind).resource === 'staff';
   const [list, setList] = useState<Pay[] | null>(null);
   useEffect(() => {
     api.GET('/v1/b/{businessId}/finances/pay', { params: { path: { businessId } } }).then(({ data }) => setList(data?.pay ?? []));
@@ -62,12 +65,12 @@ export default function PayScreen() {
     <Screen>
       <Stack.Screen options={{ title: t.sections.pay }} />
       <Text variant="largeTitle" accessibilityRole="header" style={{ marginBottom: 8 }}>{t.sections.pay}</Text>
-      <Text variant="subhead" color="labelSecondary" style={{ marginBottom: 20 }}>{t.payHint}</Text>
+      <Text variant="subhead" color="labelSecondary" style={{ marginBottom: 20 }}>{commissions ? t.payHint : t.payHintSalaryOnly}</Text>
       {!list && <ActivityIndicator />}
       {list?.length === 0 && <EmptyState icon="people-outline" title={t.noStaff} />}
       {!!list?.length && (
         <View style={{ backgroundColor: ui.surface, borderRadius: radius.sm, overflow: 'hidden' }}>
-          {list.filter((p) => !p.deleted).map((p, i) => <PayCard key={p.staff_id} businessId={businessId} pay={p} first={i === 0} />)}
+          {list.filter((p) => !p.deleted).map((p, i) => <PayCard key={p.staff_id} businessId={businessId} pay={p} first={i === 0} commissions={commissions} />)}
         </View>
       )}
     </Screen>

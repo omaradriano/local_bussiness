@@ -4,7 +4,7 @@ import type { Feature, ItemKind } from './types';
 // What each feature is, in the owner's words. Which engines support it comes from the API's catalog
 // (services/api/internal/features/features.json), so both sides agree.
 const INFO: Record<Feature, { label: string; hint: string }> = {
-  staff: { label: 'Equipo', hint: 'Personas que atienden, cada una con sus servicios y su horario.' },
+  staff: { label: 'Equipo', hint: 'Las personas del negocio y su sueldo. En citas, también los servicios que hace cada una y su horario.' },
   inventory: { label: 'Inventario', hint: 'Pestaña del calendario con cada unidad y si está libre, rentada o agendada.' },
   guarantor: { label: 'Aval del cliente', hint: 'El cliente registra a una persona que responde por él (nombre y teléfono obligatorios).' },
   customerAddress: { label: 'Dirección obligatoria', hint: 'No se registra un cliente sin su dirección.' },

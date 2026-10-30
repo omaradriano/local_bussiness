@@ -21,7 +21,7 @@ const EXPENSE_KEYS = ['payroll', 'commissions', 'merchandise', 'transport', 'sup
 export default function Finances() {
   const { businessId } = useLocalSearchParams<{ businessId: string }>();
   const ui = useUI();
-  const { texts, kind, can } = useTexts();
+  const { texts, kind, can, has } = useTexts();
   const [period, setPeriod] = useState<Period>(currentMonth);
   const [s, setS] = useState<Summary | null>(null);
   const [error, setError] = useState<string | null>(null);
@@ -109,7 +109,7 @@ export default function Finances() {
 
           <Group separatorInset={58}>
             <Cell icon="receipt" tint={ui.warning} label={t.sections.expenses} sublabel={t.sectionHints.expenses} onPress={go('expenses')} />
-            {can('payroll') && <Cell icon="people" tint={ui.indigo} label={t.sections.pay} sublabel={t.sectionHints.pay} onPress={go('pay')} />}
+            {can('payroll') && has('staff') && <Cell icon="people" tint={ui.indigo} label={t.sections.pay} sublabel={t.sectionHints.pay} onPress={go('pay')} />}
           </Group>
         </View>
       )}

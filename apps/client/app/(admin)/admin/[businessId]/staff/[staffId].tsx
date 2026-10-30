@@ -9,6 +9,7 @@ import { HoursEditor } from '../../../../../components/HoursEditor';
 import { api } from '../../../../../lib/api';
 import { errorText, fieldErrors } from '../../../../../lib/errors';
 import { useBusiness } from '../../../../../lib/useMe';
+import { useTexts } from '../../../../../lib/useTexts';
 import { Button, Cell, Field, Group, Screen, Text, useToast, useUI } from '../../../../../ui';
 
 type Staff = components['schemas']['StaffMember'];
@@ -19,6 +20,8 @@ export default function StaffDetail() {
   const { businessId, staffId } = useLocalSearchParams<{ businessId: string; staffId: string }>();
   const { business } = useBusiness(businessId);
   const isOwner = business?.role === 'owner';
+  // Services and hours only where people attend appointments; elsewhere a person is a name (and a salary in Finanzas).
+  const agenda = engineFor(useTexts().kind).resource === 'staff';
   const ui = useUI();
   const toast = useToast();
   const [person, setPerson] = useState<Staff | null>(null);
@@ -67,8 +70,10 @@ export default function StaffDetail() {
     setBusy(true);
     const steps = [
       () => api.PATCH('/v1/b/{businessId}/staff/{staffId}/', { params: { path }, body: { name, active } }),
-      () => api.PUT('/v1/b/{businessId}/staff/{staffId}/services', { params: { path }, body: { service_ids: [...selected] } }),
-      () => api.PUT('/v1/b/{businessId}/staff/{staffId}/hours', { params: { path }, body: { hours: weekToShifts(week!) } }),
+      ...(agenda ? [
+        () => api.PUT('/v1/b/{businessId}/staff/{staffId}/services', { params: { path }, body: { service_ids: [...selected] } }),
+        () => api.PUT('/v1/b/{businessId}/staff/{staffId}/hours', { params: { path }, body: { hours: weekToShifts(week!) } }),
+      ] : []),
     ];
     for (const step of steps) {
       const { error, response } = await step();
@@ -89,14 +94,18 @@ export default function StaffDetail() {
       <Group padded>
         <Field label={t.name} editable={isOwner} value={name} onChangeText={setName} />
       </Group>
-      <Group label={t.services}>
-        {services.map((it) => (
-          <Cell key={it.id} label={it.name} onPress={isOwner ? () => toggle(it.id) : undefined}
-            accessory={selected.has(it.id) ? <Ionicons name="checkmark" size={20} color={ui.accent} /> : undefined} />
-        ))}
-      </Group>
-      <Text variant="footnote" color="labelSecondary" style={{ marginHorizontal: 16, marginBottom: 6 }}>{t.hours.toUpperCase()}</Text>
-      <HoursEditor week={week} onChange={setWeek} editable={isOwner} />
+      {agenda && (
+        <>
+          <Group label={t.services}>
+            {services.map((it) => (
+              <Cell key={it.id} label={it.name} onPress={isOwner ? () => toggle(it.id) : undefined}
+                accessory={selected.has(it.id) ? <Ionicons name="checkmark" size={20} color={ui.accent} /> : undefined} />
+            ))}
+          </Group>
+          <Text variant="footnote" color="labelSecondary" style={{ marginHorizontal: 16, marginBottom: 6 }}>{t.hours.toUpperCase()}</Text>
+          <HoursEditor week={week} onChange={setWeek} editable={isOwner} />
+        </>
+      )}
       {isOwner && (
         <View style={{ gap: 8 }}>
           <Button variant="primary" busy={busy} onPress={() => save()}>{t.save}</Button>
