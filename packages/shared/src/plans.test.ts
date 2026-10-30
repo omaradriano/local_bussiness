@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import { FEATURES } from './verticals';
-import { planCan, planDef, planHighlights, TRIAL_DAYS } from './plans';
+import { planCan, planComparison, planDef, TRIAL_DAYS } from './plans';
 
 describe('plans', () => {
   it('reads the same catalog the API enforces', () => {
@@ -24,26 +24,19 @@ describe('plans', () => {
   });
 });
 
-describe('planHighlights', () => {
-  it('Lite: limits, no team, only expenses', () => {
-    const h = planHighlights('lite');
-    expect(h).toContain('1 negocio');
-    expect(h).toContain('Hasta 30 artículos en el catálogo');
-    expect(h).toContain('Gastos');
-    expect(h.some((x) => x.startsWith('Equipo'))).toBe(false);
-    expect(h).not.toContain('Sueldos y comisiones');
+describe('planComparison', () => {
+  const rows = planComparison();
+  const cell = (label: string) => rows.find((r) => r.label === label)!.cells;
+  it('limits side by side', () => {
+    expect(cell('Negocios')).toEqual({ lite: '1', pro: '1', business: '5' });
+    expect(cell('Usuarios')).toEqual({ lite: '1', pro: '5', business: 'Ilimitado' });
   });
-  it('Pro: team and payroll', () => {
-    const h = planHighlights('pro');
-    expect(h).toContain('Equipo: hasta 10 personas');
-    expect(h).toContain('Sueldos y comisiones');
-    expect(h).toContain('Hasta 5 usuarios');
+  it('the team is Pro and Business only', () => {
+    expect(cell('Equipo (personas)')).toEqual({ lite: false, pro: '10', business: 'Ilimitado' });
+    expect(cell('Sueldos y comisiones')).toEqual({ lite: false, pro: true, business: true });
   });
-  it('Business: unlimited and compare businesses', () => {
-    const h = planHighlights('business');
-    expect(h).toContain('Hasta 5 negocios');
-    expect(h).toContain('Usuarios ilimitados');
-    expect(h).toContain('Equipo sin límite de personas');
-    expect(h).toContain('Comparar negocios');
+  it('every capability of any plan has a row', () => {
+    expect(cell('Gastos')).toEqual({ lite: true, pro: true, business: true });
+    expect(cell('Comparar negocios')).toEqual({ lite: false, pro: false, business: true });
   });
 });

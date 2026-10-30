@@ -27,24 +27,30 @@ const CAPABILITY_LABELS: Record<Capability, string> = {
   compare_businesses: 'Comparar negocios',
 };
 
-const count = (n: number | null, one: string, many: string, unlimited: string) =>
-  n === null ? unlimited : n === 1 ? `1 ${one}` : `Hasta ${n} ${many}`;
+export type PaidPlan = Exclude<PlanKey, 'trial'>;
+export const PAID_PLANS: PaidPlan[] = ['lite', 'pro', 'business'];
+/** A cell: a limit ("30", "Ilimitado") or whether the plan includes it. */
+export type PlanCell = string | boolean;
+export type PlanRow = { label: string; cells: Record<PaidPlan, PlanCell> };
 
-/** What a plan includes, in the owner's words (for the plans page), from the same catalog the API enforces. */
-export function planHighlights(plan: Exclude<PlanKey, 'trial'>): string[] {
-  const d = planDef(plan);
-  const l = d.limits;
-  const excluded = d.excluded_features as string[];
-  const out = [
-    count(l.businesses, 'negocio', 'negocios', 'Negocios ilimitados'),
-    count(l.members, 'usuario', 'usuarios', 'Usuarios ilimitados'),
-    count(l.catalog_items, 'artículo en el catálogo', 'artículos en el catálogo', 'Catálogo ilimitado'),
-    count(l.rental_units, 'unidad en renta', 'unidades en renta', 'Unidades en renta ilimitadas'),
-    `${l.photos_per_item} fotos por artículo`,
+const limit = (n: number | null): string => (n === null ? 'Ilimitado' : String(n));
+const row = (label: string, cell: (p: PaidPlan) => PlanCell): PlanRow =>
+  ({ label, cells: Object.fromEntries(PAID_PLANS.map((p) => [p, cell(p)])) as Record<PaidPlan, PlanCell> });
+
+/** Plans side by side (for the plans page), from the same catalog the API enforces. */
+export function planComparison(): PlanRow[] {
+  const d = (p: PaidPlan) => planDef(p);
+  const has = (p: PaidPlan, f: string) => !(d(p).excluded_features as string[]).includes(f);
+  const capabilities = [...new Set(PAID_PLANS.flatMap((p) => d(p).capabilities as Capability[]))];
+  return [
+    row('Negocios', (p) => limit(d(p).limits.businesses)),
+    row('Usuarios', (p) => limit(d(p).limits.members)),
+    row('Artículos en el catálogo', (p) => limit(d(p).limits.catalog_items)),
+    row('Unidades en renta', (p) => limit(d(p).limits.rental_units)),
+    row('Fotos por artículo', (p) => limit(d(p).limits.photos_per_item)),
+    row('Equipo (personas)', (p) => has(p, 'staff') && limit(d(p).limits.staff)),
+    row('Venta de productos', (p) => has(p, 'productSales')),
+    row('Documentos adicionales', (p) => has(p, 'bookingDocuments')),
+    ...capabilities.map((c) => row(CAPABILITY_LABELS[c], (p) => (d(p).capabilities as string[]).includes(c))),
   ];
-  if (!excluded.includes('staff')) out.push(l.staff === null ? 'Equipo sin límite de personas' : `Equipo: hasta ${l.staff} personas`);
-  if (!excluded.includes('productSales')) out.push('Venta de productos con inventario');
-  if (!excluded.includes('bookingDocuments')) out.push('Documentos adicionales en cada reserva');
-  for (const c of d.capabilities as Capability[]) out.push(CAPABILITY_LABELS[c]);
-  return out;
 }
