@@ -9,9 +9,20 @@ Leyenda: **[Tú]** requiere tu inicio de sesión, una cuenta o tu aprobación. *
 ## 0. Antes de empezar
 
 - [ ] **Correo con Resend [Tú + Claude]: necesario antes del primer piloto.** El correo por defecto de Supabase solo envía a direcciones del equipo del proyecto y con un límite muy bajo por hora; un piloto no podría confirmar su cuenta ni recuperar su contraseña.
-  - Crea la cuenta en resend.com (plan gratis) y un dominio o remitente verificado. Mientras no haya dominio propio se puede usar el de prueba de Resend con límites.
-  - En Supabase → Authentication → SMTP: host `smtp.resend.com`, puerto 465, usuario `resend` y la API key de Resend como contraseña.
-- [ ] Decide el nombre del proyecto en Vercel; de él sale la URL. Abajo se asume `local-bussiness` → `https://local-bussiness.vercel.app`.
+  - Crea la cuenta en resend.com (plan gratis), agrega el dominio `khronno.com`, pon sus registros DNS (tabla de abajo) y verifica. Crea una API key con *Sending access*.
+  - En Supabase (staging y producción) → Authentication → Emails → SMTP: host `smtp.resend.com`, puerto 465, usuario `resend`, la API key como contraseña (la pones tú; no pasa por el chat), remitente `no-reply@khronno.com`, nombre `Khronno`.
+- [x] Dominio: **khronno.com** (web y app en `khronno.com`, API en `api.khronno.com`, correos desde `no-reply@khronno.com`). Staging sigue en `local-bussiness-staging.vercel.app`.
+
+### Registros DNS (los pones tú donde administras khronno.com)
+
+| Para | Tipo | Nombre | Valor |
+| --- | --- | --- | --- |
+| Web (Vercel) | A | `@` | El que indique Vercel al agregar el dominio (hoy `76.76.21.21`) |
+| Web (Vercel) | CNAME | `www` | `cname.vercel-dns.com` (Vercel redirige `www` → `khronno.com`) |
+| API (Railway) | CNAME | `api` | El destino que dé Railway al agregar `api.khronno.com` |
+| Correo (Resend) | MX, TXT (SPF), TXT (DKIM) | Los que dé Resend al agregar el dominio | Copiar tal cual |
+
+Los valores exactos los da cada servicio al agregar el dominio; la tabla es la guía de qué va dónde.
 
 ## 1. Supabase
 
@@ -31,7 +42,7 @@ Las migraciones **no** se corren a mano: las aplica el flujo de producción (§6
    ```sh
    cd infra/aws/production
    AWS_PROFILE=local-bussiness tofu init
-   AWS_PROFILE=local-bussiness tofu plan -var web_origin=https://local-bussiness.vercel.app
+   AWS_PROFILE=local-bussiness tofu plan -var web_origin=https://khronno.com
    ```
 3. **[Tú aprueba] [Claude]** `tofu apply` con la misma variable. Crea:
    - los buckets `local-bussiness-production-{catalog,private-docs,rental-evidence}`;
@@ -47,16 +58,17 @@ Las migraciones **no** se corren a mano: las aplica el flujo de producción (§6
 ## 3. Vercel (web)
 
 1. **[Tú]** Inicia sesión (`vercel login`) si hace falta.
-2. **[Claude]** Creo el proyecto `local-bussiness` con raíz `apps/client`. `vercel.json` ya desactiva el despliegue por Git: solo se despliega desde GitHub Actions.
-3. **[Tú aprueba] [Claude]** Variables del entorno *Production* (`vercel env add`):
+2. **[Claude]** Creo el proyecto `khronno` con raíz `apps/client`. `vercel.json` ya desactiva el despliegue por Git: solo se despliega desde GitHub Actions.
+3. **[Tú aprueba] [Claude]** Agrego los dominios `khronno.com` y `www.khronno.com` al proyecto; **[Tú]** pones los registros DNS que indique Vercel.
+4. **[Tú aprueba] [Claude]** Variables del entorno *Production* (`vercel env add`):
    | Variable | Valor |
    | --- | --- |
    | `EXPO_PUBLIC_SUPABASE_URL` | URL del proyecto de producción |
    | `EXPO_PUBLIC_SUPABASE_PUBLISHABLE_KEY` | publishable key de producción |
-   | `EXPO_PUBLIC_API_URL` | URL pública de la API de producción (§4) |
+   | `EXPO_PUBLIC_API_URL` | `https://api.khronno.com` |
    | `EXPO_PUBLIC_APP_ENV` | `production` |
    | `EXPO_PUBLIC_SENTRY_DSN` | opcional, proyecto *app* de Sentry |
-4. **[Claude]** Anoto el `VERCEL_PROJECT_ID` (para GitHub, §5).
+5. **[Claude]** Anoto el `VERCEL_PROJECT_ID` (para GitHub, §5).
 
 ## 4. Railway (API y worker)
 
@@ -74,7 +86,7 @@ Las migraciones **no** se corren a mano: las aplica el flujo de producción (§6
    - `DATABASE_URL`: la cadena del pooler de Supabase de producción;
    - `AWS_ACCESS_KEY_ID` y `AWS_SECRET_ACCESS_KEY`: la llave del §2;
    - `SENTRY_DSN`: opcional, proyecto *api* de Sentry.
-5. **[Tú aprueba] [Claude]** Dominio público del servicio `api` (`railway domain`): esa es la `API_URL`.
+5. **[Tú aprueba] [Claude]** Dominio propio del servicio `api`: `railway domain api.khronno.com`; **[Tú]** pones el CNAME que indique Railway. La `API_URL` es `https://api.khronno.com`.
 6. **[Tú]** Crea un **project token** del entorno *production* (Project Settings → Tokens): va a GitHub como `RAILWAY_TOKEN`.
 
 ## 5. GitHub (flujo de despliegue)
@@ -89,7 +101,7 @@ Las migraciones **no** se corren a mano: las aplica el flujo de producción (§6
   - `VERCEL_TOKEN`: puede ser el mismo;
   - `VERCEL_ORG_ID`;
   - `VERCEL_PROJECT_ID`: el del proyecto de producción.
-- **Variables:** `SUPABASE_PROJECT_REF` (el ref de producción) y `API_URL` (la del §4).
+- **Variables:** `SUPABASE_PROJECT_REF` (el ref de producción) y `API_URL` = `https://api.khronno.com`.
 
 Con `gh` puedo dejar listos los nombres; los valores secretos los pones tú.
 
@@ -121,7 +133,6 @@ Los siguientes despliegues son iguales: cuando staging esté probado, *Run workf
 ## 8. Pendientes que no bloquean
 
 - Datos del responsable en el aviso de privacidad y en los términos, y revisión legal.
-- Dominio propio (luego: Vercel, CORS en Railway y en `infra/aws/production`, URLs de Auth en Supabase).
 - Sentry (DSN en Railway y Vercel).
 - Respaldos diarios (plan de pago de Supabase), cuando haya datos que lo justifiquen.
 - Fase 4 (avisos y recordatorios), builds de tiendas con EAS.

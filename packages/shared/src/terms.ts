@@ -1,5 +1,6 @@
 import { TRIAL_DAYS } from './plans';
 import { PLATFORM_CONTACT, PLATFORM_RESPONSIBLE, type NoticeSection } from './privacy';
+import { APP_NAME } from './strings';
 
 /**
  * Terms and conditions of the platform (owners and their team). Change TERMS_VERSION whenever the
@@ -10,7 +11,7 @@ export const TERMS_VERSION = '2026-10-29';
 export function termsSections(r = PLATFORM_RESPONSIBLE): NoticeSection[] {
   return [
     { title: 'Quién presta el servicio', body: [
-      `Mi negocio es una plataforma para administrar negocios (citas, rentas, pedidos, clientes, cobros, productos y finanzas), prestada por ${r.legalName}, con domicilio en ${r.address}. Al crear una cuenta aceptas estos términos.`,
+      `${APP_NAME} es una plataforma para administrar negocios (citas, rentas, pedidos, clientes, cobros, productos y finanzas), prestada por ${r.legalName}, con domicilio en ${r.address}. Al crear una cuenta aceptas estos términos.`,
     ] },
     { title: 'Tu cuenta', body: [
       'Eres responsable de lo que se haga con tu cuenta y de mantener tu contraseña en secreto. Avísanos si crees que alguien más la usa.',

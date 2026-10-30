@@ -23,7 +23,8 @@ provider "aws" {
 # URL de la web de producción en Vercel (se conoce al crear el proyecto; luego, el dominio propio).
 variable "web_origin" {
   type        = string
-  description = "p. ej. https://local-bussiness.vercel.app"
+  description = "Web de producción"
+  default     = "https://khronno.com"
 }
 
 module "storage" {

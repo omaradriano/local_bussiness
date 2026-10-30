@@ -447,8 +447,8 @@ enabled = false
 # project_id = "PROD_REF"
 #
 # [remotes.production.auth]
-# site_url = "https://local-bussiness.vercel.app"
-# additional_redirect_urls = ["https://local-bussiness.vercel.app/**", "localbussiness://**"]
+# site_url = "https://khronno.com"
+# additional_redirect_urls = ["https://khronno.com/**", "https://www.khronno.com/**", "localbussiness://**"]
 #
 # [remotes.production.auth.email]
 # enable_confirmations = true

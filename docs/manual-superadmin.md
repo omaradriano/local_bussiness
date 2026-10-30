@@ -1,8 +1,8 @@
 # Manual del superadministrador
 
-Guía para operar **Mi negocio** como dueño de la plataforma: qué controla cada pantalla de Superadministrador, cómo se manejan los planes y los giros, cómo dar de alta un negocio piloto y qué falta antes de producción.
+Guía para operar **Khronno** como dueño de la plataforma: qué controla cada pantalla de Superadministrador, cómo se manejan los planes y los giros, cómo dar de alta un negocio piloto y qué falta antes de producción.
 
-> Nombre e ícono son provisionales («Mi negocio», ícono de tienda). Se cambian en `apps/client/app.json`, `apps/client/public/manifest.json`, `apps/client/public/index.html` y `apps/client/assets/icon.png`.
+> El nombre es **Khronno** (dominio khronno.com, constantes `APP_NAME`/`APP_DOMAIN` en `packages/shared/src/strings.ts`); el ícono de tienda sigue siendo provisional. Se cambian en `apps/client/app.json`, `apps/client/public/manifest.json`, `apps/client/public/index.html` y `apps/client/assets/icon.png`.
 
 ---
 
