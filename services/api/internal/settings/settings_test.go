@@ -122,7 +122,14 @@ func TestOwnerFeatureChoices(t *testing.T) {
 	if _, errs := s.Apply(Patch{Features: map[string]bool{"guarantor": true}}); errs["features"] == "" {
 		t.Fatal("owner turned on a removed feature")
 	}
-	if _, errs := s.Apply(Patch{Features: map[string]bool{"staff": true}}); errs["features"] == "" {
+	if _, errs := s.Apply(Patch{Features: map[string]bool{"homeService": true}}); errs["features"] == "" {
 		t.Fatal("owner turned on a feature its engine doesn't support")
+	}
+	// A rental offers a team (people and salaries), off until the owner turns it on.
+	if f := state(s, "staff"); !f.Available || f.Active {
+		t.Fatalf("rental team should be offered off: %+v", f)
+	}
+	if next, errs := s.Apply(Patch{Features: map[string]bool{"staff": true}}); len(errs) != 0 || !state(next, "staff").Active {
+		t.Fatalf("owner turns the team on: %v", errs)
 	}
 }

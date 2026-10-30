@@ -1,11 +1,12 @@
 import type { components } from '@lb/api-client';
-import { strings } from '@lb/shared';
+import { engineFor, strings } from '@lb/shared';
 import { router, Stack, useFocusEffect, useLocalSearchParams } from 'expo-router';
 import { useCallback, useState } from 'react';
 import { ActivityIndicator } from 'react-native';
 import { api } from '../../../../../lib/api';
 import { errorText, fieldErrors } from '../../../../../lib/errors';
 import { useBusiness } from '../../../../../lib/useMe';
+import { useTexts } from '../../../../../lib/useTexts';
 import { Button, Cell, Field, Group, Screen, Text, useUI } from '../../../../../ui';
 
 type Staff = components['schemas']['StaffMember'];
@@ -15,6 +16,7 @@ export default function StaffList() {
   const { businessId } = useLocalSearchParams<{ businessId: string }>();
   const { business } = useBusiness(businessId);
   const isOwner = business?.role === 'owner';
+  const agenda = engineFor(useTexts().kind).resource === 'staff';
   const ui = useUI();
   const [staff, setStaff] = useState<Staff[] | null>(null);
   const [name, setName] = useState('');
@@ -46,7 +48,7 @@ export default function StaffList() {
           {staff.map((p) => (
             <Cell key={p.id} icon="person" tint={p.active ? ui.success : ui.gray}
               label={`${p.name}${p.is_owner ? ` (${t.you})` : ''}${p.active ? '' : ` · ${t.inactive}`}`}
-              sublabel={`${p.service_ids.length} servicios · ${p.hours.length ? `${new Set(p.hours.map((h) => h.weekday)).size} días` : 'sin horario'}`}
+              sublabel={agenda ? `${p.service_ids.length} servicios · ${p.hours.length ? `${new Set(p.hours.map((h) => h.weekday)).size} días` : 'sin horario'}` : undefined}
               onPress={() => router.push({ pathname: '/admin/[businessId]/staff/[staffId]', params: { businessId, staffId: p.id } })} />
           ))}
         </Group>

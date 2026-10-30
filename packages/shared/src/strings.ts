@@ -402,6 +402,20 @@ export const strings = {
   },
   plans: {
     names: { trial: 'Prueba', lite: 'Lite', pro: 'Pro', business: 'Business' } as Record<string, string>,
+    page: {
+      title: 'Planes',
+      entry: 'Planes y funciones',
+      entryHint: 'Qué incluye cada plan',
+      intro: 'El plan es de la cuenta del dueño y cubre todos sus negocios.',
+      pricesPending: 'Precios y pagos aún no definidos.',
+      trial: (days: number) => `Cada cuenta nueva empieza con ${days} días de prueba gratis del plan Pro, sin tarjeta.`,
+      current: 'Tu plan',
+      blurbs: {
+        lite: 'Para empezar: un negocio y lo básico para operar.',
+        pro: 'Para el negocio que ya crece: equipo, sueldos y finanzas completas.',
+        business: 'Para varios negocios: sin límites y comparando resultados.',
+      } as Record<string, string>,
+    },
     trialLeft: (n: number) => (n === 1 ? 'Prueba de Pro: queda 1 día' : `Prueba de Pro: quedan ${n} días`),
     trialEnded: 'Tu prueba terminó. Puedes consultar tu información, pero para seguir registrando hay que elegir un plan.',
     planEnded: 'Tu plan venció. Puedes consultar tu información, pero para seguir registrando hay que renovarlo.',
@@ -580,6 +594,7 @@ export const strings = {
     emptyExpenses: 'Sin gastos registrados en este periodo.',
     emptyPlans: 'Sin compras a plazos.',
     payHint: 'Lo que gana cada persona. El sueldo cuenta como gasto día a día; la comisión es un porcentaje de lo que se cobra de sus servicios.',
+    payHintSalaryOnly: 'Lo que gana cada persona. El sueldo cuenta como gasto día a día.',
     salaryPeriod: { weekly: 'Semanal', biweekly: 'Quincenal', monthly: 'Mensual' } as Record<string, string>,
     commissionPercent: 'Comisión (% de sus servicios)',
     paySaved: 'Paga guardada.',
