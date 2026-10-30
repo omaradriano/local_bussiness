@@ -624,6 +624,10 @@ func (fakeBookings) Return(_ context.Context, _, id, _, _ string, _ time.Time) (
 	return bookings.Booking{ID: id, Status: "returned", Rental: &bookings.RentalInfo{LateDays: 2, LateFeeSuggested: 60000}}, nil
 }
 
+func (fakeBookings) SetDiscount(_ context.Context, _, id string, _ bookings.Discount, _ string) (bookings.Booking, error) {
+	return bookings.Booking{ID: id}, nil
+}
+
 func (fakeBookings) Extend(_ context.Context, _, id string, newEnd time.Time, _ string, _ time.Time) (bookings.Booking, error) {
 	if newEnd.Year() == 2030 {
 		return bookings.Booking{}, bookings.ErrSlotTaken

@@ -262,6 +262,7 @@ type BookingsRepo interface {
 	Checkout(ctx context.Context, businessID, id, condition, actor string, now time.Time) (bookings.Booking, error)
 	Return(ctx context.Context, businessID, id, condition, actor string, now time.Time) (bookings.Booking, error)
 	Extend(ctx context.Context, businessID, id string, newEnd time.Time, actor string, now time.Time) (bookings.Booking, error)
+	SetDiscount(ctx context.Context, businessID, id string, d bookings.Discount, actor string) (bookings.Booking, error)
 	Inventory(ctx context.Context, businessID string) ([]bookings.InventoryRow, error)
 	Quote(ctx context.Context, businessID string, in bookings.QuoteRequest) (bookings.QuoteResult, error)
 	History(ctx context.Context, businessID string, f bookings.HistoryFilter) ([]bookings.Summary, error)
@@ -933,6 +934,13 @@ func NewRouter(d Deps) http.Handler {
 					}
 					in.EndsAt = &end
 				}
+				if v := q.Get("discount_value"); v != "" {
+					in.Discount.Type = q.Get("discount_type")
+					if in.Discount.Value, err = strconv.ParseInt(v, 10, 64); err != nil {
+						invalid(w, "Descuento inválido.", map[string]string{"discount.value": "Descuento inválido."})
+						return
+					}
+				}
 				res, err := d.Bookings.Quote(r.Context(), m.BusinessID, in)
 				var bad bookings.Invalid
 				switch {
@@ -1221,6 +1229,16 @@ func NewRouter(d Deps) http.Handler {
 						return
 					}
 					b, err := d.Bookings.Extend(r.Context(), m.BusinessID, chi.URLParam(r, "bookingId"), *body.EndsAt, m.UserID, d.now())
+					writeBooking(w, r, b, err)
+				})
+
+				r.Put("/discount", func(w http.ResponseWriter, r *http.Request) {
+					m, _ := auth.MemberFrom(r.Context())
+					var body bookings.Discount
+					if !decode(w, r, &body) {
+						return
+					}
+					b, err := d.Bookings.SetDiscount(r.Context(), m.BusinessID, chi.URLParam(r, "bookingId"), body, m.UserID)
 					writeBooking(w, r, b, err)
 				})
 

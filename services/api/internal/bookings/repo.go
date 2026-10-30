@@ -51,6 +51,10 @@ func (r Repo) Extend(ctx context.Context, businessID, id string, newEnd time.Tim
 	return Extend(ctx, r.DB, businessID, id, newEnd, actor, now)
 }
 
+func (r Repo) SetDiscount(ctx context.Context, businessID, id string, d Discount, actor string) (Booking, error) {
+	return SetDiscount(ctx, r.DB, businessID, id, d, actor)
+}
+
 func (r Repo) Inventory(ctx context.Context, businessID string) ([]InventoryRow, error) {
 	return Inventory(ctx, r.DB, businessID)
 }

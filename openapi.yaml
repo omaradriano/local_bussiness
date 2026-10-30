@@ -684,6 +684,8 @@ paths:
         - { name: quantity, in: query, schema: { type: integer, minimum: 1, maximum: 100 } }
         - { name: starts_at, in: query, required: true, schema: { type: string, format: date-time } }
         - { name: ends_at, in: query, schema: { type: string, format: date-time } }
+        - { name: discount_type, in: query, schema: { $ref: "#/components/schemas/DiscountType" } }
+        - { name: discount_value, in: query, schema: { type: integer, minimum: 0 } }
       responses:
         "200":
           description: OK
@@ -691,9 +693,10 @@ paths:
             application/json:
               schema:
                 type: object
-                required: [subtotal, total, deposit_required, security_deposit, periods]
+                required: [subtotal, discount, total, deposit_required, security_deposit, periods]
                 properties:
                   subtotal: { type: integer }
+                  discount: { type: integer, description: "Lo que el descuento quita del total" }
                   total: { type: integer }
                   deposit_required: { type: integer }
                   security_deposit: { type: integer }
@@ -1750,6 +1753,27 @@ paths:
         "409": { $ref: "#/components/responses/Error" }
         "422": { $ref: "#/components/responses/Error" }
 
+  /v1/b/{businessId}/bookings/{bookingId}/discount:
+    parameters:
+      - $ref: "#/components/parameters/BusinessId"
+      - { name: bookingId, in: path, required: true, schema: { type: string, format: uuid } }
+    put:
+      operationId: setBookingDiscount
+      summary: Pone, cambia o quita (value 0) el descuento; recalcula total y anticipo; no baja de lo ya cobrado
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/Discount" }
+      responses:
+        "200":
+          description: OK
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Booking" }
+        "404": { $ref: "#/components/responses/Error" }
+        "422": { $ref: "#/components/responses/Error" }
+
   /v1/b/{businessId}/bookings/{bookingId}/return:
     parameters:
       - $ref: "#/components/parameters/BusinessId"
@@ -2370,6 +2394,7 @@ components:
             phone: { type: string }
             email: { type: string }
             privacy_accepted: { type: boolean, description: "El cliente aceptó el aviso de privacidad del negocio" }
+        discount: { $ref: "#/components/schemas/Discount" }
         initial_payment:
           type: object
           description: "Lo que el cliente paga al crearla (solo mostrador). Sin `amount` = el total."
@@ -2388,9 +2413,19 @@ components:
         options: { type: object, additionalProperties: { type: string } }
         notes: { type: string, maxLength: 1000 }
 
+    DiscountType: { type: string, enum: [amount, percent] }
+
+    Discount:
+      type: object
+      description: "Descuento del negocio (solo mostrador): cantidad fija en centavos o porcentaje entero del total. `value` 0 = sin descuento."
+      required: [type, value]
+      properties:
+        type: { $ref: "#/components/schemas/DiscountType" }
+        value: { type: integer, minimum: 0 }
+
     Booking:
       type: object
-      required: [id, kind, status, starts_at, ends_at, customer, items, staff, units, subtotal, deposit_required, total, source, hold_expires_at, public_token, created_at, payments, balance, events, steps, next, rental, documents]
+      required: [id, kind, status, starts_at, ends_at, customer, items, staff, units, subtotal, discount_type, discount_value, discount, deposit_required, total, source, hold_expires_at, public_token, created_at, payments, balance, events, steps, next, rental, documents]
       properties:
         id: { type: string, format: uuid }
         kind: { $ref: "#/components/schemas/ItemKind" }
@@ -2425,6 +2460,9 @@ components:
         fulfillment: { type: [string, "null"] }
         delivery_address: { type: [string, "null"] }
         subtotal: { type: integer, format: int64 }
+        discount_type: { oneOf: [{ $ref: "#/components/schemas/DiscountType" }, { type: "null" }] }
+        discount_value: { type: integer, format: int64, description: "Centavos o porcentaje, según discount_type" }
+        discount: { type: integer, format: int64, description: "Lo que el descuento quita del total" }
         deposit_required: { type: integer, format: int64 }
         total: { type: integer, format: int64 }
         notes: { type: [string, "null"] }

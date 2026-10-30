@@ -39,10 +39,12 @@ func Extend(ctx context.Context, db store.DB, businessID, id string, newEnd time
 	var rawSettings []byte
 	var unitPrice, qty int64
 	var opts []byte
-	if err := tx.QueryRow(ctx, `select bk.starts_at, bk.ends_at, biz.timezone, biz.settings, coalesce(ci.price_unit, 'day'), bi.unit_price, bi.quantity, bi.options
+	var disc Discount
+	if err := tx.QueryRow(ctx, `select bk.starts_at, bk.ends_at, biz.timezone, biz.settings, coalesce(ci.price_unit, 'day'), bi.unit_price, bi.quantity, bi.options,
+		  coalesce(bk.discount_type, ''), bk.discount_value
 		from public.bookings bk join public.businesses biz on biz.id = bk.business_id
 		join public.booking_items bi on bi.booking_id = bk.id join public.catalog_items ci on ci.id = bi.item_id
-		where bk.id = $1`, id).Scan(&start, &end, &tz, &rawSettings, &priceUnit, &unitPrice, &qty, &opts); err != nil {
+		where bk.id = $1`, id).Scan(&start, &end, &tz, &rawSettings, &priceUnit, &unitPrice, &qty, &opts, &disc.Type, &disc.Value); err != nil {
 		return Booking{}, err
 	}
 	if !newEnd.After(end) {
@@ -75,13 +77,15 @@ func Extend(ctx context.Context, db store.DB, businessID, id string, newEnd time
 		o = map[string]any{}
 	}
 	extra, _ := o["options_extra"].(float64)
-	q := Compute(QuoteInput{UnitPrice: unitPrice, OptionsExtra: int64(extra), Quantity: qty, Periods: periods})
+	// A percent discount follows the new total; a fixed one stays.
+	q := Compute(QuoteInput{UnitPrice: unitPrice, OptionsExtra: int64(extra), Quantity: qty, Periods: periods, Discount: disc})
 	o["periods"] = periods
 	opts, _ = json.Marshal(o)
 	if _, err := tx.Exec(ctx, `update public.booking_items set options = $2 where booking_id = $1`, id, opts); err != nil {
 		return Booking{}, err
 	}
-	if _, err := tx.Exec(ctx, `update public.bookings set ends_at = $2, subtotal = $3, total = $3, updated_at = now() where id = $1`, id, newEnd, q.Total); err != nil {
+	if _, err := tx.Exec(ctx, `update public.bookings set ends_at = $2, subtotal = $3, discount = $4, total = $5, updated_at = now() where id = $1`,
+		id, newEnd, q.Subtotal, q.Discount, q.Total); err != nil {
 		return Booking{}, err
 	}
 	note := fmt.Sprintf("Renta extendida hasta %s; nuevo total %s", newEnd.In(loc).Format("02/01/2006 15:04"), mxn(q.Total))

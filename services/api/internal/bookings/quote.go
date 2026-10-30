@@ -41,6 +41,7 @@ type QuoteRequest struct {
 	Quantity int
 	StartsAt time.Time
 	EndsAt   *time.Time // rentals
+	Discount Discount
 }
 
 type QuoteResult struct {
@@ -85,6 +86,10 @@ func QuoteBooking(ctx context.Context, db store.DB, businessID string, in QuoteR
 	if !rentals.SecurityDepositEnabled {
 		deposit = 0
 	}
-	q := Compute(QuoteInput{UnitPrice: price, Quantity: int64(qty), Periods: periods, DepositPercent: set.DepositPercent, SecurityDeposit: deposit})
+	if err := in.Discount.Validate(); err != nil {
+		return QuoteResult{}, err
+	}
+	q := Compute(QuoteInput{UnitPrice: price, Quantity: int64(qty), Periods: periods, DepositPercent: set.DepositPercent, SecurityDeposit: deposit,
+		Discount: in.Discount})
 	return QuoteResult{Quote: q, Periods: periods}, nil
 }

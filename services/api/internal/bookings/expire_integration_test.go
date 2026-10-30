@@ -105,3 +105,53 @@ func TestIntegrationReturnByEndOfDay(t *testing.T) {
 		t.Fatalf("return: %+v %v", got.Rental, err)
 	}
 }
+
+func TestIntegrationDiscount(t *testing.T) {
+	p := pool(t)
+	ctx := context.Background()
+	f := setup(t, p, "tool_rental", `{"deposit_percent": 50}`)
+	p.Exec(ctx, `delete from public.workflow_steps where business_id = $1`, f.business)
+	out, back := at("2026-11-02T15:00:00Z"), at("2026-11-04T15:00:00Z") // 2 days × $300
+	ten := &Discount{Type: "percent", Value: 10}
+
+	// The quote and the booking apply it the same way; the advance is half of the discounted total.
+	q, err := QuoteBooking(ctx, p, f.business, QuoteRequest{ItemID: f.item, StartsAt: *out, EndsAt: back, Discount: *ten})
+	if err != nil || q.Discount != 6000 || q.Total != 54000 {
+		t.Fatalf("quote: %+v %v", q.Quote, err)
+	}
+	b, _, err := Create(ctx, p, f.business, CreateInput{Customer: cust("6149990006"), ItemID: f.item, StartsAt: out, EndsAt: back, Source: "admin", Discount: ten}, now)
+	if err != nil || b.Discount != 6000 || b.Total != 54000 || b.DepositRequired != 27000 || deref(b.DiscountType) != "percent" {
+		t.Fatalf("create: %+v %v", b, err)
+	}
+
+	// The public catalog can't give itself a discount.
+	pub, _, err := Create(ctx, p, f.business, CreateInput{Customer: cust("6149990007"), ItemID: f.item,
+		StartsAt: at("2026-11-10T15:00:00Z"), EndsAt: at("2026-11-11T15:00:00Z"), Source: "public", Discount: ten}, now)
+	if err != nil || pub.Discount != 0 || pub.Total != 30000 {
+		t.Fatalf("public: %d %d %v", pub.Discount, pub.Total, err)
+	}
+
+	// Extending recalculates a percent discount on the new total (3 days: $900 − 10%).
+	b, err = Extend(ctx, p, f.business, b.ID, *at("2026-11-05T15:00:00Z"), "", now)
+	if err != nil || b.Discount != 9000 || b.Total != 81000 {
+		t.Fatalf("extend: %d %d %v", b.Discount, b.Total, err)
+	}
+
+	// A fixed amount from the detail; the advance keeps its half.
+	b, err = SetDiscount(ctx, p, f.business, b.ID, Discount{Type: "amount", Value: 20000}, "")
+	if err != nil || b.Discount != 20000 || b.Total != 70000 || b.DepositRequired != 35000 {
+		t.Fatalf("set amount: %+v %v", b, err)
+	}
+
+	// Never below what was already charged.
+	AddPayment(ctx, p, f.business, b.ID, Payment{Type: "balance", Method: "cash", Amount: 65000}, "", now, noFiles)
+	if _, err := SetDiscount(ctx, p, f.business, b.ID, Discount{Type: "percent", Value: 20}, ""); err == nil {
+		t.Fatal("discount below what was paid was accepted")
+	}
+
+	// Removing it gives the full total back.
+	b, err = SetDiscount(ctx, p, f.business, b.ID, Discount{}, "")
+	if err != nil || b.Discount != 0 || b.Total != 90000 || b.DiscountType != nil {
+		t.Fatalf("remove: %+v %v", b, err)
+	}
+}

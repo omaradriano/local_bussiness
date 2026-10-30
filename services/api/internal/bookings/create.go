@@ -52,6 +52,7 @@ type CreateInput struct {
 	DeliveryZone    string            `json:"delivery_zone"`
 	Options         map[string]string `json:"options"` // option name -> answer
 	Notes           string            `json:"notes"`
+	Discount        *Discount         `json:"discount"` // counter only
 	// Counter only: what the customer pays right now (type is set here: all of it = balance, part = advance).
 	InitialPayment *Payment `json:"initial_payment"`
 
@@ -114,12 +115,22 @@ func (in *CreateInput) Validate() error {
 	if utf8.RuneCountInString(in.Notes) > 1000 {
 		return Invalid{"notes", "Las notas son muy largas."}
 	}
+	if in.Discount != nil {
+		if in.Discount.Value == 0 {
+			in.Discount = nil
+		} else if err := in.Discount.Validate(); err != nil {
+			return err
+		}
+	}
 	return nil
 }
 
 // Create books the item atomically. It returns the booking and whether it already existed (same Idempotency-Key).
 // Availability is re-checked inside the transaction; the DB exclusion constraints settle races (F3-2).
 func Create(ctx context.Context, db store.DB, businessID string, in CreateInput, now time.Time) (Booking, bool, error) {
+	if in.Source != "admin" {
+		in.Discount = nil // only the business gives discounts (the public catalog can't ask for one)
+	}
 	if err := in.Validate(); err != nil {
 		return Booking{}, false, err
 	}
@@ -213,7 +224,7 @@ func Create(ctx context.Context, db store.DB, businessID string, in CreateInput,
 		set.DepositPercent = 0 // booked at the counter: paid at the end, confirmed right away
 	}
 	q := Compute(QuoteInput{UnitPrice: it.Price, OptionsExtra: optsExtra, Quantity: int64(in.Quantity), Periods: periods,
-		DeliveryFee: deliveryFee, DepositPercent: set.DepositPercent, SecurityDeposit: securityDeposit})
+		DeliveryFee: deliveryFee, DepositPercent: set.DepositPercent, SecurityDeposit: securityDeposit, Discount: deref(in.Discount)})
 	status, hold := InitialStatus(q.Advance, set.HoldHours, now)
 	pay := in.InitialPayment
 	if pay != nil {
@@ -235,11 +246,13 @@ func Create(ctx context.Context, db store.DB, businessID string, in CreateInput,
 	var bookingID string
 	err = tx.QueryRow(ctx, `
 		insert into public.bookings (business_id, customer_id, kind, status, starts_at, ends_at, fulfillment, delivery_address,
-		  subtotal, deposit_required, total, notes, source, hold_expires_at, idempotency_key, created_by)
-		values ($1, $2, $3, $4, $5, $6, nullif($7, ''), nullif($8, ''), $9, $10, $11, nullif($12, ''), $13, $14, nullif($15, ''), nullif($16, '')::uuid)
+		  subtotal, deposit_required, total, notes, source, hold_expires_at, idempotency_key, created_by, discount_type, discount_value, discount)
+		values ($1, $2, $3, $4, $5, $6, nullif($7, ''), nullif($8, ''), $9, $10, $11, nullif($12, ''), $13, $14, nullif($15, ''), nullif($16, '')::uuid,
+		  nullif($17, ''), $18, $19)
 		returning id::text`,
 		businessID, customerID, it.Kind, status, start, end, in.Fulfillment, in.DeliveryAddress,
-		q.Subtotal, q.Advance, q.Total, strings.TrimSpace(in.Notes), in.Source, hold, in.IdempotencyKey, in.CreatedBy).Scan(&bookingID)
+		q.Subtotal, q.Advance, q.Total, strings.TrimSpace(in.Notes), in.Source, hold, in.IdempotencyKey, in.CreatedBy,
+		deref(in.Discount).Type, deref(in.Discount).Value, q.Discount).Scan(&bookingID)
 	if isUnique(err) && in.IdempotencyKey != "" {
 		tx.Rollback(ctx) // a concurrent retry with the same key won: return that one
 		id, err := idByKey(ctx, db, businessID, in.IdempotencyKey)

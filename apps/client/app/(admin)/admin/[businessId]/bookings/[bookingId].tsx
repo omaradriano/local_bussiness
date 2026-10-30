@@ -5,6 +5,7 @@ import { useCallback, useEffect, useState } from 'react';
 import { ActivityIndicator, Linking, View } from 'react-native';
 import { BookingDocuments } from '../../../../../components/BookingDocuments';
 import { ExtendRental } from '../../../../../components/ExtendRental';
+import { DiscountForm } from '../../../../../components/DiscountForm';
 import { PaymentForm, PaymentList, paymentTypesFor, type PaymentType } from '../../../../../components/Payments';
 import { StatusBadge } from '../../../../../components/StatusBadge';
 import { StepCard } from '../../../../../components/StepCard';
@@ -105,6 +106,7 @@ export default function BookingDetail() {
 
   const balance = (
     <View style={{ gap: 6 }}>
+      {b.discount > 0 && <Row label={t.discount.row(b.discount_type, b.discount_value)} value={`− ${formatMXN(b.discount)}`} />}
       <Row label={t.total} value={formatMXN(b.total)} />
       <Row label={t.paid} value={formatMXN(b.balance.paid)} />
       {b.deposit_required > 0 && <Row label={t.advance} value={formatMXN(b.deposit_required)} />}
@@ -113,11 +115,17 @@ export default function BookingDetail() {
       <Row label={t.due} value={formatMXN(b.balance.due)} strong />
     </View>
   );
-  // The payment form opens on demand, with only the payment types that apply at this moment.
-  const payments = editable && (payOpen ? (
-    <PaymentForm key={`${b.status}-${b.balance.paid}-${b.balance.extra_charges}-${b.balance.deposit_held}`} businessId={businessId} booking={b}
-      types={paymentTypesFor(b, security)} suggested={suggestedPayment(b, security)} onDone={show} />
-  ) : <Button icon="cash" onPress={() => setPayOpen(true)}>{t.showPaymentForm}</Button>);
+  // The payment form opens on demand, with only the payment types that apply at this moment; the
+  // discount sits next to it (the API refuses it once the booking is finished).
+  const payments = editable && (
+    <View style={{ gap: 12 }}>
+      <DiscountForm key={`d-${b.total}-${b.discount}`} businessId={businessId} booking={b} onDone={show} />
+      {payOpen ? (
+        <PaymentForm key={`${b.status}-${b.balance.paid}-${b.balance.extra_charges}-${b.balance.deposit_held}`} businessId={businessId} booking={b}
+          types={paymentTypesFor(b, security)} suggested={suggestedPayment(b, security)} onDone={show} />
+      ) : <Button icon="cash" onPress={() => setPayOpen(true)}>{t.showPaymentForm}</Button>}
+    </View>
+  );
   const settled = b.balance.due === 0 && (security === 0 || b.balance.deposit_held >= security);
 
   const rentalStep = { pending_deposit: 0, confirmed: 1, checked_out: 2, overdue: 2, returned: 3, completed: 4 }[b.status as string] ?? -1;

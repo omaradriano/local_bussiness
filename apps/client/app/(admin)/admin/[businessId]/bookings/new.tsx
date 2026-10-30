@@ -1,10 +1,11 @@
 import type { components } from '@lb/api-client';
-import { addDays, engineFor, firstOfMonth, futureTime, nextHour, parsePesos, formatMXN, hhmm, lastOfMonth, localToISO, strings, term, todayISO } from '@lb/shared';
+import { addDays, discountInput, engineFor, firstOfMonth, futureTime, nextHour, parsePesos, formatMXN, hhmm, lastOfMonth, localToISO, strings, term, todayISO, type DiscountMode } from '@lb/shared';
 import { router, Stack, useLocalSearchParams } from 'expo-router';
 import { useEffect, useMemo, useState } from 'react';
 import { ActivityIndicator, Switch, View } from 'react-native';
 import { Calendar, type DayInfo } from '../../../../../components/Calendar';
 import { CustomerPicker, type PickedCustomer } from '../../../../../components/CustomerPicker';
+import { DiscountFields } from '../../../../../components/DiscountForm';
 import { api } from '../../../../../lib/api';
 import { errorText, fieldErrors } from '../../../../../lib/errors';
 import { useBusiness } from '../../../../../lib/useMe';
@@ -24,7 +25,7 @@ function Field({ label, value, onChange, error, keyboard, hint, onBlur }: {
   return <UIField label={label} value={value} onChangeText={onChange} keyboardType={keyboard} error={error} hint={hint} onBlur={onBlur} />;
 }
 
-type Quote = { total: number; security_deposit: number; periods: number };
+type Quote = { total: number; discount: number; security_deposit: number; periods: number };
 
 export default function NewBooking() {
   const { businessId } = useLocalSearchParams<{ businessId: string }>();
@@ -62,6 +63,9 @@ export default function NewBooking() {
   const [payMode, setPayMode] = useState<'none' | 'total' | 'partial'>('none'); // the real payment is usually at check-out
   const [payMethod, setPayMethod] = useState<'cash' | 'transfer' | 'card'>('cash');
   const [payAmount, setPayAmount] = useState('');
+  const [discMode, setDiscMode] = useState<DiscountMode>('none');
+  const [discText, setDiscText] = useState('');
+  const discount = discountInput(discMode, discText); // undefined = unreadable (not sent until fixed)
 
   const [days, setDays] = useState<Record<string, Day>>({}); // calendar availability of the visible month
   const [daysState, setDaysState] = useState<'loading' | 'ready' | string>('loading'); // string = error
@@ -138,9 +142,10 @@ export default function NewBooking() {
     setQuote(null);
     if (!item || !quoteReady || !quoteStart) return;
     api.GET('/v1/b/{businessId}/quote', {
-      params: { path: { businessId }, query: { item_id: item.id, quantity: qty, starts_at: quoteStart, ...(isRange && backISO ? { ends_at: backISO } : {}) } },
+      params: { path: { businessId }, query: { item_id: item.id, quantity: qty, starts_at: quoteStart, ...(isRange && backISO ? { ends_at: backISO } : {}),
+        ...(discount ? { discount_type: discount.type, discount_value: discount.value } : {}) } },
     }).then(({ data }) => setQuote(data ?? null));
-  }, [businessId, item, qty, quoteStart, backISO, quoteReady]);
+  }, [businessId, item, qty, quoteStart, backISO, quoteReady, discount?.type, discount?.value]);
 
   function dayInfo(date: string): DayInfo {
     if (date < today) return { disabled: true };
@@ -173,6 +178,7 @@ export default function NewBooking() {
     if (!startsAt) return toast(isRange ? t.pickRange : t.pickDay, 'error');
     if (isRange && !backISO) return toast(t.pickReturn, 'error');
     if (!customer) return toast(strings.customers.pick, 'error');
+    if (discount === undefined) return setErrors({ discount: t.discount.invalid });
     const partial = payMode === 'partial' ? parsePesos(payAmount) : null;
     if (payMode === 'partial' && !partial) return setErrors({ amount: t.invalidAmount });
     setBusy(true);
@@ -190,6 +196,7 @@ export default function NewBooking() {
         ...(e?.fulfillment === 'pickupOrDelivery' ? { fulfillment, delivery_address: address, delivery_zone: zone } : {}),
         ...(e?.fulfillment === 'atPlaceOrHome' && atHome ? { fulfillment: 'delivery' as const, delivery_address: address } : {}),
         notes,
+        ...(discount ? { discount } : {}),
         ...(payMode !== 'none' ? { initial_payment: { method: payMethod, ...(partial ? { amount: partial } : {}) } } : {}),
       },
     });
@@ -326,6 +333,8 @@ export default function NewBooking() {
         <Step inline n={4} title={s.payment.title} description={texts.newBooking.paymentHint} state={item ? state(3) : 'upcoming'}>
           {item && (
             <>
+              <Text variant="subhead" color="labelSecondary">{t.discount.label}</Text>
+              <DiscountFields mode={discMode} text={discText} onMode={setDiscMode} onText={setDiscText} error={errors.discount ?? errors['discount.value']} />
               <Segmented options={(['none', 'total', 'partial'] as const).map((m) => ({ value: m, label: t.payModes[m] }))} value={payMode} onChange={setPayMode} />
               {payMode !== 'none' && (
                 <Segmented options={(['cash', 'transfer', 'card'] as const).map((m) => ({ value: m, label: t.methods[m] }))} value={payMethod} onChange={setPayMethod} />
@@ -333,6 +342,7 @@ export default function NewBooking() {
               {payMode === 'partial' && <Field label={t.amount} value={payAmount} onChange={setPayAmount} keyboard="numeric" error={errors.amount} />}
               {quote && (
                 <View style={{ gap: 6 }}>
+                  {quote.discount > 0 && <Row label={t.discount.label} value={`− ${formatMXN(quote.discount)}`} />}
                   <Row label={t.total} value={formatMXN(quote.total)} />
                   <Row label={s.payment.now} value={formatMXN(paidNow)} />
                   <Row label={s.payment.remaining} value={formatMXN(remaining ?? 0)} strong />
