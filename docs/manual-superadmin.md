@@ -11,7 +11,7 @@ Guía para operar **Mi negocio** como dueño de la plataforma: qué controla cad
 | Entorno | Web | API | Base de datos |
 | --- | --- | --- | --- |
 | Staging (pruebas) | https://local-bussiness-staging.vercel.app | https://api-staging-4e97e.up.railway.app | Supabase `local-bussiness-staging` |
-| Producción | **No existe todavía** (ver §10) | — | — |
+| Producción | **Por crear**: guía paso a paso en `docs/produccion.md` | — | — |
 
 - Tu `pnpm dev` local usa **la misma base de staging**: lo que crees en local aparece en staging.
 - Cada merge a `main` despliega solo a staging (migraciones → Railway → Vercel).

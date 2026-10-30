@@ -53,6 +53,21 @@ resource "aws_s3_bucket_versioning" "this" {
   versioning_configuration { status = "Enabled" }
 }
 
+# Borrar de verdad: al eliminar un documento o un negocio queda una marca de borrado y la versión
+# anterior; esta regla elimina las versiones anteriores a los 30 días y limpia las marcas sobrantes.
+resource "aws_s3_bucket_lifecycle_configuration" "versions" {
+  for_each   = { for k, v in local.buckets : k => v if v.versioned }
+  bucket     = aws_s3_bucket.this[each.key].id
+  depends_on = [aws_s3_bucket_versioning.this]
+  rule {
+    id     = "expire-old-versions"
+    status = "Enabled"
+    filter {}
+    noncurrent_version_expiration { noncurrent_days = 30 }
+    expiration { expired_object_delete_marker = true }
+  }
+}
+
 # El cliente sube directo con URL prefirmada (PUT) y lee archivos privados con URL prefirmada (GET).
 resource "aws_s3_bucket_cors_configuration" "this" {
   for_each = aws_s3_bucket.this

@@ -440,3 +440,16 @@ verify_enabled = true
 
 [remotes.staging.storage.vector]
 enabled = false
+
+# Producción: descomentar al crear el proyecto (docs/produccion.md) con su ref y la URL de Vercel.
+# Se aplica con `supabase config push` estando ligado a ese proyecto (requiere aprobación).
+# [remotes.production]
+# project_id = "PROD_REF"
+#
+# [remotes.production.auth]
+# site_url = "https://local-bussiness.vercel.app"
+# additional_redirect_urls = ["https://local-bussiness.vercel.app/**", "localbussiness://**"]
+#
+# [remotes.production.auth.email]
+# enable_confirmations = true
+# max_frequency = "1m0s"
