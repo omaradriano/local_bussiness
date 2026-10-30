@@ -96,25 +96,16 @@ Desde 2026-10-28 cada giro es **un archivo de mapa** (`packages/shared/src/verti
 
 **Cuándo:** al entrar el primer cliente que necesite un cuarto motor (tienda o gimnasio), no antes.
 
-### Go: `internal/engines`
+### Go: `internal/engines` + una tabla por capa
 
-```go
-type Engine interface {
-	Kind() string                                    // "service", "product", "rental"…
-	Transitions() map[string][]string                // su tabla de estados
-	ValidateItem(item catalog.Item) error            // campos obligatorios del artículo (duración, unidades, existencias…)
-	Availability(ctx context.Context, q Query) (Answer, error)
-	Quote(q QuoteInput) (Quote, error)               // precio, anticipo y depósito en centavos
-	Reserve(ctx context.Context, tx pgx.Tx, b Booking) error // apartar: horario, cupo, unidades o existencias
-	Release(ctx context.Context, tx pgx.Tx, b Booking) error // devolverlo al cancelar o expirar
-}
+Una sola interfaz `Engine` con disponibilidad, precio y reservas crearía ciclos de imports (`bookings` → `engines` → `availability`/`bookings`). Por eso:
 
-var registry = map[string]Engine{} // Register(e) desde cada motor; Get(kind) en handlers
-```
+- `internal/engines` es la **única lista de motores** (`Kinds`, `Valid`) y da dos ayudas: `Get(tabla, kind)`, que devuelve `ErrUnknown` si el motor no está (falla cerrado), y `Covers(tabla)`, que dice qué motores le faltan a una tabla.
+- Cada capa guarda sus reglas por motor en una **tabla** (estrategia por motor) donde ya vive el código: `availability.answerers`, `bookings.transitions`, y luego las reglas de reserva y de catálogo.
+- Cada capa tiene un test `engines.Covers(<tabla>)`: al agregar un motor a `Kinds`, reprueban todas las capas que aún no lo implementan, y no se puede llegar a producción a medias.
+- `machine.go` sigue siendo la única puerta de los estados (`CanTransition`).
 
-- `machine.go` sigue siendo la única puerta de los estados (`CanTransition`), pero lee la tabla de `engines.Get(kind).Transitions()`.
-- Los handlers dejan de tener `switch kind`: `engines.Get(item.Kind).Quote(…)`.
-- Cada motor vive en su carpeta (`engines/service`, `engines/rental`…) con sus tests.
+Agregar un motor = agregarlo a `Kinds`, al `check` de la base y a `packages/shared`, y llenar cada tabla hasta que pasen los tests.
 
 ### Cliente: `packages/shared/src/engines/<motor>.ts`
 
@@ -150,10 +141,12 @@ Así, `sale` solo agrega la pieza «existencias» (que ya existe en `productSale
 
 ### Pasos de migración
 
-1. Extraer la interfaz con los tres motores actuales, **sin cambiar comportamiento**: los tests existentes son la red.
-2. Mover uno a uno los `switch` de Go al registro; luego los del cliente a `engineFor()`.
-3. Agregar el test de paridad Go ↔ TS y actualizar la regla de `CLAUDE.md` («la máquina de estados vive solo en `machine.go`») para decir que las tablas viven en cada motor y `machine.go` es la única puerta.
-4. Recién entonces, el cuarto motor.
+1. **(Hecho, 2026-10-30)** Lista única `internal/engines`; disponibilidad y estados en tablas con test de cobertura; reservas, catálogo y filtros ya no caen en renta por omisión: un motor desconocido es un error. Las plantillas de giro y `features.json` solo pueden nombrar motores de la lista.
+2. Reservas: reglas por motor (preparar, revisar disponibilidad, apartar recursos, periodos y cobros) en una tabla de `bookings`, en lugar de los `switch` de `create.go`, `quote.go` y `payments.go`.
+3. Catálogo: campos, validación y limpieza por motor en una tabla de `catalog`.
+4. Cliente: `packages/shared/src/engines` con `engineFor(kind)`, las pantallas dejan de preguntar `kind === '…'`, y test de paridad Go ↔ TS.
+5. Batería de contrato común por motor y actualizar la regla de `CLAUDE.md`.
+6. Recién entonces, el cuarto motor.
 
 ### No romper a los demás negocios
 

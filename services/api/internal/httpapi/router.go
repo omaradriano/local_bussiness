@@ -23,6 +23,7 @@ import (
 	"github.com/omaradriano/local_bussiness/services/api/internal/businesses"
 	"github.com/omaradriano/local_bussiness/services/api/internal/catalog"
 	"github.com/omaradriano/local_bussiness/services/api/internal/customers"
+	"github.com/omaradriano/local_bussiness/services/api/internal/engines"
 	"github.com/omaradriano/local_bussiness/services/api/internal/exports"
 	"github.com/omaradriano/local_bussiness/services/api/internal/features"
 	"github.com/omaradriano/local_bussiness/services/api/internal/files"
@@ -966,7 +967,7 @@ func NewRouter(d Deps) http.Handler {
 					return
 				}
 				kind := q.Get("kind")
-				if kind != "" && kind != "service" && kind != "product" && kind != "rental" {
+				if kind != "" && !engines.Valid(kind) {
 					invalid(w, "Tipo inválido.", map[string]string{"kind": "Tipo inválido."})
 					return
 				}

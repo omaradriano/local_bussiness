@@ -5,6 +5,7 @@ import (
 	"testing"
 
 	"github.com/omaradriano/local_bussiness/services/api/internal/businesses"
+	"github.com/omaradriano/local_bussiness/services/api/internal/engines"
 )
 
 func TestAvailabilityAndOwnerChoice(t *testing.T) {
@@ -80,5 +81,15 @@ func TestThePlanTurnsFeaturesOff(t *testing.T) {
 	}
 	if active := Active("barbershop", ParseForPlan(nil, "trial"), nil); !slices.Contains(active, "staff") {
 		t.Fatalf("the trial is Pro: %v", active)
+	}
+}
+
+func TestFeaturesOnlyNameKnownEngines(t *testing.T) {
+	for key, f := range catalog {
+		for _, e := range f.Engines {
+			if !engines.Valid(e) {
+				t.Errorf("feature %s: engine %q is not in engines.Kinds", key, e)
+			}
+		}
 	}
 }

@@ -14,6 +14,7 @@ import (
 	"github.com/jackc/pgx/v5/pgconn"
 
 	"github.com/omaradriano/local_bussiness/services/api/internal/availability"
+	"github.com/omaradriano/local_bussiness/services/api/internal/engines"
 	"github.com/omaradriano/local_bussiness/services/api/internal/features"
 	"github.com/omaradriano/local_bussiness/services/api/internal/privacy"
 	"github.com/omaradriano/local_bussiness/services/api/internal/settings"
@@ -176,7 +177,7 @@ func Create(ctx context.Context, db store.DB, businessID string, in CreateInput,
 	periods := int64(1)
 	var deliveryFee int64
 	switch it.Kind {
-	case "service":
+	case engines.Service:
 		e := start.Add(time.Duration(it.DurationMinutes) * time.Minute)
 		end = &e
 		// At the customer's place only if the business gives home service.
@@ -190,7 +191,7 @@ func Create(ctx context.Context, db store.DB, businessID string, in CreateInput,
 		} else {
 			in.Fulfillment, in.DeliveryAddress = "", ""
 		}
-	case "product":
+	case engines.Product:
 		if in.Fulfillment == "" {
 			in.Fulfillment = "pickup"
 		}
@@ -209,12 +210,14 @@ func Create(ctx context.Context, db store.DB, businessID string, in CreateInput,
 				deliveryFee = set.DeliveryZones[i].Fee
 			}
 		}
-	default: // rental
+	case engines.Rental:
 		if in.EndsAt == nil || !in.EndsAt.After(start) {
 			return Booking{}, false, Invalid{"ends_at", "El regreso debe ser después de la salida."}
 		}
 		end = in.EndsAt
 		in.Fulfillment, in.DeliveryAddress = "", ""
+	default:
+		return Booking{}, false, engines.ErrUnknown{Kind: it.Kind}
 	}
 
 	optsExtra, answers, err := checkOptions(ctx, tx, businessID, in.ItemID, in.Options)
@@ -226,7 +229,7 @@ func Create(ctx context.Context, db store.DB, businessID string, in CreateInput,
 	loader := availability.Loader{DB: tx}
 	var candidates []string // staff ids (service) or unit ids (rental) that are free, in preference order
 	switch it.Kind {
-	case "service":
+	case engines.Service:
 		res, err := loader.Answer(ctx, businessID, availability.Request{ItemID: in.ItemID, Date: start.In(loc).Format("2006-01-02"), StaffID: in.StaffID}, now)
 		if err != nil {
 			return Booking{}, false, err
@@ -236,7 +239,7 @@ func Create(ctx context.Context, db store.DB, businessID string, in CreateInput,
 			return Booking{}, false, ErrSlotTaken
 		}
 		candidates = res.Slots[i].StaffIDs
-	case "product":
+	case engines.Product:
 		day := start.In(loc).Format("2006-01-02")
 		// Serialize orders of this business for this day so two can't take the last spot.
 		if _, err := tx.Exec(ctx, `select pg_advisory_xact_lock(hashtextextended($1 || $2, 0))`, businessID, day); err != nil {
@@ -249,7 +252,7 @@ func Create(ctx context.Context, db store.DB, businessID string, in CreateInput,
 		if len(res.Days) != 1 || !res.Days[0].Available {
 			return Booking{}, false, ErrSlotTaken
 		}
-	default:
+	case engines.Rental:
 		res, err := loader.Answer(ctx, businessID, availability.Request{ItemID: in.ItemID,
 			From: start.Format(time.RFC3339), To: end.Format(time.RFC3339), Quantity: in.Quantity}, now)
 		if err != nil {
@@ -333,13 +336,13 @@ func Create(ctx context.Context, db store.DB, businessID string, in CreateInput,
 	}
 
 	switch it.Kind {
-	case "service":
+	case engines.Service:
 		occupied := end.Add(time.Duration(set.BufferMinutes) * time.Minute)
 		if !claim(ctx, tx, `insert into public.booking_resources (business_id, booking_id, staff_id, during) values ($1, $2, $3, tstzrange($4, $5))`,
 			businessID, bookingID, candidates, 1, start, occupied) {
 			return Booking{}, false, ErrSlotTaken
 		}
-	case "rental":
+	case engines.Rental:
 		// shortcut: the inspection gap is enforced by the availability check, not by the exclusion constraint;
 		// a race inside that gap is possible. Store [start, end + gap) if it ever matters.
 		if !claim(ctx, tx, `insert into public.booking_resources (business_id, booking_id, item_unit_id, during) values ($1, $2, $3, tstzrange($4, $5))`,

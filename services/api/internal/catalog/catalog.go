@@ -10,6 +10,7 @@ import (
 
 	"github.com/jackc/pgx/v5"
 
+	"github.com/omaradriano/local_bussiness/services/api/internal/engines"
 	"github.com/omaradriano/local_bussiness/services/api/internal/store"
 )
 
@@ -111,7 +112,7 @@ const maxPrice = 100_000_000 // $1,000,000.00
 // Validate returns field -> message (es-MX); mirrors the catalog_items checks.
 func (it Item) Validate() map[string]string {
 	errs := map[string]string{}
-	if !slices.Contains([]string{"service", "product", "rental"}, it.Kind) {
+	if !engines.Valid(it.Kind) {
 		errs["kind"] = "Tipo de artículo inválido."
 	}
 	if n := utf8.RuneCountInString(strings.TrimSpace(it.Name)); n == 0 || n > 120 {
@@ -126,21 +127,21 @@ func (it Item) Validate() map[string]string {
 		}
 	}
 	switch it.Kind {
-	case "service":
+	case engines.Service:
 		if it.DurationMinutes == nil || *it.DurationMinutes < 5 || *it.DurationMinutes > 600 {
 			errs["duration_minutes"] = "La duración debe ser de 5 a 600 minutos."
 		}
 		if it.BufferMinutes < 0 || it.BufferMinutes > 240 {
 			errs["buffer_minutes"] = "El margen entre citas debe ser de 0 a 240 minutos."
 		}
-	case "product":
+	case engines.Product:
 		if it.PrepHours == nil || *it.PrepHours < 0 || *it.PrepHours > 720 {
 			errs["prep_hours"] = "La anticipación debe ser de 0 a 720 horas."
 		}
 		if it.DailyCapacity != nil && (*it.DailyCapacity < 1 || *it.DailyCapacity > 1000) {
 			errs["daily_capacity"] = "El cupo diario debe ser de 1 a 1000, o dejarse vacío."
 		}
-	case "rental":
+	case engines.Rental:
 		if it.PriceUnit == nil || !slices.Contains([]string{"day", "weekend", "week"}, *it.PriceUnit) {
 			errs["price_unit"] = "Elige si se cobra por día, fin de semana o semana."
 		}
