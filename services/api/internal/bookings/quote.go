@@ -9,6 +9,7 @@ import (
 	"github.com/jackc/pgx/v5"
 
 	"github.com/omaradriano/local_bussiness/services/api/internal/availability"
+	"github.com/omaradriano/local_bussiness/services/api/internal/engines"
 	"github.com/omaradriano/local_bussiness/services/api/internal/settings"
 	"github.com/omaradriano/local_bussiness/services/api/internal/store"
 )
@@ -62,23 +63,21 @@ func QuoteBooking(ctx context.Context, db store.DB, businessID string, in QuoteR
 	qty := max(in.Quantity, 1)
 	var set bizSettings
 	_ = json.Unmarshal(raw, &set)
-	periods := int64(1)
+	rules, err := engines.Get(rulesByKind, kind)
+	if err != nil {
+		return QuoteResult{}, err
+	}
+	loc, err := time.LoadLocation(tz)
+	if err != nil {
+		return QuoteResult{}, err
+	}
 	rentals := settings.RentalsFrom(raw)
-	if kind == "rental" {
-		if in.EndsAt == nil || !in.EndsAt.After(in.StartsAt) {
-			return QuoteResult{}, Invalid{"ends_at", "El regreso debe ser después de la salida."}
-		}
-		loc, err := time.LoadLocation(tz)
-		if err != nil {
-			return QuoteResult{}, err
-		}
-		hours, err := availability.Loader{DB: db}.BusinessHours(ctx, businessID)
-		if err != nil {
-			return QuoteResult{}, err
-		}
-		if periods, err = rentalPeriods(loc, hours, rentals, priceUnit, in.StartsAt, *in.EndsAt); err != nil {
-			return QuoteResult{}, err
-		}
+	hours := func() ([]availability.Shift, error) {
+		return availability.Loader{DB: db}.BusinessHours(ctx, businessID)
+	}
+	periods, err := rules.pricing(periodQuery{loc: loc, hours: hours, rentals: rentals, priceUnit: priceUnit, start: in.StartsAt, end: in.EndsAt})
+	if err != nil {
+		return QuoteResult{}, err
 	}
 	if !rentals.SecurityDepositEnabled {
 		deposit = 0
