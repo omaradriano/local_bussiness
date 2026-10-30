@@ -40,6 +40,18 @@ export async function pickPhotos(limit: number): Promise<{ photos: PickedPhoto[]
   return { photos, dropped: picked.assets.length - chosen.length };
 }
 
+/**
+ * Presigned PUT straight to S3. A browser that blocks it (CORS: e.g. a web origin the bucket
+ * doesn't allow) makes fetch throw instead of answering, so that becomes a failed response too.
+ */
+async function putToS3(url: string, headers: Record<string, string>, body: Blob): Promise<{ ok: boolean; status: number | string }> {
+  try {
+    return await fetch(url, { method: 'PUT', headers, body });
+  } catch {
+    return { ok: false, status: 'red' };
+  }
+}
+
 /** Upload a picked photo to an existing item: presigned PUT straight to S3, then confirm. Error message or null. */
 export async function uploadPhoto(businessId: string, itemId: string, photo: PickedPhoto): Promise<string | null> {
   const blob = await (await fetch(photo.uri)).blob();
@@ -50,7 +62,7 @@ export async function uploadPhoto(businessId: string, itemId: string, photo: Pic
   });
   if (!created.data) return fieldErrors(created.error).file ?? errorText(created.error, created.response.status);
 
-  const put = await fetch(created.data.upload_url, { method: 'PUT', headers: created.data.upload_headers, body: blob });
+  const put = await putToS3(created.data.upload_url, created.data.upload_headers, blob);
   if (!put.ok) return `${strings.common.error} (S3 ${put.status})`;
 
   const done = await api.POST('/v1/b/{businessId}/catalog/{itemId}/images/{imageId}/complete', {
@@ -76,7 +88,7 @@ export async function uploadStepPhoto(businessId: string, bookingId: string, ste
     body: { step_id: stepId, content_type: photo.type ?? 'image/jpeg', size: blob.size },
   });
   if (!created.data) return { error: fieldErrors(created.error).file ?? errorText(created.error, created.response.status) };
-  const put = await fetch(created.data.upload_url, { method: 'PUT', headers: created.data.upload_headers, body: blob });
+  const put = await putToS3(created.data.upload_url, created.data.upload_headers, blob);
   if (!put.ok) return { error: `${strings.common.error} (S3 ${put.status})` };
   return { key: created.data.key };
 }
@@ -89,7 +101,7 @@ export async function uploadCustomerDoc(businessId: string, customerId: string, 
     body: { doc_type: docType, content_type: 'image/jpeg', size: blob.size },
   });
   if (!created.data) return { error: fieldErrors(created.error).file ?? errorText(created.error, created.response.status) };
-  const put = await fetch(created.data.upload_url, { method: 'PUT', headers: created.data.upload_headers, body: blob });
+  const put = await putToS3(created.data.upload_url, created.data.upload_headers, blob);
   if (!put.ok) return { error: `${strings.common.error} (S3 ${put.status})` };
   return { key: created.data.key };
 }
@@ -102,7 +114,7 @@ export async function uploadPaymentEvidence(businessId: string, bookingId: strin
     body: { purpose: 'payment', content_type: 'image/jpeg', size: blob.size },
   });
   if (!created.data) return { error: fieldErrors(created.error).file ?? errorText(created.error, created.response.status) };
-  const put = await fetch(created.data.upload_url, { method: 'PUT', headers: created.data.upload_headers, body: blob });
+  const put = await putToS3(created.data.upload_url, created.data.upload_headers, blob);
   if (!put.ok) return { error: `${strings.common.error} (S3 ${put.status})` };
   return { key: created.data.key };
 }
@@ -122,7 +134,7 @@ export async function uploadBookingDocument(businessId: string, bookingId: strin
     body: { purpose: 'document', content_type: file.type ?? 'image/jpeg', size: blob.size },
   });
   if (!created.data) return { error: fieldErrors(created.error).file ?? errorText(created.error, created.response.status) };
-  const put = await fetch(created.data.upload_url, { method: 'PUT', headers: created.data.upload_headers, body: blob });
+  const put = await putToS3(created.data.upload_url, created.data.upload_headers, blob);
   if (!put.ok) return { error: `${strings.common.error} (S3 ${put.status})` };
   return { key: created.data.key };
 }
