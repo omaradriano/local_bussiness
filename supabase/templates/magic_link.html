@@ -1,0 +1,19 @@
+<!doctype html>
+<html lang="es">
+<body style="margin:0;padding:0;background:#f2f2f7;font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,Helvetica,Arial,sans-serif;color:#1c1c1e;">
+  <table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="background:#f2f2f7;padding:32px 16px;">
+    <tr><td align="center">
+      <table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="max-width:480px;background:#ffffff;border-radius:14px;padding:32px 28px;">
+        <tr><td style="font-size:20px;font-weight:700;color:#0052cc;padding-bottom:20px;">Khronno</td></tr>
+        <tr><td style="font-size:22px;font-weight:700;padding-bottom:12px;">Tu enlace para entrar</td></tr>
+        <tr><td style="font-size:16px;line-height:24px;color:#3a3a3c;padding-bottom:24px;">Toca el botón para entrar a tu cuenta de Khronno.</td></tr>
+        <tr><td style="padding-bottom:24px;">
+          <a href="{{ .ConfirmationURL }}" style="display:inline-block;background:#0052cc;color:#ffffff;text-decoration:none;font-weight:600;font-size:16px;padding:12px 22px;border-radius:12px;">Entrar a Khronno</a>
+        </td></tr>
+        <tr><td style="font-size:13px;line-height:20px;color:#8e8e93;">Si no lo pediste, ignora este correo. El enlace vence en una hora.<br><br>Si el botón no funciona, copia este enlace en tu navegador:<br><a href="{{ .ConfirmationURL }}" style="color:#0052cc;word-break:break-all;">{{ .ConfirmationURL }}</a></td></tr>
+      </table>
+      <p style="font-size:12px;color:#8e8e93;margin-top:16px;">Khronno · khronno.com</p>
+    </td></tr>
+  </table>
+</body>
+</html>

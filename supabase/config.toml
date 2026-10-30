@@ -244,6 +244,27 @@ otp_expiry = 3600
 # admin_email = "admin@email.com"
 # sender_name = "Admin"
 
+# Plantillas de correo en español (Khronno). Las aplica `supabase config push` a cada proyecto.
+[auth.email.template.confirmation]
+subject = "Confirma tu cuenta de Khronno"
+content_path = "./supabase/templates/confirmation.html"
+
+[auth.email.template.recovery]
+subject = "Cambia tu contraseña de Khronno"
+content_path = "./supabase/templates/recovery.html"
+
+[auth.email.template.email_change]
+subject = "Confirma tu nuevo correo en Khronno"
+content_path = "./supabase/templates/email_change.html"
+
+[auth.email.template.invite]
+subject = "Te invitaron a Khronno"
+content_path = "./supabase/templates/invite.html"
+
+[auth.email.template.magic_link]
+subject = "Tu enlace para entrar a Khronno"
+content_path = "./supabase/templates/magic_link.html"
+
 # Uncomment to customize email template
 # [auth.email.template.invite]
 # subject = "You have been invited"
