@@ -39,6 +39,9 @@ export default function AdminHome() {
           <Cell icon="add-circle" tint={ui.success} label={t.createAnother} onPress={() => router.push('/onboarding')} />
         </Group>
       )}
+      <Group>
+        <Cell icon="pricetags" tint={ui.indigo} label={strings.plans.page.entry} sublabel={strings.plans.page.entryHint} onPress={() => router.push('/admin/plans')} />
+      </Group>
       {platformAdmin && (
         <Group>
           <Cell icon="shield" tint={ui.purple} label={strings.platform.entry} sublabel={strings.platform.entryHint} onPress={() => router.push('/admin/platform')} />
