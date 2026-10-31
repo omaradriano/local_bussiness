@@ -21,6 +21,7 @@ import (
 
 	"github.com/omaradriano/local_bussiness/services/api/internal/catalog"
 	"github.com/omaradriano/local_bussiness/services/api/internal/customers"
+	"github.com/omaradriano/local_bussiness/services/api/internal/customfields"
 	"github.com/omaradriano/local_bussiness/services/api/internal/exports"
 	"github.com/omaradriano/local_bussiness/services/api/internal/files"
 	"github.com/omaradriano/local_bussiness/services/api/internal/finances"
@@ -90,6 +91,7 @@ func run(log *slog.Logger) error {
 			Authenticate: auth.Authenticate(keys, supabaseURL+"/auth/v1"),
 			Store:        store.New(pool),
 			Catalog:      catalog.Repo{DB: pool},
+			CustomFields: customfields.Repo{DB: pool},
 			Staff:        staff.Repo{DB: pool},
 			Availability: availability.Loader{DB: pool},
 			Bookings:     bookings.Repo{DB: pool},

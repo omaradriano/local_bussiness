@@ -7,9 +7,12 @@
     "customerDocuments",
     "trustedCustomers",
     "bookingDocuments",
-    "productSales"
+    "productSales",
+    "customFields"
   ],
-  "optional_features": ["staff"],
+  "optional_features": [
+    "staff"
+  ],
   "settings": {
     "deposit_percent": 0,
     "cancel_hours": 24,

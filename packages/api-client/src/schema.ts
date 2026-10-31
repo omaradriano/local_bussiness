@@ -302,6 +302,46 @@ export interface paths {
         patch: operations["updateUnit"];
         trace?: never;
     };
+    "/v1/b/{businessId}/custom-fields": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                businessId: components["parameters"]["BusinessId"];
+            };
+            cookie?: never;
+        };
+        /** Campos personalizados del negocio (todos los miembros) */
+        get: operations["listCustomFields"];
+        put?: never;
+        /** Crea un campo (solo dueño, con la función customFields) */
+        post: operations["createCustomField"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/b/{businessId}/custom-fields/{fieldId}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                businessId: components["parameters"]["BusinessId"];
+                fieldId: string;
+            };
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post?: never;
+        /** Borra el campo; sus valores guardados dejan de mostrarse */
+        delete: operations["deleteCustomField"];
+        options?: never;
+        head?: never;
+        patch: operations["updateCustomField"];
+        trace?: never;
+    };
     "/v1/b/{businessId}/staff": {
         parameters: {
             query?: never;
@@ -1435,6 +1475,47 @@ export interface components {
              * @description renta
              */
             late_fee_per_day?: number | null;
+            custom_values?: components["schemas"]["CustomValues"];
+        };
+        /** @description Valores de los campos personalizados: id del campo → texto, número, opción, fecha (AAAA-MM-DD) o sí/no. Al guardar, los vacíos se quitan. */
+        CustomValues: {
+            [key: string]: string | number | boolean | null;
+        };
+        /** @enum {string} */
+        CustomFieldType: "text" | "number" | "select" | "date" | "boolean";
+        CustomField: {
+            /** Format: uuid */
+            id: string;
+            kind: components["schemas"]["ItemKind"];
+            /**
+             * @description Del artículo o de cada unidad (solo motores con unidades)
+             * @enum {string}
+             */
+            target: "item" | "unit";
+            label: string;
+            type: components["schemas"]["CustomFieldType"];
+            /** @description Solo listas (select) */
+            options: string[];
+            required: boolean;
+            active: boolean;
+            sort: number;
+        };
+        CustomFieldInput: {
+            kind: components["schemas"]["ItemKind"];
+            /** @enum {string} */
+            target: "item" | "unit";
+            label: string;
+            type: components["schemas"]["CustomFieldType"];
+            options?: string[];
+            required?: boolean;
+        };
+        /** @description El motor, el destino y el tipo no cambian (para cambiarlos, borra el campo y crea otro). */
+        CustomFieldPatch: {
+            label?: string;
+            options?: string[];
+            required?: boolean;
+            active?: boolean;
+            sort?: number;
         };
         CatalogItemInput: components["schemas"]["CatalogItemFields"] & {
             kind: components["schemas"]["ItemKind"];
@@ -1731,7 +1812,7 @@ export interface components {
             }[];
         };
         /** @enum {string} */
-        Feature: "staff" | "inventory" | "guarantor" | "customerAddress" | "customerDocuments" | "trustedCustomers" | "walkIn" | "homeService" | "startService" | "bookingDocuments" | "productSales";
+        Feature: "staff" | "inventory" | "guarantor" | "customerAddress" | "customerDocuments" | "trustedCustomers" | "walkIn" | "homeService" | "startService" | "bookingDocuments" | "productSales" | "customFields";
         FeatureState: {
             key: components["schemas"]["Feature"];
             /** @description La trae su giro */
@@ -2062,11 +2143,13 @@ export interface components {
             code: string;
             status: components["schemas"]["UnitStatus"];
             notes: string;
+            custom_values: components["schemas"]["CustomValues"];
         };
         UnitPatch: {
             code?: string;
             status?: components["schemas"]["UnitStatus"];
             notes?: string;
+            custom_values?: components["schemas"]["CustomValues"];
         };
         /** @description Un turno; weekday 0 = domingo; horas HH:MM en la zona del negocio */
         Hours: {
@@ -2715,6 +2798,113 @@ export interface operations {
             403: components["responses"]["Error"];
             404: components["responses"]["Error"];
             409: components["responses"]["Error"];
+            422: components["responses"]["Error"];
+        };
+    };
+    listCustomFields: {
+        parameters: {
+            query?: {
+                kind?: components["schemas"]["ItemKind"];
+            };
+            header?: never;
+            path: {
+                businessId: components["parameters"]["BusinessId"];
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        fields: components["schemas"]["CustomField"][];
+                    };
+                };
+            };
+        };
+    };
+    createCustomField: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                businessId: components["parameters"]["BusinessId"];
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["CustomFieldInput"];
+            };
+        };
+        responses: {
+            /** @description Creado */
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["CustomField"];
+                };
+            };
+            403: components["responses"]["Error"];
+            422: components["responses"]["Error"];
+        };
+    };
+    deleteCustomField: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                businessId: components["parameters"]["BusinessId"];
+                fieldId: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Borrado */
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            403: components["responses"]["Error"];
+            404: components["responses"]["Error"];
+        };
+    };
+    updateCustomField: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                businessId: components["parameters"]["BusinessId"];
+                fieldId: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["CustomFieldPatch"];
+            };
+        };
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["CustomField"];
+                };
+            };
+            403: components["responses"]["Error"];
+            404: components["responses"]["Error"];
             422: components["responses"]["Error"];
         };
     };

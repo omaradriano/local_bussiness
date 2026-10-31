@@ -32,7 +32,18 @@ type Item struct {
 	PriceUnit       *string `json:"price_unit"`
 	SecurityDeposit *int64  `json:"security_deposit"`
 	LateFeePerDay   *int64  `json:"late_fee_per_day"`
-	Images          any     `json:"images"` // filled by the handler (media.Image list); never stored here
+	CustomValues    Values  `json:"custom_values"` // custom field id -> value (validated by customfields.Clean)
+	Images          any     `json:"images"`        // filled by the handler (media.Image list); never stored here
+}
+
+// Values of the owner's custom fields; never null in the database.
+type Values map[string]any
+
+func (v Values) orEmpty() Values {
+	if v == nil {
+		return Values{}
+	}
+	return v
 }
 
 // Patch: nil fields are left as they are. Kind cannot change.
@@ -49,9 +60,13 @@ type Patch struct {
 	PriceUnit       *string `json:"price_unit"`
 	SecurityDeposit *int64  `json:"security_deposit"`
 	LateFeePerDay   *int64  `json:"late_fee_per_day"`
+	CustomValues    *Values `json:"custom_values"`
 }
 
 func (it Item) Apply(p Patch) Item {
+	if p.CustomValues != nil {
+		it.CustomValues = *p.CustomValues
+	}
 	if p.Name != nil {
 		it.Name = *p.Name
 	}
@@ -131,12 +146,12 @@ func HasUnits(kind string) bool { return rulesByKind[kind].units }
 type Repo struct{ DB store.DB }
 
 const columns = `id::text, kind, name, coalesce(description, ''), price, active, sort, duration_minutes, buffer_minutes,
-	prep_hours, daily_capacity, price_unit, security_deposit, late_fee_per_day`
+	prep_hours, daily_capacity, price_unit, security_deposit, late_fee_per_day, custom_values`
 
 func scan(row pgx.Row) (Item, error) {
 	var it Item
 	err := row.Scan(&it.ID, &it.Kind, &it.Name, &it.Description, &it.Price, &it.Active, &it.Sort, &it.DurationMinutes,
-		&it.BufferMinutes, &it.PrepHours, &it.DailyCapacity, &it.PriceUnit, &it.SecurityDeposit, &it.LateFeePerDay)
+		&it.BufferMinutes, &it.PrepHours, &it.DailyCapacity, &it.PriceUnit, &it.SecurityDeposit, &it.LateFeePerDay, &it.CustomValues)
 	if errors.Is(err, pgx.ErrNoRows) {
 		return it, ErrNotFound
 	}
@@ -168,13 +183,13 @@ func (r Repo) Create(ctx context.Context, businessID string, it Item) (Item, err
 	return scan(r.DB.QueryRow(ctx, `
 		insert into public.catalog_items
 		  (business_id, kind, name, description, price, active, sort, duration_minutes, buffer_minutes,
-		   prep_hours, daily_capacity, price_unit, security_deposit, late_fee_per_day)
+		   prep_hours, daily_capacity, price_unit, security_deposit, late_fee_per_day, custom_values)
 		values ($1, $2, $3, nullif($4, ''), $5, true,
 		        coalesce((select max(sort) + 1 from public.catalog_items where business_id = $1), 1),
-		        $6, $7, $8, $9, $10, $11, $12)
+		        $6, $7, $8, $9, $10, $11, $12, $13)
 		returning `+columns,
 		businessID, it.Kind, it.Name, it.Description, it.Price, it.DurationMinutes, it.BufferMinutes,
-		it.PrepHours, it.DailyCapacity, it.PriceUnit, it.SecurityDeposit, it.LateFeePerDay))
+		it.PrepHours, it.DailyCapacity, it.PriceUnit, it.SecurityDeposit, it.LateFeePerDay, it.CustomValues.orEmpty()))
 }
 
 func (r Repo) Update(ctx context.Context, businessID string, it Item) (Item, error) {
@@ -182,9 +197,9 @@ func (r Repo) Update(ctx context.Context, businessID string, it Item) (Item, err
 		update public.catalog_items set
 		  name = $3, description = nullif($4, ''), price = $5, active = $6, sort = $7, duration_minutes = $8,
 		  buffer_minutes = $9, prep_hours = $10, daily_capacity = $11, price_unit = $12,
-		  security_deposit = $13, late_fee_per_day = $14
+		  security_deposit = $13, late_fee_per_day = $14, custom_values = $15
 		where business_id = $1 and id = $2 and deleted_at is null
 		returning `+columns,
 		businessID, it.ID, it.Name, it.Description, it.Price, it.Active, it.Sort, it.DurationMinutes,
-		it.BufferMinutes, it.PrepHours, it.DailyCapacity, it.PriceUnit, it.SecurityDeposit, it.LateFeePerDay))
+		it.BufferMinutes, it.PrepHours, it.DailyCapacity, it.PriceUnit, it.SecurityDeposit, it.LateFeePerDay, it.CustomValues.orEmpty()))
 }

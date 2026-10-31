@@ -421,6 +421,69 @@ paths:
         "404": { $ref: "#/components/responses/Error" }
         "409": { $ref: "#/components/responses/Error" }
 
+  /v1/b/{businessId}/custom-fields:
+    parameters:
+      - $ref: "#/components/parameters/BusinessId"
+    get:
+      operationId: listCustomFields
+      summary: Campos personalizados del negocio (todos los miembros)
+      parameters:
+        - { name: kind, in: query, schema: { $ref: "#/components/schemas/ItemKind" } }
+      responses:
+        "200":
+          description: OK
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [fields]
+                properties:
+                  fields: { type: array, items: { $ref: "#/components/schemas/CustomField" } }
+    post:
+      operationId: createCustomField
+      summary: Crea un campo (solo dueño, con la función customFields)
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/CustomFieldInput" }
+      responses:
+        "201":
+          description: Creado
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/CustomField" }
+        "403": { $ref: "#/components/responses/Error" }
+        "422": { $ref: "#/components/responses/Error" }
+
+  /v1/b/{businessId}/custom-fields/{fieldId}:
+    parameters:
+      - $ref: "#/components/parameters/BusinessId"
+      - { name: fieldId, in: path, required: true, schema: { type: string, format: uuid } }
+    patch:
+      operationId: updateCustomField
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/CustomFieldPatch" }
+      responses:
+        "200":
+          description: OK
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/CustomField" }
+        "403": { $ref: "#/components/responses/Error" }
+        "404": { $ref: "#/components/responses/Error" }
+        "422": { $ref: "#/components/responses/Error" }
+    delete:
+      operationId: deleteCustomField
+      summary: Borra el campo; sus valores guardados dejan de mostrarse
+      responses:
+        "204": { description: Borrado }
+        "403": { $ref: "#/components/responses/Error" }
+        "404": { $ref: "#/components/responses/Error" }
+
   /v1/b/{businessId}/staff:
     parameters:
       - $ref: "#/components/parameters/BusinessId"
@@ -1939,6 +2002,49 @@ components:
         price_unit: { oneOf: [{ $ref: "#/components/schemas/PriceUnit" }, { type: "null" }], description: "renta" }
         security_deposit: { type: [integer, "null"], format: int64, description: "renta" }
         late_fee_per_day: { type: [integer, "null"], format: int64, description: "renta" }
+        custom_values: { $ref: "#/components/schemas/CustomValues" }
+
+    CustomValues:
+      type: object
+      description: "Valores de los campos personalizados: id del campo → texto, número, opción, fecha (AAAA-MM-DD) o sí/no. Al guardar, los vacíos se quitan."
+      additionalProperties: { oneOf: [{ type: string }, { type: number }, { type: boolean }, { type: "null" }] }
+
+    CustomFieldType: { type: string, enum: [text, number, select, date, boolean] }
+
+    CustomField:
+      type: object
+      required: [id, kind, target, label, type, options, required, active, sort]
+      properties:
+        id: { type: string, format: uuid }
+        kind: { $ref: "#/components/schemas/ItemKind" }
+        target: { type: string, enum: [item, unit], description: "Del artículo o de cada unidad (solo motores con unidades)" }
+        label: { type: string, maxLength: 60 }
+        type: { $ref: "#/components/schemas/CustomFieldType" }
+        options: { type: array, items: { type: string, maxLength: 40 }, description: "Solo listas (select)" }
+        required: { type: boolean }
+        active: { type: boolean }
+        sort: { type: integer }
+
+    CustomFieldInput:
+      type: object
+      required: [kind, target, label, type]
+      properties:
+        kind: { $ref: "#/components/schemas/ItemKind" }
+        target: { type: string, enum: [item, unit] }
+        label: { type: string, maxLength: 60 }
+        type: { $ref: "#/components/schemas/CustomFieldType" }
+        options: { type: array, items: { type: string, maxLength: 40 } }
+        required: { type: boolean }
+
+    CustomFieldPatch:
+      type: object
+      description: El motor, el destino y el tipo no cambian (para cambiarlos, borra el campo y crea otro).
+      properties:
+        label: { type: string, maxLength: 60 }
+        options: { type: array, items: { type: string, maxLength: 40 } }
+        required: { type: boolean }
+        active: { type: boolean }
+        sort: { type: integer }
 
     CatalogItemInput:
       allOf:
@@ -1961,7 +2067,7 @@ components:
       allOf:
         - $ref: "#/components/schemas/CatalogItemFields"
         - type: object
-          required: [id, kind, name, description, price, active, sort, buffer_minutes]
+          required: [id, kind, name, description, price, active, sort, buffer_minutes, custom_values]
           properties:
             id: { type: string, format: uuid }
             kind: { $ref: "#/components/schemas/ItemKind" }
@@ -2273,7 +2379,7 @@ components:
 
     Feature:
       type: string
-      enum: [staff, inventory, guarantor, customerAddress, customerDocuments, trustedCustomers, walkIn, homeService, startService, bookingDocuments, productSales]
+      enum: [staff, inventory, guarantor, customerAddress, customerDocuments, trustedCustomers, walkIn, homeService, startService, bookingDocuments, productSales, customFields]
 
     FeatureState:
       type: object
@@ -2593,13 +2699,14 @@ components:
 
     Unit:
       type: object
-      required: [id, item_id, code, status, notes]
+      required: [id, item_id, code, status, notes, custom_values]
       properties:
         id: { type: string, format: uuid }
         item_id: { type: string, format: uuid }
         code: { type: string }
         status: { $ref: "#/components/schemas/UnitStatus" }
         notes: { type: string }
+        custom_values: { $ref: "#/components/schemas/CustomValues" }
 
     UnitPatch:
       type: object
@@ -2607,6 +2714,7 @@ components:
         code: { type: string, maxLength: 40 }
         status: { $ref: "#/components/schemas/UnitStatus" }
         notes: { type: string }
+        custom_values: { $ref: "#/components/schemas/CustomValues" }
 
     Hours:
       type: object

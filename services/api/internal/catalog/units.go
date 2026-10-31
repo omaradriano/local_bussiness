@@ -20,15 +20,21 @@ type Unit struct {
 	Code   string `json:"code"`
 	Status string `json:"status"` // available | maintenance | retired
 	Notes  string `json:"notes"`
+	// Custom values of the unit's fields (serial number, condition…).
+	CustomValues Values `json:"custom_values"`
 }
 
 type UnitPatch struct {
-	Code   *string `json:"code"`
-	Status *string `json:"status"`
-	Notes  *string `json:"notes"`
+	Code         *string `json:"code"`
+	Status       *string `json:"status"`
+	Notes        *string `json:"notes"`
+	CustomValues *Values `json:"custom_values"`
 }
 
 func (u Unit) Apply(p UnitPatch) Unit {
+	if p.CustomValues != nil {
+		u.CustomValues = *p.CustomValues
+	}
 	if p.Code != nil {
 		u.Code = *p.Code
 	}
@@ -54,11 +60,11 @@ func (u Unit) Validate() map[string]string {
 	return errs
 }
 
-const unitColumns = `id::text, item_id::text, code, status, coalesce(notes, '')`
+const unitColumns = `id::text, item_id::text, code, status, coalesce(notes, ''), custom_values`
 
 func scanUnit(row pgx.Row) (Unit, error) {
 	var u Unit
-	err := row.Scan(&u.ID, &u.ItemID, &u.Code, &u.Status, &u.Notes)
+	err := row.Scan(&u.ID, &u.ItemID, &u.Code, &u.Status, &u.Notes, &u.CustomValues)
 	if errors.Is(err, pgx.ErrNoRows) {
 		return u, ErrNotFound
 	}
@@ -97,11 +103,11 @@ func (r Repo) ListUnits(ctx context.Context, businessID, itemID string) ([]Unit,
 func (r Repo) CreateUnit(ctx context.Context, businessID string, u Unit) (Unit, error) {
 	// Only inserts when the item is a rental of this business; otherwise no row -> ErrNotFound.
 	return scanUnit(r.DB.QueryRow(ctx, `
-		insert into public.item_units (business_id, item_id, code, status, notes)
-		select i.business_id, i.id, $3, $4, nullif($5, '')
+		insert into public.item_units (business_id, item_id, code, status, notes, custom_values)
+		select i.business_id, i.id, $3, $4, nullif($5, ''), $6
 		from public.catalog_items i
 		where i.business_id = $1 and i.id = $2 and i.kind = 'rental' and i.deleted_at is null
-		returning `+unitColumns, businessID, u.ItemID, u.Code, u.Status, u.Notes))
+		returning `+unitColumns, businessID, u.ItemID, u.Code, u.Status, u.Notes, u.CustomValues.orEmpty()))
 }
 
 func (r Repo) GetUnit(ctx context.Context, businessID, itemID, unitID string) (Unit, error) {
@@ -111,7 +117,7 @@ func (r Repo) GetUnit(ctx context.Context, businessID, itemID, unitID string) (U
 
 func (r Repo) UpdateUnit(ctx context.Context, businessID string, u Unit) (Unit, error) {
 	return scanUnit(r.DB.QueryRow(ctx, `
-		update public.item_units set code = $4, status = $5, notes = nullif($6, '')
+		update public.item_units set code = $4, status = $5, notes = nullif($6, ''), custom_values = $7
 		where business_id = $1 and item_id = $2 and id = $3 and deleted_at is null
-		returning `+unitColumns, businessID, u.ItemID, u.ID, u.Code, u.Status, u.Notes))
+		returning `+unitColumns, businessID, u.ItemID, u.ID, u.Code, u.Status, u.Notes, u.CustomValues.orEmpty()))
 }
