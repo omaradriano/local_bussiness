@@ -186,6 +186,16 @@ func Delete(ctx context.Context, db Beginner, businessID string, purge func(cont
 		return err
 	}
 	defer tx.Rollback(ctx)
+	// Bookings and sales first: they point at staff, units, items and products without a cascade,
+	// and the order of the cascade from businesses isn't guaranteed.
+	for _, q := range []string{
+		`delete from public.bookings where business_id = $1`,
+		`delete from public.sales where business_id = $1`,
+	} {
+		if _, err := tx.Exec(ctx, q, businessID); err != nil {
+			return err
+		}
+	}
 	tag, err := tx.Exec(ctx, `delete from public.businesses where id = $1`, businessID)
 	if err != nil {
 		return err
