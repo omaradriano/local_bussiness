@@ -1,9 +1,10 @@
 import type { components } from '@lb/api-client';
-import { strings } from '@lb/shared';
+import { customInputOf, customValuesOf, customValueText, strings, type CustomFieldType, type CustomInput } from '@lb/shared';
 import { useCallback, useEffect, useState } from 'react';
 import { ActivityIndicator, View } from 'react-native';
 import { Button, Cell, Field, Group, Segmented, Text, useToast, useUI } from '../ui';
 import { ConfirmDialog } from './ConfirmDialog';
+import { CustomFieldInputs, type CustomField } from './CustomFieldInputs';
 import { api } from '../lib/api';
 import { errorText, fieldErrors } from '../lib/errors';
 
@@ -13,11 +14,13 @@ const t = strings.units;
 const STATUSES: Status[] = ['available', 'maintenance', 'retired'];
 
 /** The rental item's pieces (units) and their status, inside the item's edit screen. */
-export function UnitsSection({ businessId, itemId, isOwner }: { businessId: string; itemId: string; isOwner: boolean }) {
+export function UnitsSection({ businessId, itemId, isOwner, fields = [] }: {
+  businessId: string; itemId: string; isOwner: boolean; fields?: CustomField[]; // the unit's custom fields (serial number, condition…)
+}) {
   const ui = useUI();
   const toast = useToast();
   const [units, setUnits] = useState<Unit[] | null>(null);
-  const [editing, setEditing] = useState<{ id: string; code: string; error?: string } | null>(null);
+  const [editing, setEditing] = useState<{ id: string; code: string; custom: Record<string, CustomInput>; error?: string; errors?: Record<string, string> } | null>(null);
   const [removing, setRemoving] = useState<Unit | null>(null);
   const [busy, setBusy] = useState(false);
   const [code, setCode] = useState('');
@@ -51,13 +54,22 @@ export function UnitsSection({ businessId, itemId, isOwner }: { businessId: stri
     else setError(errorText(error, response.status));
   }
 
+  function edit(u: Unit) {
+    setEditing({ id: u.id, code: u.code, custom: Object.fromEntries(fields.map((f) => [f.id, customInputOf(f.type as CustomFieldType, u.custom_values[f.id])])) });
+  }
+
   async function saveCode() {
     if (!editing) return;
+    const cv = customValuesOf(fields, editing.custom);
+    if (cv.errors) return setEditing({ ...editing, errors: cv.errors });
     const { data, error, response } = await api.PATCH('/v1/b/{businessId}/catalog/{itemId}/units/{unitId}', {
       params: { path: { ...path, unitId: editing.id } },
-      body: { code: editing.code },
+      body: { code: editing.code, ...(fields.length ? { custom_values: cv.values } : {}) },
     });
-    if (!data) return setEditing({ ...editing, error: fieldErrors(error).code ?? errorText(error, response.status) });
+    if (!data) {
+      const errs = fieldErrors(error);
+      return setEditing({ ...editing, error: errs.code ?? (fields.length ? undefined : errorText(error, response.status)), errors: errs });
+    }
     setUnits((prev) => prev?.map((x) => (x.id === data.id ? data : x)).sort((a, b) => a.code.localeCompare(b.code)) ?? null);
     setEditing(null);
   }
@@ -84,19 +96,26 @@ export function UnitsSection({ businessId, itemId, isOwner }: { businessId: stri
             <Text style={{ flex: 1, fontVariant: ['tabular-nums'] }}>{u.code}</Text>
             <Text variant="footnote" color="labelSecondary">{t.status[u.status]}</Text>
           </View>
+          {fields.some((f) => customValueText(f.type as CustomFieldType, u.custom_values[f.id])) && (
+            <Text variant="footnote" color="labelSecondary">
+              {fields.map((f) => [f.label, customValueText(f.type as CustomFieldType, u.custom_values[f.id])]).filter(([, v]) => v).map(([l, v]) => `${l}: ${v}`).join(' · ')}
+            </Text>
+          )}
           {isOwner && (
             <Segmented options={STATUSES.map((st) => ({ value: st, label: t.status[st] }))} value={u.status} onChange={(st) => st !== u.status && setStatus(u, st)} />
           )}
           {isOwner && editing?.id === u.id && (
             <View style={{ gap: 8 }}>
-              <Field label={t.code} autoCapitalize="characters" value={editing.code} onChangeText={(code) => setEditing({ id: u.id, code })}
+              <Field label={t.code} autoCapitalize="characters" value={editing.code} onChangeText={(code) => setEditing({ ...editing, code })}
                 onSubmitEditing={saveCode} error={editing.error} />
-              <Button size="sm" variant="primary" onPress={saveCode}>{t.saveCode}</Button>
+              <CustomFieldInputs fields={fields} inputs={editing.custom} errors={editing.errors}
+                onChange={(id, v) => setEditing({ ...editing, custom: { ...editing.custom, [id]: v } })} />
+              <Button size="sm" variant="primary" onPress={saveCode}>{fields.length ? strings.common.save : t.saveCode}</Button>
             </View>
           )}
           {isOwner && editing?.id !== u.id && (
             <View style={{ flexDirection: 'row', gap: 8 }}>
-              <Button size="sm" icon="create" onPress={() => setEditing({ id: u.id, code: u.code })} style={{ flex: 1 }}>{t.editCode}</Button>
+              <Button size="sm" icon="create" onPress={() => edit(u)} style={{ flex: 1 }}>{fields.length ? t.edit : t.editCode}</Button>
               <Button size="sm" icon="trash" variant="plain" onPress={() => setRemoving(u)} style={{ flex: 1 }}>{t.remove}</Button>
             </View>
           )}

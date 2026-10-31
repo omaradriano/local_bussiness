@@ -1,9 +1,10 @@
 import type { components } from '@lb/api-client';
-import { centavosToInput, engineFor, kindFor, parsePesos, strings, term, type ItemKind } from '@lb/shared';
+import { centavosToInput, customInputOf, customValuesOf, engineFor, kindFor, type CustomFieldType, type CustomInput, parsePesos, strings, term, type ItemKind } from '@lb/shared';
 import { router, Stack, useLocalSearchParams, usePathname } from 'expo-router';
 import { useCallback, useEffect, useState } from 'react';
 import { ActivityIndicator, Switch, View } from 'react-native';
 import { ConfirmDialog } from '../../../../../../components/ConfirmDialog';
+import { CustomFieldInputs, useCustomFields } from '../../../../../../components/CustomFieldInputs';
 import { ItemPhotos } from '../../../../../../components/ItemPhotos';
 import { UnitsSection } from '../../../../../../components/UnitsSection';
 import { Button, Cell, Field, Group, Notice, Screen, Text, useToast } from '../../../../../../ui';
@@ -66,7 +67,11 @@ export default function CatalogItemForm() {
   const pathname = usePathname();
   const { businessId, itemId, error: carriedError } = useLocalSearchParams<{ businessId: string; itemId: string; error?: string }>();
   const { business } = useBusiness(businessId);
-  const { texts } = useTexts();
+  const { texts, has, kind: businessKind } = useTexts();
+  // Custom fields of the item (module customFields): brand, model…
+  const customFields = useCustomFields(businessId, businessKind, 'item', has('customFields'));
+  const unitFields = useCustomFields(businessId, businessKind, 'unit', has('customFields'));
+  const [custom, setCustom] = useState<Record<string, CustomInput>>({});
   const toast = useToast();
   const { settings } = useSettings(businessId);
   const depositEnabled = settings?.rentals.security_deposit_enabled ?? true;
@@ -89,6 +94,12 @@ export default function CatalogItemForm() {
     });
   }, [businessId, itemId, isNew]);
 
+  // The custom inputs start from the saved values once both the item and its fields are loaded.
+  const savedValues = item?.custom_values;
+  useEffect(() => {
+    setCustom(Object.fromEntries(customFields.map((f) => [f.id, customInputOf(f.type as CustomFieldType, savedValues?.[f.id])])));
+  }, [customFields, item?.id]); // eslint-disable-line react-hooks/exhaustive-deps
+
   // Refresh only the item (its photos), never the form, so typing isn't lost while photos process.
   const reloadItem = useCallback(async () => {
     const { data } = await api.GET('/v1/b/{businessId}/catalog', { params: { path: { businessId } } });
@@ -106,6 +117,9 @@ export default function CatalogItemForm() {
   async function save() {
     const { fields, errors: local } = toFields(form!, kind, depositEnabled);
     if (!fields) return setErrors(local!);
+    const cv = customValuesOf(customFields, custom);
+    if (cv.errors) return setErrors(cv.errors);
+    if (customFields.length) fields.custom_values = cv.values;
     setBusy(true);
     setErrors({});
     setMessage(null);
@@ -168,6 +182,12 @@ export default function CatalogItemForm() {
           <Field label={t.unitsToCreate} value={units} onChangeText={setUnits} keyboardType="numeric" error={errors.units} hint={t.unitsToCreateHint} />
         )}
       </Group>
+      {customFields.length > 0 && (
+        <Group label={strings.settings.customFields.section} padded>
+          <CustomFieldInputs fields={customFields} inputs={custom} editable={isOwner} errors={errors}
+            onChange={(id, v) => setCustom((c) => ({ ...c, [id]: v }))} />
+        </Group>
+      )}
       <Group label={strings.photos.title} padded footer={t.photosHint}>
         {item ? (
           <ItemPhotos businessId={businessId} itemId={item.id} images={item.images ?? []} reload={reloadItem} editable={isOwner} />
@@ -182,7 +202,7 @@ export default function CatalogItemForm() {
       )}
       {message && form && item && <View style={{ marginBottom: 12 }}><Notice tone="warning">{message}</Notice></View>}
       {isOwner && <Button variant="primary" busy={busy} onPress={save} style={{ marginBottom: 28 }}>{t.save}</Button>}
-      {item && e.resource === 'units' && <UnitsSection businessId={businessId} itemId={item.id} isOwner={isOwner} />}
+      {item && e.resource === 'units' && <UnitsSection businessId={businessId} itemId={item.id} isOwner={isOwner} fields={unitFields} />}
       {item && isOwner && (
         <>
           <Button variant="plain" icon="trash" disabled={busy} onPress={() => setRemoving(true)} style={{ marginTop: 12 }}>
