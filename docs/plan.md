@@ -553,6 +553,8 @@ Todo lo que tenga lógica lleva test unitario, y cada criterio de aceptación de
 
 ## Fases de desarrollo
 
+> **Desde 2026-10-30 el orden del trabajo pendiente lo marca `docs/plan-ventas.md`** (priorizado por lo que vende): adelanta en partes pequeñas la fase 4 (recordatorio de WhatsApp de un toque) y la fase 6 (link de reservas público).
+
 Siete fases en orden, con prioridad al panel de administración: primero se construye y prueba todo lo que usa el dueño, y el catálogo público con su diseño llamativo llega en la fase 6. Cada fase termina con algo demostrable y no se pasa a la siguiente sin cumplir sus criterios de aceptación, cada uno verificado por un test (ver Estrategia de pruebas).
 
 **Trabajo por partes**
