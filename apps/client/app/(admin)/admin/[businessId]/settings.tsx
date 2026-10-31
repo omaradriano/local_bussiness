@@ -1,4 +1,4 @@
-import { centavosToInput, featureInfo, parsePesos, settingsSectionsFor, strings, type SettingsSection } from '@lb/shared';
+import { centavosToInput, featureInfo, kindFor, parsePesos, settingsSectionsFor, strings, type SettingsSection } from '@lb/shared';
 import { Ionicons } from '@expo/vector-icons';
 import { router, Stack, useLocalSearchParams, type Href } from 'expo-router';
 import { useEffect, useState, type ReactNode } from 'react';
@@ -6,6 +6,7 @@ import { ActivityIndicator, Pressable, Switch, View } from 'react-native';
 import { DeleteBusiness } from '../../../../components/DeleteBusiness';
 import { ExportData } from '../../../../components/ExportData';
 import { ImportData } from '../../../../components/ImportData';
+import { CustomFieldsEditor } from '../../../../components/CustomFieldsEditor';
 import { DocumentTypesEditor } from '../../../../components/DocumentTypesEditor';
 import { api } from '../../../../lib/api';
 import { errorText, fieldErrors } from '../../../../lib/errors';
@@ -192,6 +193,13 @@ export default function SettingsScreen() {
       </Group>
       {isOwner && <Button variant="primary" busy={busy} onPress={save} style={{ marginBottom: 28 }}>{t.save}</Button>}
       <FeatureToggles businessId={businessId} isOwner={isOwner} features={settings!.features} onSaved={setSettings} />
+      {settings!.features.some((f) => f.key === 'customFields' && f.active) && (
+        <>
+          <Text variant="footnote" color="labelSecondary" style={{ marginHorizontal: 16, marginBottom: 6 }}>{t.customFields.title.toUpperCase()}</Text>
+          <CustomFieldsEditor businessId={businessId} kind={kindFor(business.vertical)} isOwner={isOwner} />
+          <Text variant="footnote" color="labelSecondary" style={{ marginHorizontal: 16, marginBottom: 28 }}>{t.customFields.hint}</Text>
+        </>
+      )}
       {has('documents') && (
         <>
           <Text variant="footnote" color="labelSecondary" style={{ marginHorizontal: 16, marginBottom: 6 }}>{t.documents.title.toUpperCase()}</Text>

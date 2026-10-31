@@ -5,6 +5,7 @@ export * from './auth';
 export * from './slug';
 export * from './money';
 export * from './discount';
+export * from './customFields';
 export * from './hours';
 export * from './image';
 export * from './nav';
