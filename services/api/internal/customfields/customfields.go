@@ -236,14 +236,22 @@ func (r Repo) Create(ctx context.Context, businessID string, f Field) (Field, er
 		insert into public.custom_fields (business_id, applies_to_kind, target, label, type, options, required, active, sort)
 		values ($1, $2, $3, $4, $5, $6, $7, true,
 		        coalesce((select max(sort) + 1 from public.custom_fields where business_id = $1), 1))
-		returning `+columns, businessID, f.Kind, f.Target, f.Label, f.Type, f.Options, f.Required))
+		returning `+columns, businessID, f.Kind, f.Target, f.Label, f.Type, options(f), f.Required))
 }
 
 func (r Repo) Update(ctx context.Context, businessID string, f Field) (Field, error) {
 	return scan(r.DB.QueryRow(ctx, `
 		update public.custom_fields set label = $3, type = $4, options = $5, required = $6, active = $7, sort = $8
 		where business_id = $1 and id = $2
-		returning `+columns, businessID, f.ID, f.Label, f.Type, f.Options, f.Required, f.Active, f.Sort))
+		returning `+columns, businessID, f.ID, f.Label, f.Type, options(f), f.Required, f.Active, f.Sort))
+}
+
+// options is never null in the database.
+func options(f Field) []string {
+	if f.Options == nil {
+		return []string{}
+	}
+	return f.Options
 }
 
 // Delete removes the definition; saved values under its id are no longer shown nor validated.
