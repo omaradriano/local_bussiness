@@ -3,6 +3,7 @@ import { centavosToInput, engineFor, kindFor, parsePesos, strings, term, type It
 import { router, Stack, useLocalSearchParams, usePathname } from 'expo-router';
 import { useCallback, useEffect, useState } from 'react';
 import { ActivityIndicator, Switch, View } from 'react-native';
+import { ConfirmDialog } from '../../../../../../components/ConfirmDialog';
 import { ItemPhotos } from '../../../../../../components/ItemPhotos';
 import { UnitsSection } from '../../../../../../components/UnitsSection';
 import { Button, Cell, Field, Group, Notice, Screen, Text, useToast } from '../../../../../../ui';
@@ -75,6 +76,7 @@ export default function CatalogItemForm() {
   const [errors, setErrors] = useState<Record<string, string>>({});
   const [message, setMessage] = useState<string | null>(carriedError ?? null);
   const [busy, setBusy] = useState(false);
+  const [removing, setRemoving] = useState(false);
   const [pending, setPending] = useState<PickedPhoto[]>([]); // photos chosen before the item exists
   const [units, setUnits] = useState('1'); // new rental: pieces to create
 
@@ -134,6 +136,16 @@ export default function CatalogItemForm() {
   );
   const isOwner = business.role === 'owner';
 
+  async function remove() {
+    setBusy(true);
+    const { error, response } = await api.DELETE('/v1/b/{businessId}/catalog/{itemId}', { params: { path: { businessId, itemId } } });
+    setBusy(false);
+    setRemoving(false);
+    if (!response.ok) return toast(errorText(error, response.status), 'error');
+    toast(t.removed);
+    goBack(pathname);
+  }
+
   async function toggleActive(active: boolean) {
     const { data, error, response } = await api.PATCH('/v1/b/{businessId}/catalog/{itemId}', { params: { path: { businessId, itemId } }, body: { active } });
     if (data) setItem(data);
@@ -171,6 +183,15 @@ export default function CatalogItemForm() {
       {message && form && item && <View style={{ marginBottom: 12 }}><Notice tone="warning">{message}</Notice></View>}
       {isOwner && <Button variant="primary" busy={busy} onPress={save} style={{ marginBottom: 28 }}>{t.save}</Button>}
       {item && e.resource === 'units' && <UnitsSection businessId={businessId} itemId={item.id} isOwner={isOwner} />}
+      {item && isOwner && (
+        <>
+          <Button variant="plain" icon="trash" disabled={busy} onPress={() => setRemoving(true)} style={{ marginTop: 12 }}>
+            {t.remove(term(business.vertical, 'catalog_item') ?? '')}
+          </Button>
+          <ConfirmDialog open={removing} title={t.removeTitle(item.name)} body={t.removeBody} confirmLabel={t.remove(term(business.vertical, 'catalog_item') ?? '')}
+            busy={busy} onConfirm={remove} onClose={() => setRemoving(false)} />
+        </>
+      )}
     </Screen>
   );
 }

@@ -144,7 +144,7 @@ func scan(row pgx.Row) (Item, error) {
 }
 
 func (r Repo) List(ctx context.Context, businessID string) ([]Item, error) {
-	rows, err := r.DB.Query(ctx, `select `+columns+` from public.catalog_items where business_id = $1 order by sort, name`, businessID)
+	rows, err := r.DB.Query(ctx, `select `+columns+` from public.catalog_items where business_id = $1 and deleted_at is null order by sort, name`, businessID)
 	if err != nil {
 		return nil, err
 	}
@@ -161,7 +161,7 @@ func (r Repo) List(ctx context.Context, businessID string) ([]Item, error) {
 }
 
 func (r Repo) Get(ctx context.Context, businessID, itemID string) (Item, error) {
-	return scan(r.DB.QueryRow(ctx, `select `+columns+` from public.catalog_items where business_id = $1 and id = $2`, businessID, itemID))
+	return scan(r.DB.QueryRow(ctx, `select `+columns+` from public.catalog_items where business_id = $1 and id = $2 and deleted_at is null`, businessID, itemID))
 }
 
 func (r Repo) Create(ctx context.Context, businessID string, it Item) (Item, error) {
@@ -183,7 +183,7 @@ func (r Repo) Update(ctx context.Context, businessID string, it Item) (Item, err
 		  name = $3, description = nullif($4, ''), price = $5, active = $6, sort = $7, duration_minutes = $8,
 		  buffer_minutes = $9, prep_hours = $10, daily_capacity = $11, price_unit = $12,
 		  security_deposit = $13, late_fee_per_day = $14
-		where business_id = $1 and id = $2
+		where business_id = $1 and id = $2 and deleted_at is null
 		returning `+columns,
 		businessID, it.ID, it.Name, it.Description, it.Price, it.Active, it.Sort, it.DurationMinutes,
 		it.BufferMinutes, it.PrepHours, it.DailyCapacity, it.PriceUnit, it.SecurityDeposit, it.LateFeePerDay))

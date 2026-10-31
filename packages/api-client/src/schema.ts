@@ -252,7 +252,8 @@ export interface paths {
         get?: never;
         put?: never;
         post?: never;
-        delete?: never;
+        /** Borra el artículo y sus unidades (solo dueño); las reservas pasadas conservan su nombre. 409 si tiene reservas activas o próximas */
+        delete: operations["deleteCatalogItem"];
         options?: never;
         head?: never;
         /** Edita campos del artículo (solo dueño); el tipo no cambia */
@@ -294,7 +295,8 @@ export interface paths {
         get?: never;
         put?: never;
         post?: never;
-        delete?: never;
+        /** Borra la unidad (solo dueño); su clave se puede volver a usar. 409 si tiene rentas activas o próximas */
+        delete: operations["deleteUnit"];
         options?: never;
         head?: never;
         patch: operations["updateUnit"];
@@ -2546,6 +2548,30 @@ export interface operations {
             422: components["responses"]["Error"];
         };
     };
+    deleteCatalogItem: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                businessId: components["parameters"]["BusinessId"];
+                itemId: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Borrado */
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            403: components["responses"]["Error"];
+            404: components["responses"]["Error"];
+            409: components["responses"]["Error"];
+        };
+    };
     updateCatalogItem: {
         parameters: {
             query?: never;
@@ -2633,6 +2659,31 @@ export interface operations {
             404: components["responses"]["Error"];
             409: components["responses"]["Error"];
             422: components["responses"]["Error"];
+        };
+    };
+    deleteUnit: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                businessId: components["parameters"]["BusinessId"];
+                itemId: components["parameters"]["ItemId"];
+                unitId: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Borrada */
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            403: components["responses"]["Error"];
+            404: components["responses"]["Error"];
+            409: components["responses"]["Error"];
         };
     };
     updateUnit: {

@@ -73,7 +73,7 @@ func Inventory(ctx context.Context, db store.DB, businessID string) ([]Inventory
 		  join public.customers c on c.id = bk.customer_id
 		  where br.business_id = $1
 		) b on b.item_unit_id = u.id
-		where u.business_id = $1 and ci.kind = 'rental'`, businessID)
+		where u.business_id = $1 and ci.kind = 'rental' and u.deleted_at is null and ci.deleted_at is null`, businessID)
 	if err != nil {
 		return nil, err
 	}

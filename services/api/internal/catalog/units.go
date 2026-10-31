@@ -71,14 +71,14 @@ func scanUnit(row pgx.Row) (Unit, error) {
 // ListUnits returns the units of a rental item of the business (ErrNotFound if it isn't one).
 func (r Repo) ListUnits(ctx context.Context, businessID, itemID string) ([]Unit, error) {
 	var isRental bool
-	err := r.DB.QueryRow(ctx, `select kind = 'rental' from public.catalog_items where business_id = $1 and id = $2`, businessID, itemID).Scan(&isRental)
+	err := r.DB.QueryRow(ctx, `select kind = 'rental' from public.catalog_items where business_id = $1 and id = $2 and deleted_at is null`, businessID, itemID).Scan(&isRental)
 	if errors.Is(err, pgx.ErrNoRows) || (err == nil && !isRental) {
 		return nil, ErrNotFound
 	}
 	if err != nil {
 		return nil, err
 	}
-	rows, err := r.DB.Query(ctx, `select `+unitColumns+` from public.item_units where business_id = $1 and item_id = $2 order by code`, businessID, itemID)
+	rows, err := r.DB.Query(ctx, `select `+unitColumns+` from public.item_units where business_id = $1 and item_id = $2 and deleted_at is null order by code`, businessID, itemID)
 	if err != nil {
 		return nil, err
 	}
@@ -100,18 +100,18 @@ func (r Repo) CreateUnit(ctx context.Context, businessID string, u Unit) (Unit, 
 		insert into public.item_units (business_id, item_id, code, status, notes)
 		select i.business_id, i.id, $3, $4, nullif($5, '')
 		from public.catalog_items i
-		where i.business_id = $1 and i.id = $2 and i.kind = 'rental'
+		where i.business_id = $1 and i.id = $2 and i.kind = 'rental' and i.deleted_at is null
 		returning `+unitColumns, businessID, u.ItemID, u.Code, u.Status, u.Notes))
 }
 
 func (r Repo) GetUnit(ctx context.Context, businessID, itemID, unitID string) (Unit, error) {
-	return scanUnit(r.DB.QueryRow(ctx, `select `+unitColumns+` from public.item_units where business_id = $1 and item_id = $2 and id = $3`,
+	return scanUnit(r.DB.QueryRow(ctx, `select `+unitColumns+` from public.item_units where business_id = $1 and item_id = $2 and id = $3 and deleted_at is null`,
 		businessID, itemID, unitID))
 }
 
 func (r Repo) UpdateUnit(ctx context.Context, businessID string, u Unit) (Unit, error) {
 	return scanUnit(r.DB.QueryRow(ctx, `
 		update public.item_units set code = $4, status = $5, notes = nullif($6, '')
-		where business_id = $1 and item_id = $2 and id = $3
+		where business_id = $1 and item_id = $2 and id = $3 and deleted_at is null
 		returning `+unitColumns, businessID, u.ItemID, u.ID, u.Code, u.Status, u.Notes))
 }
