@@ -57,6 +57,7 @@ type Deps struct {
 	Availability   AvailabilityAnswerer
 	Bookings       BookingsRepo
 	Settings       SettingsRepo
+	CustomFields   CustomFieldsRepo
 	Customers      CustomersRepo
 	Platform       PlatformRepo
 	Finances       FinancesRepo
@@ -747,6 +748,11 @@ func NewRouter(d Deps) http.Handler {
 					invalid(w, "Revisa los datos del artículo.", errs)
 					return
 				}
+				values, ok := d.customValues(w, r, it.Kind, "item", &it.CustomValues, nil)
+				if !ok {
+					return
+				}
+				it.CustomValues = values
 				created, err := d.Catalog.Create(r.Context(), m.BusinessID, it)
 				if err != nil {
 					internalError(w, r, "create catalog item", err)
@@ -786,6 +792,11 @@ func NewRouter(d Deps) http.Handler {
 					invalid(w, "Revisa los datos del artículo.", errs)
 					return
 				}
+				values, ok := d.customValues(w, r, it.Kind, "item", p.CustomValues, current.CustomValues)
+				if !ok {
+					return
+				}
+				it.CustomValues = values
 				updated, err := d.Catalog.Update(r.Context(), m.BusinessID, it)
 				if err != nil {
 					internalError(w, r, "update catalog item", err)
@@ -807,6 +818,7 @@ func NewRouter(d Deps) http.Handler {
 			mountCustomers(r, d)
 			mountFinances(r, d)
 			mountProducts(r, d)
+			mountCustomFields(r, d)
 
 			r.Get("/settings", func(w http.ResponseWriter, r *http.Request) {
 				m, _ := auth.MemberFrom(r.Context())
@@ -1461,7 +1473,15 @@ func NewRouter(d Deps) http.Handler {
 				}
 				created, err := catalog.Unit{}, error(catalog.ErrNotFound)
 				if auth.IsUUID(itemID) {
-					created, err = d.Catalog.CreateUnit(r.Context(), m.BusinessID, u)
+					var item catalog.Item
+					if item, err = d.Catalog.Get(r.Context(), m.BusinessID, itemID); err == nil {
+						values, ok := d.customValues(w, r, item.Kind, "unit", p.CustomValues, nil)
+						if !ok {
+							return
+						}
+						u.CustomValues = values
+						created, err = d.Catalog.CreateUnit(r.Context(), m.BusinessID, u)
+					}
 				}
 				writeUnit(w, r, http.StatusCreated, created, err)
 			})
@@ -1485,6 +1505,18 @@ func NewRouter(d Deps) http.Handler {
 				if errs := u.Validate(); len(errs) > 0 {
 					invalid(w, "Revisa los datos de la unidad.", errs)
 					return
+				}
+				if p.CustomValues != nil {
+					item, err := d.Catalog.Get(r.Context(), m.BusinessID, itemID)
+					if err != nil {
+						writeUnit(w, r, 0, current, err)
+						return
+					}
+					values, ok := d.customValues(w, r, item.Kind, "unit", p.CustomValues, current.CustomValues)
+					if !ok {
+						return
+					}
+					u.CustomValues = values
 				}
 				updated, err := d.Catalog.UpdateUnit(r.Context(), m.BusinessID, u)
 				writeUnit(w, r, http.StatusOK, updated, err)

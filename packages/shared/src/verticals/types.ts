@@ -25,7 +25,7 @@ export type BookingStatus =
  */
 export type Feature =
   | 'staff' | 'inventory' | 'guarantor' | 'customerAddress' | 'customerDocuments' | 'trustedCustomers'
-  | 'walkIn' | 'homeService' | 'startService' | 'bookingDocuments' | 'productSales';
+  | 'walkIn' | 'homeService' | 'startService' | 'bookingDocuments' | 'productSales' | 'customFields';
 
 /** Ajustes sections. "general" is shared by every business (advance and holds); "agenda" is the appointment engine's. */
 export type SettingsSection = 'general' | 'agenda' | 'rentals' | 'inspection' | 'documents' | 'delivery';

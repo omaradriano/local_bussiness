@@ -68,5 +68,12 @@
       "product",
       "rental"
     ]
+  },
+  "customFields": {
+    "engines": [
+      "service",
+      "product",
+      "rental"
+    ]
   }
 }
