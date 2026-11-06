@@ -75,5 +75,15 @@
       "product",
       "rental"
     ]
+  },
+  "giftOrder": {
+    "engines": [
+      "product"
+    ]
+  },
+  "customOrder": {
+    "engines": [
+      "product"
+    ]
   }
 }

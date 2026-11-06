@@ -1475,6 +1475,8 @@ export interface components {
              * @description renta
              */
             late_fee_per_day?: number | null;
+            /** @description Precio libre: se captura en cada pedido con su descripción (función customOrder) */
+            custom_price?: boolean;
             custom_values?: components["schemas"]["CustomValues"];
         };
         /** @description Valores de los campos personalizados: id del campo → texto, número, opción, fecha (AAAA-MM-DD) o sí/no. Al guardar, los vacíos se quitan. */
@@ -1812,7 +1814,7 @@ export interface components {
             }[];
         };
         /** @enum {string} */
-        Feature: "staff" | "inventory" | "guarantor" | "customerAddress" | "customerDocuments" | "trustedCustomers" | "walkIn" | "homeService" | "startService" | "bookingDocuments" | "productSales" | "customFields";
+        Feature: "staff" | "inventory" | "guarantor" | "customerAddress" | "customerDocuments" | "trustedCustomers" | "walkIn" | "homeService" | "startService" | "bookingDocuments" | "productSales" | "customFields" | "giftOrder" | "customOrder";
         FeatureState: {
             key: components["schemas"]["Feature"];
             /** @description La trae su giro */
@@ -1952,7 +1954,7 @@ export interface components {
             starts_at: string;
             /**
              * Format: date-time
-             * @description Renta: regreso
+             * @description Renta: regreso; producto: fin del horario de entrega, el mismo día (opcional)
              */
             ends_at?: string;
             /**
@@ -1968,6 +1970,19 @@ export interface components {
                 [key: string]: string;
             };
             notes?: string;
+            /** @description Quién recibe (función giftOrder) */
+            recipient_name?: string;
+            /** @description Teléfono de quien recibe (función giftOrder) */
+            recipient_phone?: string;
+            /** @description Dedicatoria de la tarjeta (función giftOrder) */
+            card_message?: string;
+            /**
+             * Format: int64
+             * @description Precio en centavos de un artículo con precio libre (función customOrder)
+             */
+            custom_price?: number;
+            /** @description Qué pidió el cliente, para un artículo con precio libre */
+            custom_description?: string;
         };
         /** @enum {string} */
         DiscountType: "amount" | "percent";
@@ -2008,6 +2023,9 @@ export interface components {
             units: components["schemas"]["Ref"][];
             fulfillment?: string | null;
             delivery_address?: string | null;
+            recipient_name: string | null;
+            recipient_phone: string | null;
+            card_message: string | null;
             /** Format: int64 */
             subtotal: number;
             discount_type: components["schemas"]["DiscountType"] | null;
@@ -3311,6 +3329,8 @@ export interface operations {
                 ends_at?: string;
                 discount_type?: components["schemas"]["DiscountType"];
                 discount_value?: number;
+                /** @description Precio de un artículo con precio libre */
+                custom_price?: number;
             };
             header?: never;
             path: {

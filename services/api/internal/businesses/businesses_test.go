@@ -67,7 +67,7 @@ func TestTemplatesAreCompleteForEachVertical(t *testing.T) {
 				if it.Kind != KindFor(v) {
 					t.Errorf("%s: item %q is %s, want %s", v, it.Name, it.Kind, KindFor(v))
 				}
-				if it.Price <= 0 {
+				if it.Price <= 0 && !it.CustomPrice { // a free price is written in each order
 					t.Errorf("%s: item %q price %d", v, it.Name, it.Price)
 				}
 			}

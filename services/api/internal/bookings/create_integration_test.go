@@ -225,6 +225,31 @@ func TestIntegrationCreateBooking(t *testing.T) {
 		}
 	})
 
+	t.Run("florería: personalizado con precio libre, quién recibe, dedicatoria y horario", func(t *testing.T) {
+		f := setup(t, p, "flowers", `{"deposit_percent": 50}`)
+		var custom string
+		if err := p.QueryRow(ctx, `insert into public.catalog_items (business_id, kind, name, price, prep_hours, custom_price)
+			values ($1, 'product', 'Arreglo personalizado', 0, 0, true) returning id::text`, f.business).Scan(&custom); err != nil {
+			t.Fatal(err)
+		}
+		price := int64(120000)
+		in := CreateInput{Customer: cust("6143330002"), ItemID: custom, StartsAt: at("2026-11-02T17:00:00Z"), EndsAt: at("2026-11-02T20:00:00Z"),
+			CustomPrice: &price, CustomDescription: "24 rosas rojas", RecipientName: "Lupita", RecipientPhone: "6145550000",
+			CardMessage: "Feliz aniversario", Source: "admin"}
+		b, _, err := Create(ctx, p, f.business, in, now)
+		if err != nil || b.Total != 120000 || b.DepositRequired != 60000 || b.EndsAt == nil || !b.EndsAt.Equal(*in.EndsAt) {
+			t.Fatalf("custom order: %+v %v", b, err)
+		}
+		if *b.RecipientName != "Lupita" || *b.RecipientPhone != "+526145550000" || *b.CardMessage != "Feliz aniversario" ||
+			b.Items[0].Options["description"] != "24 rosas rojas" || b.Items[0].UnitPrice != 120000 {
+			t.Fatalf("gift details: %+v", b)
+		}
+		q, err := QuoteBooking(ctx, p, f.business, QuoteRequest{ItemID: custom, StartsAt: *in.StartsAt, CustomPrice: &price})
+		if err != nil || q.Total != 120000 {
+			t.Fatalf("quote with the free price: %+v %v", q, err)
+		}
+	})
+
 	t.Run("renta: días cobrados, depósito aparte, unidad asignada, pasos copiados", func(t *testing.T) {
 		f := setup(t, p, "tool_rental", `{}`)
 		b, _, err := Create(ctx, p, f.business, CreateInput{Customer: cust("6144440001"), ItemID: f.item,

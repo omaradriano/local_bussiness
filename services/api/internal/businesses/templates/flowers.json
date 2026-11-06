@@ -1,6 +1,9 @@
 {
   "kind": "product",
-  "features": [],
+  "features": [
+    "giftOrder",
+    "customOrder"
+  ],
   "optional_features": [
     "walkIn",
     "productSales"
@@ -41,6 +44,14 @@
       "description": "Flores de temporada en caja.",
       "price": 55000,
       "prep_hours": 24
+    },
+    {
+      "kind": "product",
+      "name": "Arreglo personalizado",
+      "description": "A tu gusto: describe flores, colores y presupuesto.",
+      "price": 0,
+      "prep_hours": 24,
+      "custom_price": true
     }
   ],
   "steps": []

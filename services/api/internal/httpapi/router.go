@@ -957,6 +957,14 @@ func NewRouter(d Deps) http.Handler {
 					}
 					in.EndsAt = &end
 				}
+				if v := q.Get("custom_price"); v != "" {
+					p, err := strconv.ParseInt(v, 10, 64)
+					if err != nil {
+						invalid(w, "Precio inválido.", map[string]string{"custom_price": "Precio inválido."})
+						return
+					}
+					in.CustomPrice = &p
+				}
 				if v := q.Get("discount_value"); v != "" {
 					in.Discount.Type = q.Get("discount_type")
 					if in.Discount.Value, err = strconv.ParseInt(v, 10, 64); err != nil {

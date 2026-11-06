@@ -765,6 +765,7 @@ paths:
         - { name: ends_at, in: query, schema: { type: string, format: date-time } }
         - { name: discount_type, in: query, schema: { $ref: "#/components/schemas/DiscountType" } }
         - { name: discount_value, in: query, schema: { type: integer, minimum: 0 } }
+        - { name: custom_price, in: query, schema: { type: integer, minimum: 1 }, description: "Precio de un artículo con precio libre" }
       responses:
         "200":
           description: OK
@@ -2002,6 +2003,7 @@ components:
         price_unit: { oneOf: [{ $ref: "#/components/schemas/PriceUnit" }, { type: "null" }], description: "renta" }
         security_deposit: { type: [integer, "null"], format: int64, description: "renta" }
         late_fee_per_day: { type: [integer, "null"], format: int64, description: "renta" }
+        custom_price: { type: boolean, description: "Precio libre: se captura en cada pedido con su descripción (función customOrder)" }
         custom_values: { $ref: "#/components/schemas/CustomValues" }
 
     CustomValues:
@@ -2379,7 +2381,7 @@ components:
 
     Feature:
       type: string
-      enum: [staff, inventory, guarantor, customerAddress, customerDocuments, trustedCustomers, walkIn, homeService, startService, bookingDocuments, productSales, customFields]
+      enum: [staff, inventory, guarantor, customerAddress, customerDocuments, trustedCustomers, walkIn, homeService, startService, bookingDocuments, productSales, customFields, giftOrder, customOrder]
 
     FeatureState:
       type: object
@@ -2527,13 +2529,18 @@ components:
         item_id: { type: string, format: uuid }
         quantity: { type: integer, minimum: 1, maximum: 100, default: 1 }
         starts_at: { type: string, format: date-time, description: "Servicio: hora de la cita; producto: entrega; renta: salida" }
-        ends_at: { type: string, format: date-time, description: "Renta: regreso" }
+        ends_at: { type: string, format: date-time, description: "Renta: regreso; producto: fin del horario de entrega, el mismo día (opcional)" }
         staff_id: { type: string, format: uuid, description: "Servicio: persona preferida" }
         fulfillment: { type: string, enum: [pickup, delivery] }
         delivery_address: { type: string }
         delivery_zone: { type: string }
         options: { type: object, additionalProperties: { type: string } }
         notes: { type: string, maxLength: 1000 }
+        recipient_name: { type: string, maxLength: 80, description: "Quién recibe (función giftOrder)" }
+        recipient_phone: { type: string, description: "Teléfono de quien recibe (función giftOrder)" }
+        card_message: { type: string, maxLength: 500, description: "Dedicatoria de la tarjeta (función giftOrder)" }
+        custom_price: { type: integer, format: int64, minimum: 1, description: "Precio en centavos de un artículo con precio libre (función customOrder)" }
+        custom_description: { type: string, maxLength: 500, description: "Qué pidió el cliente, para un artículo con precio libre" }
 
     DiscountType: { type: string, enum: [amount, percent] }
 
@@ -2547,7 +2554,7 @@ components:
 
     Booking:
       type: object
-      required: [id, kind, status, starts_at, ends_at, customer, items, staff, units, subtotal, discount_type, discount_value, discount, deposit_required, total, source, hold_expires_at, public_token, created_at, payments, balance, events, steps, next, rental, documents]
+      required: [id, kind, status, starts_at, ends_at, customer, items, staff, units, subtotal, discount_type, discount_value, discount, deposit_required, total, source, hold_expires_at, public_token, created_at, payments, balance, events, steps, next, rental, documents, recipient_name, recipient_phone, card_message]
       properties:
         id: { type: string, format: uuid }
         kind: { $ref: "#/components/schemas/ItemKind" }
@@ -2581,6 +2588,9 @@ components:
           items: { $ref: "#/components/schemas/Ref" }
         fulfillment: { type: [string, "null"] }
         delivery_address: { type: [string, "null"] }
+        recipient_name: { type: [string, "null"] }
+        recipient_phone: { type: [string, "null"] }
+        card_message: { type: [string, "null"] }
         subtotal: { type: integer, format: int64 }
         discount_type: { oneOf: [{ $ref: "#/components/schemas/DiscountType" }, { type: "null" }] }
         discount_value: { type: integer, format: int64, description: "Centavos o porcentaje, según discount_type" }

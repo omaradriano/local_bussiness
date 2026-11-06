@@ -144,7 +144,8 @@ type TemplateItem struct {
 	PriceUnit       *string `json:"price_unit"`
 	SecurityDeposit *int64  `json:"security_deposit"`
 	LateFeePerDay   *int64  `json:"late_fee_per_day"`
-	Units           int     `json:"units"` // rentals: physical pieces to create (codes like ROT-01)
+	CustomPrice     bool    `json:"custom_price"` // priced in each order («arreglo personalizado»)
+	Units           int     `json:"units"`        // rentals: physical pieces to create (codes like ROT-01)
 }
 
 type TemplateStep struct {
@@ -288,10 +289,10 @@ func Create(ctx context.Context, db Beginner, userID string, in Input) (Business
 		if err := tx.QueryRow(ctx, `
 			insert into public.catalog_items
 			  (business_id, kind, name, description, price, sort, duration_minutes, buffer_minutes,
-			   prep_hours, price_unit, security_deposit, late_fee_per_day)
-			values ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12) returning id::text`,
+			   prep_hours, price_unit, security_deposit, late_fee_per_day, custom_price)
+			values ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13) returning id::text`,
 			b.ID, it.Kind, it.Name, it.Description, it.Price, i+1, it.DurationMinutes, it.BufferMinutes,
-			it.PrepHours, it.PriceUnit, it.SecurityDeposit, it.LateFeePerDay).Scan(&itemID); err != nil {
+			it.PrepHours, it.PriceUnit, it.SecurityDeposit, it.LateFeePerDay, it.CustomPrice).Scan(&itemID); err != nil {
 			return Business{}, err
 		}
 		for n := 1; n <= it.Units; n++ {
