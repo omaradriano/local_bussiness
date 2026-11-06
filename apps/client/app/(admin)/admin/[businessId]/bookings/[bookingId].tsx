@@ -1,5 +1,5 @@
 import type { components } from '@lb/api-client';
-import { engineFor, formatMXN, formatPhone, strings, term } from '@lb/shared';
+import { engineFor, formatMXN, formatPhone, hhmm, strings, term } from '@lb/shared';
 import { router, Stack, useLocalSearchParams } from 'expo-router';
 import { useCallback, useEffect, useState } from 'react';
 import { ActivityIndicator, Linking, View } from 'react-native';
@@ -140,6 +140,8 @@ export default function BookingDetail() {
         <View style={{ gap: 4 }}>
           {b.units.length > 0 && <Text variant="footnote" color="labelSecondary">{b.units.map((u) => u.name).join(', ')}</Text>}
           <Text variant="largeTitle" accessibilityRole="header">{b.items.map((i) => `${i.quantity > 1 ? `${i.quantity} × ` : ''}${i.name}`).join(', ')}</Text>
+          {b.items.map((i) => (typeof i.options.description === 'string' && i.options.description
+            ? <Text key={i.item_id} color="labelSecondary">{i.options.description}</Text> : null))}
           <StatusBadge status={b.status} size="md" />
           {b.status === 'overdue' && <Notice tone="warning">{f.overdue}</Notice>}
           {closedNote && <Notice tone="warning">{texts.bookings.inactive}</Notice>}
@@ -156,7 +158,13 @@ export default function BookingDetail() {
             <Cell icon="logo-whatsapp" tint={ui.success} label={t.whatsapp}
               onPress={() => Linking.openURL(`https://wa.me/${b.customer.phone.replace(/\D/g, '')}?text=${encodeURIComponent(waText)}`)} />
           ) : null}
-          <Cell icon="arrow-up-circle" tint={ui.accent} label={term(business.vertical, 'starts_at') ?? ''} value={when(b.starts_at)} />
+          <Cell icon="arrow-up-circle" tint={ui.accent} label={term(business.vertical, 'starts_at') ?? ''}
+            value={e.timing === 'day' && b.ends_at ? `${when(b.starts_at)} ${t.windowUntil(hhmm(b.ends_at))}` : when(b.starts_at)} />
+          {b.recipient_name || b.recipient_phone ? (
+            <Cell icon="gift" tint={ui.purple} label={`${t.gift.recipient}: ${b.recipient_name ?? ''}`.trim()} sublabel={b.recipient_phone ? formatPhone(b.recipient_phone) : undefined}
+              onPress={b.recipient_phone ? () => Linking.openURL(`tel:${b.recipient_phone}`) : undefined} />
+          ) : null}
+          {b.card_message ? <Cell icon="mail" tint={ui.purple} label={t.gift.cardLabel} sublabel={b.card_message} /> : null}
           {e.timing === 'range' && b.ends_at ? <Cell icon="arrow-down-circle" tint={ui.warning} label={term(business.vertical, 'ends_at') ?? ''} value={when(b.ends_at)} /> : null}
           {b.staff.length > 0 ? <Cell icon="person-circle" tint={ui.gray} label={t.attendedBy} value={b.staff.map((x) => x.name).join(', ')} /> : null}
           {b.fulfillment === 'delivery' ? <Cell icon={e.fulfillment === 'atPlaceOrHome' ? 'home' : 'car'} tint={ui.gray} label={e.fulfillment === 'atPlaceOrHome' ? t.homeService : t.delivery} sublabel={b.delivery_address ?? ''} /> : null}
@@ -253,7 +261,7 @@ export default function BookingDetail() {
         {/* After the check-out (and for other kinds) the documents stay at hand in their own section. */}
         {(!e.custody || rentalStep > 1 || closedNote) && (additional.length > 0 || has('bookingDocuments')) && (
           <View>
-            <Text variant="footnote" color="labelSecondary" style={{ marginHorizontal: 16, marginBottom: 6 }}>{t.docs.section.toUpperCase()}</Text>
+            <Text variant="footnote" color="labelSecondary" style={{ marginHorizontal: 16, marginBottom: 6 }}>{(texts.bookings.documents?.section ?? t.docs.section).toUpperCase()}</Text>
             <View style={{ gap: 10 }}>
               {cards(additional, false)}
               {has('bookingDocuments') && <BookingDocuments businessId={businessId} booking={b} editable={editable} onDone={show} />}

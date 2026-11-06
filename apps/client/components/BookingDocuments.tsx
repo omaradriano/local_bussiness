@@ -5,6 +5,7 @@ import { useEffect, useState } from 'react';
 import { Pressable, View } from 'react-native';
 import { api } from '../lib/api';
 import { errorText } from '../lib/errors';
+import { useTexts } from '../lib/useTexts';
 import { pickPdfs, pickPhotos, uploadBookingDocument, type PickedPhoto } from '../lib/photos';
 import { Button, Field, Text, radius, useToast, useUI } from '../ui';
 import { FileThumb } from './FileThumb';
@@ -18,6 +19,7 @@ export function BookingDocuments({ businessId, booking, editable, onDone }: {
 }) {
   const ui = useUI();
   const toast = useToast();
+  const { texts } = useTexts();
   const [name, setName] = useState('');
   const [nameError, setNameError] = useState<string | undefined>();
   const [busy, setBusy] = useState(false);
@@ -87,7 +89,7 @@ export function BookingDocuments({ businessId, booking, editable, onDone }: {
       ))}
       {editable && (
         <View style={{ borderRadius: radius.sm, padding: 14, backgroundColor: ui.fill, gap: 4 }}>
-          <Field label={t.name} placeholder={t.namePlaceholder} value={name} onChangeText={setName} error={nameError} style={{ backgroundColor: ui.surface }} />
+          <Field label={t.name} placeholder={texts.bookings.documents?.namePlaceholder ?? t.namePlaceholder} value={name} onChangeText={setName} error={nameError} style={{ backgroundColor: ui.surface }} />
           <View style={{ flexDirection: 'row', gap: 8 }}>
             <Button icon="camera" busy={busy} onPress={() => add('photo')} style={{ flex: 1 }}>{strings.files.addPhotos}</Button>
             <Button icon="document-text" disabled={busy} onPress={() => add('pdf')} style={{ flex: 1 }}>{strings.files.addPdf}</Button>
