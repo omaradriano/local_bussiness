@@ -42,6 +42,8 @@ type QuoteRequest struct {
 	StartsAt time.Time
 	EndsAt   *time.Time // rentals
 	Discount Discount
+	// CustomPrice: the price written for an item with a free price (ignored for a fixed-price one).
+	CustomPrice *int64
 }
 
 type QuoteResult struct {
@@ -55,9 +57,10 @@ func QuoteBooking(ctx context.Context, db store.DB, businessID string, in QuoteR
 	var tz, kind, priceUnit string
 	var raw []byte
 	var price, deposit int64
-	err := db.QueryRow(ctx, `select b.timezone, b.settings, ci.kind, ci.price, coalesce(ci.price_unit, 'day'), coalesce(ci.security_deposit, 0)
+	var custom bool
+	err := db.QueryRow(ctx, `select b.timezone, b.settings, ci.kind, ci.price, coalesce(ci.price_unit, 'day'), coalesce(ci.security_deposit, 0), ci.custom_price
 		from public.catalog_items ci join public.businesses b on b.id = ci.business_id
-		where ci.business_id = $1 and ci.id = $2 and ci.active`, businessID, in.ItemID).Scan(&tz, &raw, &kind, &price, &priceUnit, &deposit)
+		where ci.business_id = $1 and ci.id = $2 and ci.active`, businessID, in.ItemID).Scan(&tz, &raw, &kind, &price, &priceUnit, &deposit, &custom)
 	if errors.Is(err, pgx.ErrNoRows) {
 		return QuoteResult{}, Invalid{"item_id", "El artículo no existe o está inactivo."}
 	}
@@ -65,6 +68,9 @@ func QuoteBooking(ctx context.Context, db store.DB, businessID string, in QuoteR
 		return QuoteResult{}, err
 	}
 	qty := max(in.Quantity, 1)
+	if custom && in.CustomPrice != nil && *in.CustomPrice > 0 && *in.CustomPrice <= maxPayment {
+		price = *in.CustomPrice
+	}
 	var set bizSettings
 	_ = json.Unmarshal(raw, &set)
 	rules, err := engines.Get(rulesByKind, kind)

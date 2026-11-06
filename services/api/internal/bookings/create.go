@@ -45,14 +45,21 @@ type CreateInput struct {
 	ItemID          string            `json:"item_id"`
 	Quantity        int               `json:"quantity"`
 	StartsAt        *time.Time        `json:"starts_at"` // service: appointment; product: delivery; rental: pick-up
-	EndsAt          *time.Time        `json:"ends_at"`   // rental: return
+	EndsAt          *time.Time        `json:"ends_at"`   // rental: return; product: end of the time window (optional)
 	StaffID         string            `json:"staff_id"`  // service: preferred person (optional)
 	Fulfillment     string            `json:"fulfillment"`
 	DeliveryAddress string            `json:"delivery_address"`
 	DeliveryZone    string            `json:"delivery_zone"`
 	Options         map[string]string `json:"options"` // option name -> answer
 	Notes           string            `json:"notes"`
-	Discount        *Discount         `json:"discount"` // counter only
+	// giftOrder: who receives it and the card message.
+	RecipientName  string `json:"recipient_name"`
+	RecipientPhone string `json:"recipient_phone"`
+	CardMessage    string `json:"card_message"`
+	// customOrder: price and description of an item with a free price.
+	CustomPrice       *int64    `json:"custom_price"`
+	CustomDescription string    `json:"custom_description"`
+	Discount          *Discount `json:"discount"` // counter only
 	// Counter only: what the customer pays right now (type is set here: all of it = balance, part = advance).
 	InitialPayment *Payment `json:"initial_payment"`
 
@@ -82,6 +89,7 @@ type itemRow struct {
 	BufferMinutes   int
 	PriceUnit       string
 	SecurityDeposit int64
+	CustomPrice     bool // priced in each order (customOrder)
 }
 
 type option struct {
@@ -173,13 +181,20 @@ func Create(ctx context.Context, db store.DB, businessID string, in CreateInput,
 	rentals := settings.RentalsFrom(rawSettings)
 
 	var it itemRow
-	err = tx.QueryRow(ctx, `select kind, name, price, coalesce(duration_minutes, 0), buffer_minutes, coalesce(price_unit, ''), coalesce(security_deposit, 0)
+	err = tx.QueryRow(ctx, `select kind, name, price, coalesce(duration_minutes, 0), buffer_minutes, coalesce(price_unit, ''), coalesce(security_deposit, 0), custom_price
 		from public.catalog_items where business_id = $1 and id = $2 and active`, businessID, in.ItemID).
-		Scan(&it.Kind, &it.Name, &it.Price, &it.DurationMinutes, &it.BufferMinutes, &it.PriceUnit, &it.SecurityDeposit)
+		Scan(&it.Kind, &it.Name, &it.Price, &it.DurationMinutes, &it.BufferMinutes, &it.PriceUnit, &it.SecurityDeposit, &it.CustomPrice)
 	if errors.Is(err, pgx.ErrNoRows) {
 		return Booking{}, false, Invalid{"item_id", "El artículo no existe o está inactivo."}
 	}
 	if err != nil {
+		return Booking{}, false, err
+	}
+
+	if err := giftDetails(&in, active); err != nil {
+		return Booking{}, false, err
+	}
+	if err := customPrice(&in, &it, active); err != nil {
 		return Booking{}, false, err
 	}
 
@@ -246,13 +261,14 @@ func Create(ctx context.Context, db store.DB, businessID string, in CreateInput,
 	var bookingID string
 	err = tx.QueryRow(ctx, `
 		insert into public.bookings (business_id, customer_id, kind, status, starts_at, ends_at, fulfillment, delivery_address,
-		  subtotal, deposit_required, total, notes, source, hold_expires_at, idempotency_key, created_by, discount_type, discount_value, discount)
+		  subtotal, deposit_required, total, notes, source, hold_expires_at, idempotency_key, created_by, discount_type, discount_value, discount,
+		  recipient_name, recipient_phone, card_message)
 		values ($1, $2, $3, $4, $5, $6, nullif($7, ''), nullif($8, ''), $9, $10, $11, nullif($12, ''), $13, $14, nullif($15, ''), nullif($16, '')::uuid,
-		  nullif($17, ''), $18, $19)
+		  nullif($17, ''), $18, $19, nullif($20, ''), nullif($21, ''), nullif($22, ''))
 		returning id::text`,
 		businessID, customerID, it.Kind, status, start, end, in.Fulfillment, in.DeliveryAddress,
 		q.Subtotal, q.Advance, q.Total, strings.TrimSpace(in.Notes), in.Source, hold, in.IdempotencyKey, in.CreatedBy,
-		deref(in.Discount).Type, deref(in.Discount).Value, q.Discount).Scan(&bookingID)
+		deref(in.Discount).Type, deref(in.Discount).Value, q.Discount, in.RecipientName, in.RecipientPhone, in.CardMessage).Scan(&bookingID)
 	if isUnique(err) && in.IdempotencyKey != "" {
 		tx.Rollback(ctx) // a concurrent retry with the same key won: return that one
 		id, err := idByKey(ctx, db, businessID, in.IdempotencyKey)
@@ -267,7 +283,7 @@ func Create(ctx context.Context, db store.DB, businessID string, in CreateInput,
 	}
 
 	opts, _ := json.Marshal(map[string]any{"answers": answers, "options_extra": optsExtra, "periods": periods,
-		"delivery_fee": deliveryFee, "security_deposit": q.SecurityDeposit, "item_name": it.Name})
+		"delivery_fee": deliveryFee, "security_deposit": q.SecurityDeposit, "item_name": it.Name, "description": in.CustomDescription})
 	if _, err := tx.Exec(ctx, `insert into public.booking_items (business_id, booking_id, item_id, quantity, unit_price, options)
 		values ($1, $2, $3, $4, $5, $6)`, businessID, bookingID, in.ItemID, in.Quantity, it.Price, opts); err != nil {
 		return Booking{}, false, err

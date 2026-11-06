@@ -73,8 +73,18 @@ func slotTiming(r *reservation) error {
 	return nil
 }
 
-// dayTiming: a delivery date, no end.
-func dayTiming(*reservation) error { return nil }
+// dayTiming: a delivery date, optionally with a time window that ends the same day («de 10 a 13 h»).
+func dayTiming(r *reservation) error {
+	e := r.in.EndsAt
+	if e == nil {
+		return nil
+	}
+	if !e.After(r.start) || e.In(r.loc).Format("2006-01-02") != r.start.In(r.loc).Format("2006-01-02") {
+		return Invalid{"ends_at", "El horario debe terminar después de que empieza y el mismo día."}
+	}
+	r.end = e
+	return nil
+}
 
 // rangeTiming: from pick-up to return.
 func rangeTiming(r *reservation) error {
