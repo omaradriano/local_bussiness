@@ -71,7 +71,7 @@ export default function CatalogList() {
                   <Text numberOfLines={1}>{it.name}</Text>
                   <Text variant="footnote" color="labelSecondary" numberOfLines={1}>{it.active ? detail(it) : `${t.inactive} · ${detail(it)}`}</Text>
                 </View>
-                <Text color="labelSecondary" style={{ fontVariant: ['tabular-nums'] }}>{formatMXN(it.price)}</Text>
+                <Text color="labelSecondary" style={{ fontVariant: ['tabular-nums'] }}>{it.custom_price ? strings.catalog.customPrice : formatMXN(it.price)}</Text>
                 <Ionicons name="chevron-forward" size={18} color={ui.labelSecondary} style={{ opacity: 0.6 }} />
               </Pressable>
             </View>

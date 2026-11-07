@@ -49,6 +49,8 @@ export type VerticalTexts = {
     inactive: string; // a cancelled / expired one
     /** Descriptive state: where it is and what's next. */
     status: Record<BookingStatus, string>;
+    /** Files attached to a booking, when the giro calls them something else (default: «Documentos adicionales»). */
+    documents?: { section: string; sectionHint: string; namePlaceholder: string };
   };
   home: { today: string; calendar: string; customers: string; history: string; catalog: string; settings: string };
   newBooking: { itemHint: string; customerHint: string; paymentHint: string };

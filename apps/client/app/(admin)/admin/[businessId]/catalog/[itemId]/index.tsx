@@ -26,9 +26,10 @@ type Form = {
   name: string; description: string; price: string;
   duration: string; prepHours: string; dailyCapacity: string;
   priceUnit: PriceUnit; deposit: string; lateFee: string;
+  customPrice: boolean; // priced in each order (feature customOrder)
 };
 
-const empty: Form = { name: '', description: '', price: '', duration: '60', prepHours: '24', dailyCapacity: '', priceUnit: 'day', deposit: '', lateFee: '' };
+const empty: Form = { name: '', description: '', price: '', duration: '60', prepHours: '24', dailyCapacity: '', priceUnit: 'day', deposit: '', lateFee: '', customPrice: false };
 
 function fromItem(it: Item): Form {
   return {
@@ -38,17 +39,20 @@ function fromItem(it: Item): Form {
     priceUnit: it.price_unit ?? 'day',
     deposit: it.security_deposit != null ? centavosToInput(it.security_deposit) : '',
     lateFee: it.late_fee_per_day != null ? centavosToInput(it.late_fee_per_day) : '',
+    customPrice: !!it.custom_price,
   };
 }
 
 /** Form -> API fields for the engine's modules, or field errors for what can't be parsed. */
-function toFields(f: Form, kind: ItemKind, depositEnabled: boolean): { fields?: Fields; errors?: Record<string, string> } {
+function toFields(f: Form, kind: ItemKind, depositEnabled: boolean, customOrder: boolean): { fields?: Fields; errors?: Record<string, string> } {
   const e = engineFor(kind);
   const errors: Record<string, string> = {};
   const money = (key: string, v: string) => { const c = parsePesos(v); if (c === null) errors[key] = t.invalidMoney; return c ?? 0; };
   const int = (key: string, v: string) => { if (!/^\d+$/.test(v.trim())) errors[key] = t.invalidNumber; return Number(v); };
 
-  const fields: Fields = { name: f.name, description: f.description, price: money('price', f.price) };
+  const custom = customOrder && f.customPrice;
+  const fields: Fields = { name: f.name, description: f.description, price: custom ? 0 : money('price', f.price) };
+  if (customOrder) fields.custom_price = f.customPrice;
   if (e.timing === 'slot') fields.duration_minutes = int('duration_minutes', f.duration);
   if (e.timing === 'day') {
     fields.prep_hours = int('prep_hours', f.prepHours);
@@ -115,7 +119,7 @@ export default function CatalogItemForm() {
   const set = (k: keyof Form) => (v: string) => setForm({ ...form, [k]: v });
 
   async function save() {
-    const { fields, errors: local } = toFields(form!, kind, depositEnabled);
+    const { fields, errors: local } = toFields(form!, kind, depositEnabled, has('customOrder'));
     if (!fields) return setErrors(local!);
     const cv = customValuesOf(customFields, custom);
     if (cv.errors) return setErrors(cv.errors);
@@ -174,7 +178,16 @@ export default function CatalogItemForm() {
       <Group label={t.general} padded>
         {field('name', 'name', t.name)}
         {field('description', 'description', t.description)}
-        {field('price', 'price', e.pricing === 'perPeriod' ? t.pricePerDay : t.price, true, e.pricing === 'perPeriod' ? t.perDayNote(settings?.rentals.late_fee_multiplier ?? 1) : undefined)}
+        {has('customOrder') && (
+          <View style={{ flexDirection: 'row', alignItems: 'center', gap: 12 }}>
+            <View style={{ flex: 1 }}>
+              <Text>{t.customPrice}</Text>
+              <Text variant="footnote" color="labelSecondary">{t.customPriceHint}</Text>
+            </View>
+            <Switch accessibilityLabel={t.customPrice} value={form.customPrice} onValueChange={(on) => setForm({ ...form, customPrice: on })} />
+          </View>
+        )}
+        {!(has('customOrder') && form.customPrice) && field('price', 'price', e.pricing === 'perPeriod' ? t.pricePerDay : t.price, true, e.pricing === 'perPeriod' ? t.perDayNote(settings?.rentals.late_fee_multiplier ?? 1) : undefined)}
         {e.timing === 'slot' && field('duration', 'duration_minutes', t.duration, true, t.bufferInSettings)}
         {e.timing === 'day' && (<>{field('prepHours', 'prep_hours', t.prepHours, true)}{field('dailyCapacity', 'daily_capacity', t.dailyCapacity, true)}</>)}
         {e.custody && depositEnabled && field('deposit', 'security_deposit', t.deposit, true, t.depositHint)}

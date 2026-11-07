@@ -1,12 +1,12 @@
 import type { VerticalMap } from './types';
 
-// Florería bajo pedido: products with a delivery date. Texts and Ajustes done; detail flow and builder pending.
+// Florería bajo pedido: products with a delivery date and time window, gift details (who receives it, card) and free-price custom orders.
 export const flowers = {
   label: 'Florería bajo pedido',
   kind: 'product',
   terms: { booking: 'Pedido', catalog_item: 'Arreglo', catalog: 'Arreglos', starts_at: 'Fecha de entrega', ends_at: null },
   settings: ['general', 'delivery'],
-  features: ['giftOrder', 'customOrder'],
+  features: ['giftOrder', 'customOrder', 'bookingDocuments'],
   optionalFeatures: ['walkIn', 'productSales'],
   texts: {
     bookings: {
@@ -16,6 +16,11 @@ export const flowers = {
       ofCustomer: 'Pedidos de este cliente',
       noneThatDay: 'Sin pedidos ese día.',
       inactive: 'Este pedido ya no está activo.',
+      documents: {
+        section: 'Fotos del pedido',
+        sectionHint: 'La foto de referencia que mandó el cliente o la del arreglo terminado.',
+        namePlaceholder: 'Referencia, arreglo terminado…',
+      },
       status: {
         pending_deposit: 'Apartado · falta anticipo',
         confirmed: 'Confirmado · por preparar',

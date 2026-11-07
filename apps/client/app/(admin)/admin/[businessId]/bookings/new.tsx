@@ -43,6 +43,7 @@ export default function NewBooking() {
   const isSlot = e?.timing === 'slot'; // pick a time slot (and who attends)
   const isDay = e?.timing === 'day'; // pick a day and a time
   const isRange = e?.timing === 'range'; // pick from–to and check the exact range
+  const isCustom = !!item?.custom_price && has('customOrder'); // free price: described and priced here
 
   // What's being booked (kept as typed; converted on save).
   const [month, setMonth] = useState(firstOfMonth(today));
@@ -58,6 +59,14 @@ export default function NewBooking() {
   const [address, setAddress] = useState('');
   const [atHome, setAtHome] = useState(false); // service at the customer's address (feature homeService)
   const [zone, setZone] = useState('');
+  const zones = settings?.delivery.delivery_zones ?? [];
+  const [untilTime, setUntilTime] = useState(''); // end of the time window (products, optional)
+  const [customDesc, setCustomDesc] = useState('');
+  const [customPriceText, setCustomPriceText] = useState('');
+  const customPrice = isCustom ? parsePesos(customPriceText) : null;
+  const [recipientName, setRecipientName] = useState('');
+  const [recipientPhone, setRecipientPhone] = useState('');
+  const [cardMessage, setCardMessage] = useState('');
   const [customer, setCustomer] = useState<PickedCustomer | null>(null);
   const [notes, setNotes] = useState('');
   const [payMode, setPayMode] = useState<'none' | 'total' | 'partial'>('none'); // the real payment is usually at check-out
@@ -125,6 +134,7 @@ export default function NewBooking() {
   // A past time today counts as the next full hour (the field shows it on blur).
   const outISO = from ? localToISO(from, futureTime(from, time)) : null;
   const backISO = to ? localToISO(to, backTime) : null;
+  const untilISO = isDay && from && untilTime.trim() ? localToISO(from, untilTime) : null;
   useEffect(() => {
     setExact(null);
     if (!item || !isRange || !outISO || !backISO) return;
@@ -143,9 +153,9 @@ export default function NewBooking() {
     if (!item || !quoteReady || !quoteStart) return;
     api.GET('/v1/b/{businessId}/quote', {
       params: { path: { businessId }, query: { item_id: item.id, quantity: qty, starts_at: quoteStart, ...(isRange && backISO ? { ends_at: backISO } : {}),
-        ...(discount ? { discount_type: discount.type, discount_value: discount.value } : {}) } },
+        ...(discount ? { discount_type: discount.type, discount_value: discount.value } : {}), ...(customPrice ? { custom_price: customPrice } : {}) } },
     }).then(({ data }) => setQuote(data ?? null));
-  }, [businessId, item, qty, quoteStart, backISO, quoteReady, discount?.type, discount?.value]);
+  }, [businessId, item, qty, quoteStart, backISO, quoteReady, discount?.type, discount?.value, customPrice]);
 
   function dayInfo(date: string): DayInfo {
     if (date < today) return { disabled: true };
@@ -179,6 +189,8 @@ export default function NewBooking() {
     if (isRange && !backISO) return toast(t.pickReturn, 'error');
     if (!customer) return toast(strings.customers.pick, 'error');
     if (discount === undefined) return setErrors({ discount: t.discount.invalid });
+    if (isCustom && !customPrice) return setErrors({ custom_price: t.invalidAmount });
+    if (untilTime.trim() && !untilISO) return setErrors({ ends_at: t.badTime });
     const partial = payMode === 'partial' ? parsePesos(payAmount) : null;
     if (payMode === 'partial' && !partial) return setErrors({ amount: t.invalidAmount });
     setBusy(true);
@@ -192,8 +204,11 @@ export default function NewBooking() {
         quantity: qty,
         starts_at: startsAt,
         ...(isRange && backISO ? { ends_at: backISO } : {}),
+        ...(untilISO ? { ends_at: untilISO } : {}),
+        ...(isCustom && customPrice ? { custom_price: customPrice, custom_description: customDesc } : {}),
+        ...(has('giftOrder') ? { recipient_name: recipientName, recipient_phone: recipientPhone, card_message: cardMessage } : {}),
         ...(staffId ? { staff_id: staffId } : {}),
-        ...(e?.fulfillment === 'pickupOrDelivery' ? { fulfillment, delivery_address: address, delivery_zone: zone } : {}),
+        ...(e?.fulfillment === 'pickupOrDelivery' ? { fulfillment: zones.length ? fulfillment : 'pickup', delivery_address: address, delivery_zone: zone } : {}),
         ...(e?.fulfillment === 'atPlaceOrHome' && atHome ? { fulfillment: 'delivery' as const, delivery_address: address } : {}),
         notes,
         ...(discount ? { discount } : {}),
@@ -227,11 +242,20 @@ export default function NewBooking() {
         <Step inline n={1} title={s.item.title(term(business.vertical, 'catalog_item') ?? '')} description={texts.newBooking.itemHint} state={state(0)}>
           <Chips>
             {items.map((i) => (
-              <Chip key={i.id} selected={i.id === itemId} onPress={() => setItemId(i.id)}>{`${i.name} · ${formatMXN(i.price)}`}</Chip>
+              <Chip key={i.id} selected={i.id === itemId} onPress={() => setItemId(i.id)}>
+                {`${i.name} · ${i.custom_price && has('customOrder') ? t.custom.badge : formatMXN(i.price)}`}
+              </Chip>
             ))}
           </Chips>
           {item && !isSlot && (
             <Field label={t.quantity} value={quantity} onChange={setQuantity} keyboard="numeric" error={errors.quantity} />
+          )}
+          {isCustom && (
+            <>
+              <UIField label={t.custom.description} value={customDesc} onChangeText={setCustomDesc} multiline hint={t.custom.descriptionHint}
+                error={errors.custom_description} />
+              <Field label={t.custom.price} value={customPriceText} onChange={setCustomPriceText} keyboard="numeric" error={errors.custom_price} />
+            </>
           )}
         </Step>
 
@@ -293,12 +317,21 @@ export default function NewBooking() {
 
           {isDay && from && (
             <>
-              <Field label={t.deliveryTime} value={time} onChange={setTime} error={errors.starts_at} onBlur={() => from && setTime(futureTime(from, time))} />
-              {e?.fulfillment === 'pickupOrDelivery' && <Segmented options={[{ value: 'pickup', label: t.pickup }, { value: 'delivery', label: t.delivery }]} value={fulfillment} onChange={setFulfillment} />}
-              {e?.fulfillment === 'pickupOrDelivery' && fulfillment === 'delivery' && (
+              <View style={{ flexDirection: 'row', gap: 12 }}>
+                <View style={{ flex: 1 }}><Field label={t.deliveryTime} value={time} onChange={setTime} error={errors.starts_at} onBlur={() => from && setTime(futureTime(from, time))} /></View>
+                <View style={{ flex: 1 }}><Field label={t.windowEnd} value={untilTime} onChange={setUntilTime} error={errors.ends_at} /></View>
+              </View>
+              <Text variant="footnote" color="labelSecondary">{t.windowHint}</Text>
+              {/* Delivery only once the business sets its zones in Ajustes; otherwise it's picked up. */}
+              {e?.fulfillment === 'pickupOrDelivery' && zones.length > 0 && <Segmented options={[{ value: 'pickup', label: t.pickup }, { value: 'delivery', label: t.delivery }]} value={fulfillment} onChange={setFulfillment} />}
+              {e?.fulfillment === 'pickupOrDelivery' && zones.length > 0 && fulfillment === 'delivery' && (
                 <>
                   <Field label={t.address} value={address} onChange={setAddress} error={errors.delivery_address} />
-                  <Field label={t.zone} value={zone} onChange={setZone} error={errors.delivery_zone} />
+                  <Text variant="subhead" color="labelSecondary">{t.zone}</Text>
+                  <Chips>
+                    {zones.map((z) => <Chip key={z.name} selected={zone === z.name} onPress={() => setZone(z.name)}>{`${z.name} · ${formatMXN(z.fee)}`}</Chip>)}
+                  </Chips>
+                  {errors.delivery_zone && <Notice tone="warning">{errors.delivery_zone}</Notice>}
                 </>
               )}
             </>
@@ -327,6 +360,15 @@ export default function NewBooking() {
           {item && (
             <CustomerPicker businessId={businessId} isOwner={business.role === 'owner'} value={customer} onChange={setCustomer}
               error={errors['customer.id'] ?? errors['customer.name']} />
+          )}
+          {item && has('giftOrder') && (
+            <View style={{ gap: 8 }}>
+              <Text variant="headline">{t.gift.title}</Text>
+              <Text variant="footnote" color="labelSecondary">{t.gift.hint}</Text>
+              <Field label={t.gift.name} value={recipientName} onChange={setRecipientName} error={errors.recipient_name} />
+              <Field label={t.gift.phone} value={recipientPhone} onChange={setRecipientPhone} keyboard="phone-pad" error={errors.recipient_phone} />
+              <UIField label={t.gift.card} value={cardMessage} onChangeText={setCardMessage} multiline error={errors.card_message} />
+            </View>
           )}
         </Step>
 
