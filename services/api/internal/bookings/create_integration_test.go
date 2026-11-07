@@ -370,7 +370,7 @@ func TestIntegrationListFloristOrders(t *testing.T) {
 	}
 	s := got[0]
 	if *s.Fulfillment != "pickup" || *s.RecipientName != "Lupita" || *s.CardMessage != "Feliz cumple" || s.Details != "Girasoles" ||
-		s.Status != "confirmed" || len(s.Next) != 1 || s.Next[0] != "in_progress" {
+		s.Status != "confirmed" || len(s.Next) != 2 || s.Next[0] != "in_progress" || s.Next[1] != "cancelled" {
 		t.Fatalf("order details: %+v", s)
 	}
 }
