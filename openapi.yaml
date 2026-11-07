@@ -2381,7 +2381,7 @@ components:
 
     Feature:
       type: string
-      enum: [staff, inventory, guarantor, customerAddress, customerDocuments, trustedCustomers, walkIn, homeService, startService, bookingDocuments, productSales, customFields, giftOrder, customOrder]
+      enum: [staff, inventory, guarantor, customerAddress, customerDocuments, trustedCustomers, walkIn, homeService, startService, bookingDocuments, productSales, customFields, giftOrder, customOrder, dayBoard]
 
     FeatureState:
       type: object
@@ -2681,7 +2681,7 @@ components:
 
     BookingSummary:
       type: object
-      required: [id, kind, status, starts_at, ends_at, customer_name, customer_phone, items, units, staff, total, deposit_required]
+      required: [id, kind, status, starts_at, ends_at, customer_name, customer_phone, items, units, staff, total, deposit_required, fulfillment, recipient_name, card_message, details, next]
       properties:
         id: { type: string, format: uuid }
         kind: { $ref: "#/components/schemas/ItemKind" }
@@ -2695,6 +2695,11 @@ components:
         staff: { type: array, items: { type: string } }
         total: { type: integer, format: int64 }
         deposit_required: { type: integer, format: int64 }
+        fulfillment: { type: [string, "null"], description: "pickup | delivery" }
+        recipient_name: { type: [string, "null"] }
+        card_message: { type: [string, "null"] }
+        details: { type: string, description: "Descripción de un pedido personalizado (vacío si no hay)" }
+        next: { type: array, items: { $ref: "#/components/schemas/BookingStatus" }, description: "Movimientos de estado posibles desde el panel" }
 
     Ref:
       type: object

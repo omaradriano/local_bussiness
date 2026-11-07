@@ -343,8 +343,35 @@ func TestIntegrationListBookings(t *testing.T) {
 	}
 	all := win("2026-11-01T00:00:00Z", "2026-11-30T00:00:00Z")
 	all.OnlyActive = false
-	if got, _ := List(ctx, p, f.business, all); len(got) != 1 || got[0].Status != "cancelled" {
+	if got, _ := List(ctx, p, f.business, all); len(got) != 1 || got[0].Status != "cancelled" || len(got[0].Next) != 0 {
 		t.Fatalf("all statuses: %+v", got)
+	}
+}
+
+// The day board and the production sheet read the order details and the next moves from the list.
+func TestIntegrationListFloristOrders(t *testing.T) {
+	p := pool(t)
+	ctx := context.Background()
+	f := setup(t, p, "flowers", `{}`)
+	var custom string
+	if err := p.QueryRow(ctx, `insert into public.catalog_items (business_id, kind, name, price, prep_hours, custom_price)
+		values ($1, 'product', 'Arreglo personalizado', 0, 0, true) returning id::text`, f.business).Scan(&custom); err != nil {
+		t.Fatal(err)
+	}
+	price := int64(90000)
+	b, _, err := Create(ctx, p, f.business, CreateInput{Customer: cust("6146660002"), ItemID: custom, StartsAt: at("2026-11-02T17:00:00Z"),
+		CustomPrice: &price, CustomDescription: "Girasoles", RecipientName: "Lupita", CardMessage: "Feliz cumple", Source: "admin"}, now)
+	if err != nil {
+		t.Fatal(err)
+	}
+	got, err := List(ctx, p, f.business, ListFilter{From: *at("2026-11-02T00:00:00Z"), To: *at("2026-11-03T00:00:00Z"), OnlyActive: true})
+	if err != nil || len(got) != 1 || got[0].ID != b.ID {
+		t.Fatalf("list: %+v %v", got, err)
+	}
+	s := got[0]
+	if *s.Fulfillment != "pickup" || *s.RecipientName != "Lupita" || *s.CardMessage != "Feliz cumple" || s.Details != "Girasoles" ||
+		s.Status != "confirmed" || len(s.Next) != 1 || s.Next[0] != "in_progress" {
+		t.Fatalf("order details: %+v", s)
 	}
 }
 

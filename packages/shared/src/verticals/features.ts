@@ -17,6 +17,7 @@ const INFO: Record<Feature, { label: string; hint: string }> = {
   customFields: { label: 'Campos personalizados', hint: 'Datos propios en cada artículo o unidad: marca, modelo, número de serie, condición…' },
   bookingDocuments: { label: 'Documentos adicionales', hint: 'Adjuntar archivos con nombre a una reserva (contratos, pagarés…).' },
   giftOrder: { label: 'Pedidos para regalo', hint: 'Cada pedido lleva quién lo recibe (nombre y teléfono) y el texto de la tarjeta.' },
+  dayBoard: { label: 'Tablero del día', hint: 'Los pedidos del día en columnas (por preparar, preparando, listos, entregados) y un toque para avanzarlos.' },
   customOrder: { label: 'Pedidos personalizados', hint: 'Artículos con precio libre: en cada pedido se describe lo que pidió el cliente y se pone su precio.' },
 };
 

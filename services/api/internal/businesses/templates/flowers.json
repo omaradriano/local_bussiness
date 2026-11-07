@@ -3,7 +3,8 @@
   "features": [
     "giftOrder",
     "customOrder",
-    "bookingDocuments"
+    "bookingDocuments",
+    "dayBoard"
   ],
   "optional_features": [
     "walkIn",

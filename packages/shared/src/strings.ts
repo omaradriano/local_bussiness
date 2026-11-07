@@ -339,6 +339,26 @@ export const strings = {
       completed: 'Completada', cancelled: 'Cancelada', expired: 'Expirada', no_show: 'No asistió',
     },
   },
+  board: {
+    title: 'Tablero del día',
+    hint: 'Los pedidos del día por estado; avánzalos con un toque',
+    columns: {
+      pending_deposit: 'Falta anticipo', confirmed: 'Por preparar', in_progress: 'Preparando', ready: 'Listos',
+      out_for_delivery: 'En camino', completed: 'Entregados',
+    } as Record<string, string>,
+    actions: {
+      confirmed: 'Confirmar', in_progress: 'Empezar a preparar', ready: 'Marcar listo', out_for_delivery: 'Salió a entrega', completed: 'Entregado',
+    } as Record<string, string>,
+    empty: 'Nada aquí.',
+    none: 'No hay pedidos este día.',
+    prevDay: 'Día anterior',
+    nextDay: 'Día siguiente',
+    today: 'Hoy',
+    moved: (column: string) => `Movido a «${column}».`,
+    delivery: 'A domicilio',
+    pickup: 'Recoge',
+    for: (name: string) => `Para ${name}`,
+  },
   today: {
     groups: {
       overdue: 'Rentas vencidas', awaitingDeposit: 'Por cobrar anticipo', appointments: 'Citas de hoy',
