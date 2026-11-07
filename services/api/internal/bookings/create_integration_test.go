@@ -503,3 +503,23 @@ func TestIntegrationBarbershopRequirements(t *testing.T) {
 		t.Fatalf("walk-in at nails: %v", err)
 	}
 }
+
+// A walk-in's name and phone stay on the order (detail, list, search) and no customer is created.
+func TestIntegrationWalkInWithName(t *testing.T) {
+	p := pool(t)
+	ctx := context.Background()
+	f := setup(t, p, "flowers", `{}`)
+	b, _, err := Create(ctx, p, f.business, CreateInput{Customer: CustomerInput{WalkIn: true, Name: "Doña Mari", Phone: "6147770001"},
+		ItemID: f.item, Options: map[string]string{"Color": "Rojo"}, StartsAt: at("2026-11-02T17:00:00Z"), Source: "admin"}, now)
+	if err != nil || !b.Customer.WalkIn || b.Customer.Name != "Doña Mari" || b.Customer.Phone != "+526147770001" {
+		t.Fatalf("walk-in order: %+v %v", b.Customer, err)
+	}
+	got, err := History(ctx, p, f.business, HistoryFilter{Query: "mari"})
+	if err != nil || len(got) != 1 || got[0].CustomerName != "Doña Mari" {
+		t.Fatalf("search by the walk-in's name: %+v %v", got, err)
+	}
+	var registered int
+	if err := p.QueryRow(ctx, `select count(*) from public.customers where business_id = $1 and not walk_in`, f.business).Scan(&registered); err != nil || registered != 0 {
+		t.Fatalf("customers registered: %d %v", registered, err)
+	}
+}

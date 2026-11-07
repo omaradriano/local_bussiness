@@ -697,7 +697,7 @@ export interface paths {
         };
         get: operations["listSales"];
         put?: never;
-        /** Venta (cualquiera del equipo); descuenta existencias; sola o durante una reserva */
+        /** Venta (cualquiera del equipo), sola o durante una reserva. Productos con existencias (productSales, las descuenta) y, con venta rápida (quickSale), artículos del catálogo e importes libres */
         post: operations["sell"];
         delete?: never;
         options?: never;
@@ -1676,9 +1676,13 @@ export interface components {
             /** @enum {string} */
             method: "cash" | "transfer" | "card";
             total: number;
+            customer_name: string | null;
+            customer_phone: string | null;
             lines: {
                 /** Format: uuid */
-                product_id: string;
+                product_id: string | null;
+                /** Format: uuid */
+                item_id: string | null;
                 name: string;
                 quantity: number;
                 unit_price: number;
@@ -1814,7 +1818,7 @@ export interface components {
             }[];
         };
         /** @enum {string} */
-        Feature: "staff" | "inventory" | "guarantor" | "customerAddress" | "customerDocuments" | "trustedCustomers" | "walkIn" | "homeService" | "startService" | "bookingDocuments" | "productSales" | "customFields" | "giftOrder" | "customOrder" | "dayBoard";
+        Feature: "staff" | "inventory" | "guarantor" | "customerAddress" | "customerDocuments" | "trustedCustomers" | "walkIn" | "homeService" | "startService" | "bookingDocuments" | "productSales" | "customFields" | "giftOrder" | "customOrder" | "dayBoard" | "quickSale";
         FeatureState: {
             key: components["schemas"]["Feature"];
             /** @description La trae su giro */
@@ -1924,7 +1928,7 @@ export interface components {
         /** @enum {string} */
         BookingStatus: "pending_deposit" | "confirmed" | "in_progress" | "ready" | "out_for_delivery" | "checked_out" | "overdue" | "returned" | "completed" | "cancelled" | "expired" | "no_show";
         BookingInput: {
-            /** @description `id` de un cliente existente, `name` + `phone` (10 dígitos de México o E.164), o `walk_in` (cliente casual, si el negocio tiene esa función) */
+            /** @description `id` de un cliente existente, `name` + `phone` (10 dígitos de México o E.164), o `walk_in` (cliente casual, si el negocio tiene esa función; `name` y `phone` opcionales quedan solo en esta reserva) */
             customer: {
                 walk_in?: boolean;
                 /** Format: uuid */
@@ -3631,13 +3635,24 @@ export interface operations {
                 "application/json": {
                     lines: {
                         /** Format: uuid */
-                        product_id: string;
+                        product_id?: string;
+                        /** Format: uuid */
+                        item_id?: string;
+                        name?: string;
+                        /**
+                         * Format: int64
+                         * @description centavos
+                         */
+                        price?: number;
                         quantity: number;
                     }[];
                     /** @enum {string} */
                     method: "cash" | "transfer" | "card";
                     /** Format: uuid */
                     booking_id?: string;
+                    /** @description Cliente casual (opcional, sin ficha) */
+                    customer_name?: string;
+                    customer_phone?: string;
                 };
             };
         };

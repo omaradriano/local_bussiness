@@ -19,7 +19,7 @@ type Customer struct {
 	ID     string `json:"id"`
 	Name   string `json:"name"`
 	Phone  string `json:"phone"`
-	WalkIn bool   `json:"walk_in"` // the business's «Cliente casual» (no profile, no WhatsApp)
+	WalkIn bool   `json:"walk_in"` // the business's «Cliente casual» (no profile); Name and Phone are the ones left on the booking, if any
 }
 
 type Line struct {
@@ -110,7 +110,7 @@ func Get(ctx context.Context, db store.DB, businessID, id string) (Booking, erro
 	var items, staff, units []byte
 	err := db.QueryRow(ctx, `
 		select b.id::text, b.kind, b.status, b.starts_at, b.ends_at,
-		       c.id::text, c.name, c.phone, c.walk_in,
+		       c.id::text, coalesce(b.walk_in_name, c.name), coalesce(b.walk_in_phone, c.phone), c.walk_in,
 		       b.fulfillment, b.delivery_address, b.recipient_name, b.recipient_phone, b.card_message, b.subtotal, b.discount_type, b.discount_value, b.discount, b.deposit_required, b.total, b.notes, b.source,
 		       b.hold_expires_at, b.public_token, b.created_at,
 		       coalesce((select jsonb_agg(jsonb_build_object('item_id', bi.item_id, 'name', i.name, 'quantity', bi.quantity,

@@ -6,8 +6,8 @@ export const flowers = {
   kind: 'product',
   terms: { booking: 'Pedido', catalog_item: 'Arreglo', catalog: 'Arreglos', starts_at: 'Fecha de entrega', ends_at: null },
   settings: ['general', 'delivery'],
-  features: ['giftOrder', 'customOrder', 'bookingDocuments', 'dayBoard'],
-  optionalFeatures: ['walkIn', 'productSales'],
+  features: ['giftOrder', 'customOrder', 'bookingDocuments', 'dayBoard', 'walkIn', 'quickSale'],
+  optionalFeatures: ['productSales'],
   texts: {
     bookings: {
       plural: 'Pedidos',

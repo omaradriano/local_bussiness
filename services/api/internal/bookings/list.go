@@ -41,7 +41,7 @@ type Summary struct {
 }
 
 // summaryColumns: one Summary per row, in field order (Next is filled after).
-const summaryColumns = `b.id::text, b.kind, b.status, b.starts_at, b.ends_at, c.name, c.phone,
+const summaryColumns = `b.id::text, b.kind, b.status, b.starts_at, b.ends_at, coalesce(b.walk_in_name, c.name), coalesce(b.walk_in_phone, c.phone),
 	coalesce((select string_agg(bi.quantity || ' × ' || i.name, ', ' order by i.name)
 	          from public.booking_items bi join public.catalog_items i on i.id = bi.item_id where bi.booking_id = b.id), ''),
 	coalesce((select array_agg(u.code order by u.code) from public.booking_resources r
@@ -124,7 +124,8 @@ func History(ctx context.Context, db store.DB, businessID string, f HistoryFilte
 		where b.business_id = $1
 		  and ($2::text[] is null or b.status = any($2))
 		  and ($3 = '' or c.id::text = $3)
-		  and ($4 = '' or c.name ilike '%' || $4 || '%' or ($5 <> '' and c.phone like '%' || $5 || '%')
+		  and ($4 = '' or c.name ilike '%' || $4 || '%' or b.walk_in_name ilike '%' || $4 || '%'
+		       or ($5 <> '' and (c.phone like '%' || $5 || '%' or b.walk_in_phone like '%' || $5 || '%'))
 		       or exists (select 1 from public.booking_items bi join public.catalog_items i on i.id = bi.item_id
 		                  where bi.booking_id = b.id and i.name ilike '%' || $4 || '%'))
 		  and ($6::timestamptz is null or (b.starts_at, b.id::text) < ($6, $7))

@@ -45,19 +45,19 @@ func TestIntegrationProductsFlow(t *testing.T) {
 	if cera, err = r.Purchase(ctx, biz, cera.ID, 10, 7000, day("2026-11-02"), ""); err != nil || cera.Stock != 10 {
 		t.Fatalf("purchase: %+v %v", cera, err)
 	}
-	sale, err := r.Sell(ctx, biz, []LineInput{{cera.ID, 3}}, "cash", "", "", now)
+	sale, err := r.Sell(ctx, biz, SaleInput{Lines: []LineInput{{ProductID: cera.ID, Quantity: 3}}, Method: "cash", Retail: true}, "", now)
 	if err != nil || sale.Total != 45000 {
 		t.Fatalf("sell: %+v %v", sale, err)
 	}
 	var bad Invalid
-	if _, err := r.Sell(ctx, biz, []LineInput{{cera.ID, 8}}, "cash", "", "", now); !errors.As(err, &bad) {
+	if _, err := r.Sell(ctx, biz, SaleInput{Lines: []LineInput{{ProductID: cera.ID, Quantity: 8}}, Method: "cash", Retail: true}, "", now); !errors.As(err, &bad) {
 		t.Fatalf("selling more than left: %v", err)
 	}
 	if p, _ := r.Product(ctx, biz, cera.ID); p.Stock != 7 {
 		t.Fatalf("stock after selling 3: %d", p.Stock)
 	}
 	// A second sale cancelled puts its stock back.
-	extra, _ := r.Sell(ctx, biz, []LineInput{{cera.ID, 2}}, "card", "", "", now)
+	extra, _ := r.Sell(ctx, biz, SaleInput{Lines: []LineInput{{ProductID: cera.ID, Quantity: 2}}, Method: "card", Retail: true}, "", now)
 	if err := r.CancelSale(ctx, biz, extra.ID); err != nil {
 		t.Fatal(err)
 	}
@@ -74,5 +74,36 @@ func TestIntegrationProductsFlow(t *testing.T) {
 	s, err := finances.Repo{DB: tx}.Summary(ctx, biz, day("2026-11-01"), day("2026-11-30"), now)
 	if err != nil || s.Income.Total != 45000 || s.Expenses.Total != 70000 {
 		t.Fatalf("summary: %+v %+v %v", s.Income, s.Expenses, err)
+	}
+
+	// Quick sale: a catalog item, a free amount and a product, to a walk-in with a name.
+	var corte string
+	if err := tx.QueryRow(ctx, `insert into public.catalog_items (business_id, kind, name, price, duration_minutes)
+		values ($1, 'service', 'Corte', 20000, 30) returning id::text`, biz).Scan(&corte); err != nil {
+		t.Fatal(err)
+	}
+	free := int64(5000)
+	quick := SaleInput{Lines: []LineInput{{ItemID: corte, Quantity: 1}, {Name: "Propina", Price: &free, Quantity: 1}, {ProductID: cera.ID, Quantity: 1}},
+		Method: "cash", CustomerName: "Don Beto", Quick: true}
+	if _, err := r.Sell(ctx, biz, quick, "", now); !errors.As(err, &bad) {
+		t.Fatalf("products without productSales: %v", err)
+	}
+	quick.Retail = true
+	q, err := r.Sell(ctx, biz, quick, "", now)
+	if err != nil || q.Total != 20000+5000+15000 || *q.CustomerName != "Don Beto" {
+		t.Fatalf("quick sale: %+v %v", q, err)
+	}
+	if p, _ := r.Product(ctx, biz, cera.ID); p.Stock != 6 {
+		t.Fatalf("stock after the quick sale: %d", p.Stock)
+	}
+	list, err := r.Sales(ctx, biz, start, end)
+	if err != nil || len(list) != 2 || list[0].ID != q.ID || len(list[0].Lines) != 3 || list[0].Lines[0].Name != "Cera" || list[0].Lines[2].Name != "Propina" {
+		t.Fatalf("sales: %+v %v", list, err)
+	}
+	if err := r.CancelSale(ctx, biz, q.ID); err != nil {
+		t.Fatal(err)
+	}
+	if p, _ := r.Product(ctx, biz, cera.ID); p.Stock != 7 {
+		t.Fatalf("stock after cancelling the quick sale: %d", p.Stock)
 	}
 }
