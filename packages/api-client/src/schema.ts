@@ -1814,7 +1814,7 @@ export interface components {
             }[];
         };
         /** @enum {string} */
-        Feature: "staff" | "inventory" | "guarantor" | "customerAddress" | "customerDocuments" | "trustedCustomers" | "walkIn" | "homeService" | "startService" | "bookingDocuments" | "productSales" | "customFields" | "giftOrder" | "customOrder";
+        Feature: "staff" | "inventory" | "guarantor" | "customerAddress" | "customerDocuments" | "trustedCustomers" | "walkIn" | "homeService" | "startService" | "bookingDocuments" | "productSales" | "customFields" | "giftOrder" | "customOrder" | "dayBoard";
         FeatureState: {
             key: components["schemas"]["Feature"];
             /** @description La trae su giro */
@@ -2145,6 +2145,14 @@ export interface components {
             total: number;
             /** Format: int64 */
             deposit_required: number;
+            /** @description pickup | delivery */
+            fulfillment: string | null;
+            recipient_name: string | null;
+            card_message: string | null;
+            /** @description Descripción de un pedido personalizado (vacío si no hay) */
+            details: string;
+            /** @description Movimientos de estado posibles desde el panel */
+            next: components["schemas"]["BookingStatus"][];
         };
         Ref: {
             /** Format: uuid */

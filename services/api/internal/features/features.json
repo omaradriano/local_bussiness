@@ -85,5 +85,10 @@
     "engines": [
       "product"
     ]
+  },
+  "dayBoard": {
+    "engines": [
+      "product"
+    ]
   }
 }

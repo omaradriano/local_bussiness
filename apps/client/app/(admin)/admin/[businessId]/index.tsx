@@ -33,6 +33,9 @@ export default function BusinessHome() {
 
       <Group label={s.groups.daily} separatorInset={58}>
         <Cell icon="today" tint={ui.warning} label={s.sections.today} sublabel={texts.home.today} onPress={go('/admin/[businessId]/today')} />
+        {has('dayBoard') && (
+          <Cell icon="grid" tint={ui.success} label={strings.board.title} sublabel={strings.board.hint} onPress={go('/admin/[businessId]/board')} />
+        )}
         <Cell icon="calendar" tint={ui.accent} label={s.sections.calendar} sublabel={texts.home.calendar} onPress={go('/admin/[businessId]/calendar')} />
         <Cell icon="time" tint={ui.purple} label={texts.bookings.plural} sublabel={texts.home.history} onPress={go('/admin/[businessId]/bookings')} />
         {has('productSales') ? (

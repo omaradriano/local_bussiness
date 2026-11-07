@@ -33,6 +33,36 @@ type Summary struct {
 	Staff         []string   `json:"staff"` // names
 	Total         int64      `json:"total"`
 	Deposit       int64      `json:"deposit_required"`
+	Fulfillment   *string    `json:"fulfillment"`    // pickup | delivery | null
+	RecipientName *string    `json:"recipient_name"` // giftOrder
+	CardMessage   *string    `json:"card_message"`   // giftOrder
+	Details       string     `json:"details"`        // what a custom order is («24 rosas rojas»)
+	Next          []string   `json:"next" db:"-"`    // status moves available from the panel
+}
+
+// summaryColumns: one Summary per row, in field order (Next is filled after).
+const summaryColumns = `b.id::text, b.kind, b.status, b.starts_at, b.ends_at, c.name, c.phone,
+	coalesce((select string_agg(bi.quantity || ' × ' || i.name, ', ' order by i.name)
+	          from public.booking_items bi join public.catalog_items i on i.id = bi.item_id where bi.booking_id = b.id), ''),
+	coalesce((select array_agg(u.code order by u.code) from public.booking_resources r
+	          join public.item_units u on u.id = r.item_unit_id where r.booking_id = b.id), '{}'),
+	coalesce((select array_agg(s.name order by s.name) from public.booking_resources r
+	          join public.staff s on s.id = r.staff_id where r.booking_id = b.id), '{}'),
+	b.total, b.deposit_required, b.fulfillment, b.recipient_name, b.card_message,
+	coalesce((select string_agg(bi.options->>'description', ' · ') from public.booking_items bi
+	          where bi.booking_id = b.id and coalesce(bi.options->>'description', '') <> ''), '')`
+
+func collectSummaries(rows pgx.Rows) ([]Summary, error) {
+	out, err := pgx.CollectRows(rows, pgx.RowToStructByPos[Summary])
+	if out == nil {
+		out = []Summary{}
+	}
+	for i := range out {
+		if out[i].Next = Next(out[i].Kind, out[i].Status); out[i].Next == nil {
+			out[i].Next = []string{}
+		}
+	}
+	return out, err
 }
 
 const maxListRows = 500
@@ -45,14 +75,7 @@ func List(ctx context.Context, db store.DB, businessID string, f ListFilter) ([]
 		statuses = nil
 	}
 	rows, err := db.Query(ctx, `
-		select b.id::text, b.kind, b.status, b.starts_at, b.ends_at, c.name, c.phone,
-		       coalesce((select string_agg(bi.quantity || ' × ' || i.name, ', ' order by i.name)
-		                 from public.booking_items bi join public.catalog_items i on i.id = bi.item_id where bi.booking_id = b.id), ''),
-		       coalesce((select array_agg(u.code order by u.code) from public.booking_resources r
-		                 join public.item_units u on u.id = r.item_unit_id where r.booking_id = b.id), '{}'),
-		       coalesce((select array_agg(s.name order by s.name) from public.booking_resources r
-		                 join public.staff s on s.id = r.staff_id where r.booking_id = b.id), '{}'),
-		       b.total, b.deposit_required
+		select `+summaryColumns+`
 		from public.bookings b join public.customers c on c.id = b.customer_id
 		where b.business_id = $1
 		  and b.starts_at < $3 and coalesce(b.ends_at, b.starts_at + interval '1 second') > $2
@@ -63,11 +86,7 @@ func List(ctx context.Context, db store.DB, businessID string, f ListFilter) ([]
 	if err != nil {
 		return nil, err
 	}
-	out, err := pgx.CollectRows(rows, pgx.RowToStructByPos[Summary])
-	if out == nil {
-		out = []Summary{}
-	}
-	return out, err
+	return collectSummaries(rows)
 }
 
 // History groups: what the business is doing now, what's finished, and what fell through.
@@ -100,14 +119,7 @@ func History(ctx context.Context, db store.DB, businessID string, f HistoryFilte
 		return -1
 	}, f.Query)
 	rows, err := db.Query(ctx, `
-		select b.id::text, b.kind, b.status, b.starts_at, b.ends_at, c.name, c.phone,
-		       coalesce((select string_agg(bi.quantity || ' × ' || i.name, ', ' order by i.name)
-		                 from public.booking_items bi join public.catalog_items i on i.id = bi.item_id where bi.booking_id = b.id), ''),
-		       coalesce((select array_agg(u.code order by u.code) from public.booking_resources r
-		                 join public.item_units u on u.id = r.item_unit_id where r.booking_id = b.id), '{}'),
-		       coalesce((select array_agg(s.name order by s.name) from public.booking_resources r
-		                 join public.staff s on s.id = r.staff_id where r.booking_id = b.id), '{}'),
-		       b.total, b.deposit_required
+		select `+summaryColumns+`
 		from public.bookings b join public.customers c on c.id = b.customer_id
 		where b.business_id = $1
 		  and ($2::text[] is null or b.status = any($2))
@@ -121,9 +133,5 @@ func History(ctx context.Context, db store.DB, businessID string, f HistoryFilte
 	if err != nil {
 		return nil, err
 	}
-	out, err := pgx.CollectRows(rows, pgx.RowToStructByPos[Summary])
-	if out == nil {
-		out = []Summary{}
-	}
-	return out, err
+	return collectSummaries(rows)
 }
