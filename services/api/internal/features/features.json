@@ -90,5 +90,11 @@
     "engines": [
       "product"
     ]
+  },
+  "quickSale": {
+    "engines": [
+      "service",
+      "product"
+    ]
   }
 }

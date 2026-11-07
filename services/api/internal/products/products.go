@@ -14,6 +14,7 @@ import (
 
 	"github.com/jackc/pgx/v5"
 
+	"github.com/omaradriano/local_bussiness/services/api/internal/phone"
 	"github.com/omaradriano/local_bussiness/services/api/internal/store"
 )
 
@@ -83,62 +84,157 @@ func (p Product) Validate() error {
 	return nil
 }
 
-// Line of a sale as asked: a product and how many.
+// Line of a sale as asked: a product with stock (feature productSales), or with a quick sale
+// (feature quickSale) a catalog item or a free amount (name + price). How many of it.
 type LineInput struct {
 	ProductID string `json:"product_id"`
+	ItemID    string `json:"item_id"`
+	Name      string `json:"name"`  // free amount: what it is; free-price item: what was asked for
+	Price     *int64 `json:"price"` // free amount, or free-price item
 	Quantity  int    `json:"quantity"`
 }
 
-// Line of a sale as recorded: prices and costs frozen at the moment of the sale.
+// Line of a sale as recorded: names, prices and costs frozen at the moment of the sale.
 type Line struct {
-	ProductID string `json:"product_id"`
-	Name      string `json:"name"`
-	Quantity  int    `json:"quantity"`
-	UnitPrice int64  `json:"unit_price"`
-	UnitCost  int64  `json:"-"`
+	ProductID *string `json:"product_id"`
+	ItemID    *string `json:"item_id"`
+	Name      string  `json:"name"`
+	Quantity  int     `json:"quantity"`
+	UnitPrice int64   `json:"unit_price"`
+	UnitCost  int64   `json:"-"`
 }
 
-// PriceSale checks a sale against the products (exist, active, enough stock) and returns its lines
-// and totals. Repeated products are added together.
-func PriceSale(in []LineInput, catalog map[string]Product, costs map[string]int64) ([]Line, int64, int64, error) {
+// Item is a catalog item as a quick sale sees it.
+type Item struct {
+	ID          string
+	Name        string
+	Price       int64
+	CustomPrice bool // priced (and described) in each sale
+	Active      bool
+}
+
+// Prices is what a sale is checked against, and which kinds of line the business may sell.
+type Prices struct {
+	Products map[string]Product
+	Costs    map[string]int64
+	Items    map[string]Item
+	Retail   bool // productSales: products with stock
+	Quick    bool // quickSale: catalog items and free amounts
+}
+
+// PriceSale checks a sale (products exist, are active and have stock; items exist and are active;
+// free amounts have a name and a price) and returns its lines and totals. Repeated products are
+// added together; items and free amounts are kept as sent. Only products carry a cost.
+func PriceSale(in []LineInput, p Prices) ([]Line, int64, int64, error) {
 	if len(in) == 0 || len(in) > 50 {
-		return nil, 0, 0, Invalid{"lines": "Agrega de 1 a 50 productos."}
+		return nil, 0, 0, Invalid{"lines": "Agrega de 1 a 50 conceptos."}
 	}
 	qty := map[string]int{}
-	var order []string
+	var order []string // products in the order they first appear
+	var lines []Line
+	var total, cost int64
 	for _, l := range in {
 		if l.Quantity < 1 || l.Quantity > 1000 {
 			return nil, 0, 0, Invalid{"lines": "La cantidad debe ser de 1 a 1000."}
 		}
-		if _, seen := qty[l.ProductID]; !seen {
-			order = append(order, l.ProductID)
+		if l.ProductID != "" && l.ItemID != "" {
+			return nil, 0, 0, Invalid{"lines": "Cada concepto es un producto, un artículo o un importe libre."}
 		}
-		qty[l.ProductID] += l.Quantity
+		if l.ProductID != "" {
+			if !p.Retail {
+				return nil, 0, 0, Invalid{"lines": "Tu negocio no vende productos con existencias."}
+			}
+			if _, seen := qty[l.ProductID]; !seen {
+				order = append(order, l.ProductID)
+				lines = append(lines, Line{ProductID: &l.ProductID}) // filled below, once added together
+			}
+			qty[l.ProductID] += l.Quantity
+			continue
+		}
+		if !p.Quick {
+			return nil, 0, 0, Invalid{"lines": "Tu negocio no tiene venta rápida."}
+		}
+		line, err := quickLine(l, p.Items)
+		if err != nil {
+			return nil, 0, 0, err
+		}
+		lines = append(lines, line)
+		total += line.UnitPrice * int64(line.Quantity)
 	}
-	var lines []Line
-	var total, cost int64
-	for _, id := range order {
-		p, ok := catalog[id]
-		if !ok || !p.Active {
+	for i := range lines {
+		if lines[i].ProductID == nil {
+			continue
+		}
+		id := *lines[i].ProductID
+		pr, ok := p.Products[id]
+		if !ok || !pr.Active {
 			return nil, 0, 0, Invalid{"lines": "Un producto no existe o está inactivo."}
 		}
-		if qty[id] > p.Stock {
-			return nil, 0, 0, Invalid{"lines": fmt.Sprintf("Solo quedan %d de %s.", p.Stock, p.Name)}
+		if qty[id] > pr.Stock {
+			return nil, 0, 0, Invalid{"lines": fmt.Sprintf("Solo quedan %d de %s.", pr.Stock, pr.Name)}
 		}
-		lines = append(lines, Line{ProductID: id, Name: p.Name, Quantity: qty[id], UnitPrice: p.Price, UnitCost: costs[id]})
-		total += p.Price * int64(qty[id])
-		cost += costs[id] * int64(qty[id])
+		lines[i] = Line{ProductID: &id, Name: pr.Name, Quantity: qty[id], UnitPrice: pr.Price, UnitCost: p.Costs[id]}
+		total += pr.Price * int64(qty[id])
+		cost += p.Costs[id] * int64(qty[id])
 	}
 	return lines, total, cost, nil
 }
 
+// quickLine: a catalog item at its price (a free-price one with its description and price), or a free amount.
+func quickLine(l LineInput, items map[string]Item) (Line, error) {
+	name := strings.Join(strings.Fields(l.Name), " ")
+	price := func() (int64, error) {
+		if l.Price == nil || *l.Price < 1 || *l.Price > maxMoney {
+			return 0, Invalid{"lines": "Escribe el precio de cada concepto libre."}
+		}
+		return *l.Price, nil
+	}
+	if l.ItemID == "" {
+		if n := utf8.RuneCountInString(name); n == 0 || n > 120 {
+			return Line{}, Invalid{"lines": "Escribe qué se vende en cada importe libre."}
+		}
+		v, err := price()
+		return Line{Name: name, Quantity: l.Quantity, UnitPrice: v}, err
+	}
+	it, ok := items[l.ItemID]
+	if !ok || !it.Active {
+		return Line{}, Invalid{"lines": "Un artículo no existe o está inactivo."}
+	}
+	id := l.ItemID
+	if !it.CustomPrice {
+		return Line{ItemID: &id, Name: it.Name, Quantity: l.Quantity, UnitPrice: it.Price}, nil
+	}
+	if n := utf8.RuneCountInString(name); n == 0 || n > 120 {
+		return Line{}, Invalid{"lines": fmt.Sprintf("Describe qué lleva «%s».", it.Name)}
+	}
+	v, err := price()
+	return Line{ItemID: &id, Name: it.Name + " · " + name, Quantity: l.Quantity, UnitPrice: v}, err
+}
+
+// SaleCustomer: who bought it, optional (a walk-in nobody registers). The phone is normalized.
+func SaleCustomer(name, phoneNumber string) (string, string, error) {
+	name = strings.Join(strings.Fields(name), " ")
+	if utf8.RuneCountInString(name) > 80 {
+		return "", "", Invalid{"customer_name": "El nombre es muy largo."}
+	}
+	if strings.TrimSpace(phoneNumber) == "" {
+		return name, "", nil
+	}
+	if phoneNumber = phone.Normalize(phoneNumber); phoneNumber == "" {
+		return "", "", Invalid{"customer_phone": "Escribe un teléfono válido de 10 dígitos."}
+	}
+	return name, phoneNumber, nil
+}
+
 type Sale struct {
-	ID        string    `json:"id"`
-	BookingID *string   `json:"booking_id"`
-	SoldAt    time.Time `json:"sold_at"`
-	Method    string    `json:"method"`
-	Total     int64     `json:"total"`
-	Lines     []Line    `json:"lines"`
+	ID            string    `json:"id"`
+	BookingID     *string   `json:"booking_id"`
+	SoldAt        time.Time `json:"sold_at"`
+	Method        string    `json:"method"`
+	Total         int64     `json:"total"`
+	CustomerName  *string   `json:"customer_name"`
+	CustomerPhone *string   `json:"customer_phone"`
+	Lines         []Line    `json:"lines"`
 }
 
 type Repo struct{ DB store.DB }
@@ -242,31 +338,51 @@ func (r Repo) Purchase(ctx context.Context, businessID, productID string, quanti
 	return r.Product(ctx, businessID, productID)
 }
 
-// Sell records a sale and takes the stock out, all or nothing.
-func (r Repo) Sell(ctx context.Context, businessID string, in []LineInput, method, bookingID, actor string, now time.Time) (Sale, error) {
-	if !slices.Contains([]string{"cash", "transfer", "card"}, method) {
+// SaleInput is a sale as asked, with which kinds of line the business may sell (its features).
+type SaleInput struct {
+	Lines         []LineInput `json:"lines"`
+	Method        string      `json:"method"`
+	BookingID     string      `json:"booking_id"`
+	CustomerName  string      `json:"customer_name"`  // optional: a walk-in nobody registers
+	CustomerPhone string      `json:"customer_phone"` // optional
+	Retail        bool        `json:"-"`              // productSales
+	Quick         bool        `json:"-"`              // quickSale
+}
+
+// Sell records a sale and takes the stock of its products out, all or nothing.
+func (r Repo) Sell(ctx context.Context, businessID string, in SaleInput, actor string, now time.Time) (Sale, error) {
+	if !slices.Contains([]string{"cash", "transfer", "card"}, in.Method) {
 		return Sale{}, Invalid{"method": "Elige efectivo, transferencia o tarjeta."}
+	}
+	name, phoneNumber, err := SaleCustomer(in.CustomerName, in.CustomerPhone)
+	if err != nil {
+		return Sale{}, err
 	}
 	tx, err := r.DB.Begin(ctx)
 	if err != nil {
 		return Sale{}, err
 	}
 	defer tx.Rollback(ctx)
-	if bookingID != "" {
+	if in.BookingID != "" {
 		var ok bool
-		if err := tx.QueryRow(ctx, `select exists (select 1 from public.bookings where business_id = $1 and id::text = $2)`, businessID, bookingID).Scan(&ok); err != nil {
+		if err := tx.QueryRow(ctx, `select exists (select 1 from public.bookings where business_id = $1 and id::text = $2)`, businessID, in.BookingID).Scan(&ok); err != nil {
 			return Sale{}, err
 		}
 		if !ok {
 			return Sale{}, Invalid{"booking_id": "La reserva no existe."}
 		}
 	}
-	ids := make([]string, 0, len(in))
-	for _, l := range in {
-		ids = append(ids, l.ProductID)
+	var productIDs, itemIDs []string
+	for _, l := range in.Lines {
+		if l.ProductID != "" {
+			productIDs = append(productIDs, l.ProductID)
+		}
+		if l.ItemID != "" {
+			itemIDs = append(itemIDs, l.ItemID)
+		}
 	}
 	// Lock the products sold so two sales can't take the same last piece.
-	rows, err := tx.Query(ctx, `select `+productCols+` from public.retail_products where business_id = $1 and id::text = any($2) for update`, businessID, ids)
+	rows, err := tx.Query(ctx, `select `+productCols+` from public.retail_products where business_id = $1 and id::text = any($2) for update`, businessID, productIDs)
 	if err != nil {
 		return Sale{}, err
 	}
@@ -274,29 +390,50 @@ func (r Repo) Sell(ctx context.Context, businessID string, in []LineInput, metho
 	if err != nil {
 		return Sale{}, err
 	}
-	catalog := map[string]Product{}
+	prices := Prices{Products: map[string]Product{}, Costs: costs, Items: map[string]Item{}, Retail: in.Retail, Quick: in.Quick}
 	for _, p := range list {
-		catalog[p.ID] = p
+		prices.Products[p.ID] = p
 	}
-	lines, total, cost, err := PriceSale(in, catalog, costs)
+	rows, err = tx.Query(ctx, `select id::text, name, price, custom_price, active and deleted_at is null
+		from public.catalog_items where business_id = $1 and id::text = any($2)`, businessID, itemIDs)
 	if err != nil {
 		return Sale{}, err
 	}
-	sale := Sale{Method: method, Total: total, Lines: lines, SoldAt: now}
-	if bookingID != "" {
-		sale.BookingID = &bookingID
+	items, err := pgx.CollectRows(rows, pgx.RowToStructByPos[Item])
+	if err != nil {
+		return Sale{}, err
 	}
-	if err := tx.QueryRow(ctx, `insert into public.sales (business_id, booking_id, sold_at, method, total, cost_total, created_by)
-		values ($1, nullif($2, '')::uuid, $3, $4, $5, $6, nullif($7, '')::uuid) returning id::text`,
-		businessID, bookingID, now, method, total, cost, actor).Scan(&sale.ID); err != nil {
+	for _, it := range items {
+		prices.Items[it.ID] = it
+	}
+	lines, total, cost, err := PriceSale(in.Lines, prices)
+	if err != nil {
+		return Sale{}, err
+	}
+	sale := Sale{Method: in.Method, Total: total, Lines: lines, SoldAt: now}
+	if in.BookingID != "" {
+		sale.BookingID = &in.BookingID
+	}
+	if name != "" {
+		sale.CustomerName = &name
+	}
+	if phoneNumber != "" {
+		sale.CustomerPhone = &phoneNumber
+	}
+	if err := tx.QueryRow(ctx, `insert into public.sales (business_id, booking_id, sold_at, method, total, cost_total, created_by, customer_name, customer_phone)
+		values ($1, nullif($2, '')::uuid, $3, $4, $5, $6, nullif($7, '')::uuid, nullif($8, ''), nullif($9, '')) returning id::text`,
+		businessID, in.BookingID, now, in.Method, total, cost, actor, name, phoneNumber).Scan(&sale.ID); err != nil {
 		return Sale{}, err
 	}
 	for _, l := range lines {
-		if _, err := tx.Exec(ctx, `insert into public.sale_lines (business_id, sale_id, product_id, quantity, unit_price, unit_cost)
-			values ($1, $2, $3, $4, $5, $6)`, businessID, sale.ID, l.ProductID, l.Quantity, l.UnitPrice, l.UnitCost); err != nil {
+		if _, err := tx.Exec(ctx, `insert into public.sale_lines (business_id, sale_id, product_id, item_id, name, quantity, unit_price, unit_cost)
+			values ($1, $2, $3, $4, $5, $6, $7, $8)`, businessID, sale.ID, l.ProductID, l.ItemID, l.Name, l.Quantity, l.UnitPrice, l.UnitCost); err != nil {
 			return Sale{}, err
 		}
-		if _, err := tx.Exec(ctx, `update public.retail_products set stock = stock - $3 where business_id = $1 and id = $2`, businessID, l.ProductID, l.Quantity); err != nil {
+		if l.ProductID == nil {
+			continue
+		}
+		if _, err := tx.Exec(ctx, `update public.retail_products set stock = stock - $3 where business_id = $1 and id = $2`, businessID, *l.ProductID, l.Quantity); err != nil {
 			return Sale{}, err
 		}
 	}
@@ -326,9 +463,9 @@ func (r Repo) CancelSale(ctx context.Context, businessID, saleID string) error {
 
 // Sales of [start, end), newest first, with their lines.
 func (r Repo) Sales(ctx context.Context, businessID string, start, end time.Time) ([]Sale, error) {
-	rows, err := r.DB.Query(ctx, `select s.id::text, s.booking_id::text, s.sold_at, s.method, s.total,
-		coalesce(jsonb_agg(jsonb_build_object('product_id', l.product_id, 'name', p.name, 'quantity', l.quantity, 'unit_price', l.unit_price)
-		         order by p.name) filter (where l.id is not null), '[]')
+	rows, err := r.DB.Query(ctx, `select s.id::text, s.booking_id::text, s.sold_at, s.method, s.total, s.customer_name, s.customer_phone,
+		coalesce(jsonb_agg(jsonb_build_object('product_id', l.product_id, 'item_id', l.item_id, 'name', coalesce(l.name, p.name),
+		         'quantity', l.quantity, 'unit_price', l.unit_price) order by coalesce(l.name, p.name)) filter (where l.id is not null), '[]')
 		from public.sales s left join public.sale_lines l on l.sale_id = s.id left join public.retail_products p on p.id = l.product_id
 		where s.business_id = $1 and s.sold_at >= $2 and s.sold_at < $3
 		group by s.id order by s.sold_at desc limit 500`, businessID, start, end)
@@ -339,7 +476,7 @@ func (r Repo) Sales(ctx context.Context, businessID string, start, end time.Time
 	out := []Sale{}
 	for rows.Next() {
 		var s Sale
-		if err := rows.Scan(&s.ID, &s.BookingID, &s.SoldAt, &s.Method, &s.Total, &s.Lines); err != nil {
+		if err := rows.Scan(&s.ID, &s.BookingID, &s.SoldAt, &s.Method, &s.Total, &s.CustomerName, &s.CustomerPhone, &s.Lines); err != nil {
 			return nil, err
 		}
 		out = append(out, s)

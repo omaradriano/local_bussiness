@@ -49,3 +49,18 @@ func customPrice(in *CreateInput, it *itemRow, active []string) error {
 	it.Price = *in.CustomPrice
 	return nil
 }
+
+// walkInDetails: a walk-in may leave a name and a phone kept only on this booking (who picks it
+// up, who to call); no customer profile is created.
+func walkInDetails(c *CustomerInput) error {
+	c.Name = strings.Join(strings.Fields(c.Name), " ")
+	if utf8.RuneCountInString(c.Name) > 80 {
+		return Invalid{"customer.name", "El nombre es muy largo."}
+	}
+	if raw := strings.TrimSpace(c.Phone); raw != "" {
+		if c.Phone = NormalizePhone(raw); c.Phone == "" {
+			return Invalid{"customer.phone", "Escribe un teléfono válido de 10 dígitos."}
+		}
+	}
+	return nil
+}
