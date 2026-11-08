@@ -1,5 +1,5 @@
 import type { components } from '@lb/api-client';
-import { engineFor, formatMXN, formatPhone, hhmm, strings, term } from '@lb/shared';
+import { engineFor, formatMXN, formatPhone, hhmm, strings, term, WALK_IN_PHONE } from '@lb/shared';
 import { router, Stack, useLocalSearchParams } from 'expo-router';
 import { useCallback, useEffect, useState } from 'react';
 import { ActivityIndicator, Linking, View } from 'react-native';
@@ -87,6 +87,7 @@ export default function BookingDetail() {
   // Check-out/return (custody) have their own flow; the rest are plain status moves.
   // "Iniciar" only where the business tracks the start (feature startService); otherwise it's finished directly.
   const actions = b.next.filter((s) => !(e.custody && (s === 'checked_out' || s === 'returned')) && !(s === 'in_progress' && !has('startService')));
+  const hasPhone = b.customer.phone !== WALK_IN_PHONE;
   const waText = t.whatsappText(b.customer.name, bookingTerm, when(b.starts_at), texts.bookings.status[b.status]);
   const editable = !['cancelled', 'expired', 'no_show', 'completed'].includes(b.status);
   const f = t.detailFlow;
@@ -149,12 +150,14 @@ export default function BookingDetail() {
 
         <Group separatorInset={58}>
           {b.customer.walk_in ? (
-            <Cell icon="walk" tint={ui.indigo} label={strings.customers.walkIn} sublabel={strings.customers.walkInHint} />
+            // A walk-in may have left a name and a phone on this booking only.
+            <Cell icon="walk" tint={ui.indigo} label={b.customer.name}
+              sublabel={hasPhone ? formatPhone(b.customer.phone) : strings.customers.walkInHint} />
           ) : (
             <Cell icon="person" tint={ui.indigo} label={b.customer.name} sublabel={formatPhone(b.customer.phone)}
               onPress={() => router.push({ pathname: '/admin/[businessId]/customers/[customerId]', params: { businessId, customerId: b.customer.id } })} />
           )}
-          {!b.customer.walk_in ? (
+          {hasPhone ? (
             <Cell icon="logo-whatsapp" tint={ui.success} label={t.whatsapp}
               onPress={() => Linking.openURL(`https://wa.me/${b.customer.phone.replace(/\D/g, '')}?text=${encodeURIComponent(waText)}`)} />
           ) : null}

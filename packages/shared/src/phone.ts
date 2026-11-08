@@ -31,3 +31,6 @@ export function formatPhone(e164: string): string {
   const { code, national } = splitE164(e164);
   return national.length === 10 ? `${code} ${national.slice(0, 3)} ${national.slice(3, 6)} ${national.slice(6)}` : e164;
 }
+
+/** Placeholder phone of the business's «Cliente casual» (the API's); a walk-in's own phone, if left, replaces it. */
+export const WALK_IN_PHONE = '+10000000000';

@@ -4,14 +4,14 @@ import { router, Stack, useLocalSearchParams } from 'expo-router';
 import { useEffect, useMemo, useState } from 'react';
 import { ActivityIndicator, Switch, View } from 'react-native';
 import { Calendar, type DayInfo } from '../../../../../components/Calendar';
-import { CustomerPicker, type PickedCustomer } from '../../../../../components/CustomerPicker';
+import { CustomerPicker, isWalkIn, type PickedCustomer } from '../../../../../components/CustomerPicker';
 import { DiscountFields } from '../../../../../components/DiscountForm';
 import { api } from '../../../../../lib/api';
 import { errorText, fieldErrors } from '../../../../../lib/errors';
 import { useBusiness } from '../../../../../lib/useMe';
 import { useSettings } from '../../../../../lib/useSettings';
 import { useTexts } from '../../../../../lib/useTexts';
-import { Button, Chip, Chips, Field as UIField, Notice, Row, Screen, Segmented, Step, Text, useToast, type StepState } from '../../../../../ui';
+import { Button, Cell, Chip, Chips, Field as UIField, Group, Notice, Row, Screen, Segmented, Step, Text, useToast, useUI, type StepState } from '../../../../../ui';
 
 type Item = components['schemas']['CatalogItem'];
 type Availability = components['schemas']['Availability'];
@@ -33,6 +33,7 @@ export default function NewBooking() {
   const { settings } = useSettings(businessId);
   const { texts, has } = useTexts();
   const toast = useToast();
+  const ui = useUI();
   const today = todayISO();
   const [items, setItems] = useState<Item[] | null>(null);
   const [staff, setStaff] = useState<{ id: string; name: string; service_ids: string[]; active: boolean }[]>([]);
@@ -199,7 +200,7 @@ export default function NewBooking() {
     const res = await api.POST('/v1/b/{businessId}/bookings', {
       params: { path: { businessId }, header: { 'Idempotency-Key': idempotencyKey } },
       body: {
-        customer: customer === 'walk-in' ? { walk_in: true } : { id: customer.id },
+        customer: isWalkIn(customer) ? { walk_in: true, name: customer.name, phone: customer.phone } : { id: customer.id },
         item_id: item.id,
         quantity: qty,
         starts_at: startsAt,
@@ -239,6 +240,12 @@ export default function NewBooking() {
     <Screen>
       <Stack.Screen options={{ title: t.new(bookingTerm) }} />
       <View style={{ gap: 16 }}>
+        {has('quickSale') && (
+          <Group>
+            <Cell icon="flash" tint={ui.success} label={strings.quickSale.open} sublabel={strings.quickSale.openHint}
+              onPress={() => router.push({ pathname: '/admin/[businessId]/sales/new', params: { businessId } })} />
+          </Group>
+        )}
         <Step inline n={1} title={s.item.title(term(business.vertical, 'catalog_item') ?? '')} description={texts.newBooking.itemHint} state={state(0)}>
           <Chips>
             {items.map((i) => (
@@ -297,7 +304,7 @@ export default function NewBooking() {
                     <Switch accessibilityLabel={t.homeService} value={atHome} onValueChange={(on) => {
                       setAtHome(on);
                       // Start from the customer's address when there is one.
-                      if (on && !address && customer && customer !== 'walk-in' && customer.address) setAddress(customer.address);
+                      if (on && !address && customer && !isWalkIn(customer) && customer.address) setAddress(customer.address);
                     }} />
                   </View>
                   {atHome && <Field label={t.homeAddress} value={address} onChange={setAddress} error={errors.delivery_address} />}
@@ -359,7 +366,7 @@ export default function NewBooking() {
         <Step inline n={3} title={s.customer.title} description={texts.newBooking.customerHint} state={state(2)}>
           {item && (
             <CustomerPicker businessId={businessId} isOwner={business.role === 'owner'} value={customer} onChange={setCustomer}
-              error={errors['customer.id'] ?? errors['customer.name']} />
+              error={errors['customer.id'] ?? errors['customer.name'] ?? errors['customer.phone']} />
           )}
           {item && has('giftOrder') && (
             <View style={{ gap: 8 }}>
