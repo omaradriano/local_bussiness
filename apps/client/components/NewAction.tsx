@@ -32,9 +32,13 @@ export function useNewAction(businessId: string): {
   const go = (path: string) => { setAt(null); router.push(`/admin/${businessId}${path}` as Href); };
   const n = strings.nav;
   const booking: NewChoice = { icon: 'calendar', label: strings.bookings.new(term(business?.vertical ?? 'tool_rental', 'booking') ?? ''), sublabel: n.bookingHint, path: '/bookings/new' };
-  if (!has('productSales')) return { label: booking.label, choices: [booking], onPress: () => go(booking.path), sheet: null, anchor };
+  // Quick sale covers catalog items, free amounts and products with stock; without it, the products' counter.
+  const sale: NewChoice | null = has('quickSale')
+    ? { icon: 'flash', label: strings.quickSale.open, sublabel: strings.quickSale.openHint, path: '/sales/new' }
+    : has('productSales') ? { icon: 'pricetags', label: n.sale, sublabel: n.saleHint, path: '/products' } : null;
+  if (!sale) return { label: booking.label, choices: [booking], onPress: () => go(booking.path), sheet: null, anchor };
 
-  const choices: NewChoice[] = [booking, { icon: 'pricetags', label: n.sale, sublabel: n.saleHint, path: '/products' }];
+  const choices: NewChoice[] = [booking, sale];
   const open = () => anchor.current?.measureInWindow((x, y, width, height) => setAt({ x, y, width, height }));
   return { label: n.new, choices, onPress: open, anchor, sheet: <Popover at={at} onClose={() => setAt(null)} choices={choices} go={go} /> };
 }
