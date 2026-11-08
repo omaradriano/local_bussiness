@@ -100,3 +100,21 @@ func TestDayTimingWindow(t *testing.T) {
 		})
 	}
 }
+
+// A walk-in may leave a name and a phone for this order only (who picks it up); nothing is registered.
+func TestWalkInDetails(t *testing.T) {
+	c := CustomerInput{WalkIn: true, Name: " Doña Mari ", Phone: "614 123 4567"}
+	if err := walkInDetails(&c); err != nil || c.Name != "Doña Mari" || c.Phone != "+526141234567" {
+		t.Fatalf("walk-in: %+v %v", c, err)
+	}
+	c = CustomerInput{WalkIn: true}
+	if err := walkInDetails(&c); err != nil || c.Name != "" || c.Phone != "" {
+		t.Fatalf("anonymous walk-in: %+v %v", c, err)
+	}
+	if err := walkInDetails(&CustomerInput{WalkIn: true, Phone: "123"}); invalidField(err) != "customer.phone" {
+		t.Fatalf("bad phone: %v", err)
+	}
+	if err := walkInDetails(&CustomerInput{WalkIn: true, Name: strings.Repeat("a", 81)}); invalidField(err) != "customer.name" {
+		t.Fatalf("long name: %v", err)
+	}
+}

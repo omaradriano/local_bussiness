@@ -1252,11 +1252,15 @@ func (fakeProducts) Update(_ context.Context, _ string, p products.Product) (pro
 func (fakeProducts) Purchase(_ context.Context, _, id string, q int, _ int64, _ time.Time, _ string) (products.Product, error) {
 	return products.Product{ID: id, Stock: 3 + q}, nil
 }
-func (fakeProducts) Sell(_ context.Context, _ string, in []products.LineInput, method, _, _ string, _ time.Time) (products.Sale, error) {
-	if len(in) == 0 {
+func (fakeProducts) Sell(_ context.Context, _ string, in products.SaleInput, _ string, _ time.Time) (products.Sale, error) {
+	if len(in.Lines) == 0 {
 		return products.Sale{}, products.Invalid{"lines": "Agrega productos."}
 	}
-	return products.Sale{ID: bookingID, Method: method, Total: 15000}, nil
+	if _, _, _, err := products.PriceSale(in.Lines, products.Prices{Retail: in.Retail, Quick: in.Quick,
+		Products: map[string]products.Product{itemID: {ID: itemID, Price: 15000, Stock: 9, Active: true}}}); err != nil {
+		return products.Sale{}, err
+	}
+	return products.Sale{ID: bookingID, Method: in.Method, Total: 15000}, nil
 }
 func (fakeProducts) CancelSale(context.Context, string, string) error { return nil }
 func (fakeProducts) Sales(context.Context, string, time.Time, time.Time) ([]products.Sale, error) {
@@ -1285,6 +1289,9 @@ func TestProductRoutes(t *testing.T) {
 		{"compra sin fecha", http.MethodPost, base + "/products/" + itemID + "/purchases", "ok", `{"quantity":5,"unit_cost":6500}`, http.StatusUnprocessableEntity, `"purchased_on"`},
 		{"empleado vende", http.MethodPost, base + "/sales", "staff", `{"lines":[{"product_id":"` + itemID + `","quantity":1}],"method":"cash"}`, http.StatusCreated, `"total":15000`},
 		{"venta vacía", http.MethodPost, base + "/sales", "staff", `{"lines":[],"method":"cash"}`, http.StatusUnprocessableEntity, `"lines"`},
+		// The barbershop sells products with stock but has no quick sale: catalog items are refused.
+		{"sin venta rápida", http.MethodPost, base + "/sales", "staff", `{"lines":[{"item_id":"` + itemID + `","quantity":1}],"method":"cash"}`, http.StatusUnprocessableEntity, `"lines"`},
+		{"concepto inválido", http.MethodPost, base + "/sales", "staff", `{"lines":[{"item_id":"x","quantity":1}],"method":"cash"}`, http.StatusUnprocessableEntity, `"lines"`},
 		{"empleado no cancela ventas", http.MethodDelete, base + "/sales/" + bookingID, "staff", "", http.StatusForbidden, `"forbidden"`},
 		{"dueño cancela", http.MethodDelete, base + "/sales/" + bookingID, "ok", "", http.StatusNoContent, ""},
 		{"estadísticas solo dueño", http.MethodGet, base + "/products/stats", "staff", "", http.StatusForbidden, `"forbidden"`},

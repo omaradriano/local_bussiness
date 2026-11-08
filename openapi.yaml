@@ -952,7 +952,7 @@ paths:
                   sales: { type: array, items: { $ref: "#/components/schemas/Sale" } }
     post:
       operationId: sell
-      summary: Venta (cualquiera del equipo); descuenta existencias; sola o durante una reserva
+      summary: Venta (cualquiera del equipo), sola o durante una reserva. Productos con existencias (productSales, las descuenta) y, con venta rápida (quickSale), artículos del catálogo e importes libres
       requestBody:
         required: true
         content:
@@ -964,14 +964,21 @@ paths:
                 lines:
                   type: array
                   minItems: 1
+                  maxItems: 50
                   items:
                     type: object
-                    required: [product_id, quantity]
+                    required: [quantity]
+                    description: "Un producto (`product_id`), un artículo (`item_id`; con precio libre lleva `name` y `price`) o un importe libre (`name` y `price`)"
                     properties:
                       product_id: { type: string, format: uuid }
+                      item_id: { type: string, format: uuid }
+                      name: { type: string, maxLength: 120 }
+                      price: { type: integer, format: int64, minimum: 1, description: centavos }
                       quantity: { type: integer, minimum: 1 }
                 method: { type: string, enum: [cash, transfer, card] }
                 booking_id: { type: string, format: uuid }
+                customer_name: { type: string, maxLength: 80, description: "Cliente casual (opcional, sin ficha)" }
+                customer_phone: { type: string }
       responses:
         "201":
           description: Creada
@@ -2208,20 +2215,23 @@ components:
 
     Sale:
       type: object
-      required: [id, booking_id, sold_at, method, total, lines]
+      required: [id, booking_id, sold_at, method, total, customer_name, customer_phone, lines]
       properties:
         id: { type: string, format: uuid }
         booking_id: { type: [string, "null"] }
         sold_at: { type: string, format: date-time }
         method: { type: string, enum: [cash, transfer, card] }
         total: { type: integer }
+        customer_name: { type: [string, "null"] }
+        customer_phone: { type: [string, "null"] }
         lines:
           type: array
           items:
             type: object
-            required: [product_id, name, quantity, unit_price]
+            required: [product_id, item_id, name, quantity, unit_price]
             properties:
-              product_id: { type: string, format: uuid }
+              product_id: { type: [string, "null"], format: uuid }
+              item_id: { type: [string, "null"], format: uuid }
               name: { type: string }
               quantity: { type: integer }
               unit_price: { type: integer }
@@ -2381,7 +2391,7 @@ components:
 
     Feature:
       type: string
-      enum: [staff, inventory, guarantor, customerAddress, customerDocuments, trustedCustomers, walkIn, homeService, startService, bookingDocuments, productSales, customFields, giftOrder, customOrder, dayBoard]
+      enum: [staff, inventory, guarantor, customerAddress, customerDocuments, trustedCustomers, walkIn, homeService, startService, bookingDocuments, productSales, customFields, giftOrder, customOrder, dayBoard, quickSale]
 
     FeatureState:
       type: object
@@ -2510,7 +2520,7 @@ components:
       properties:
         customer:
           type: object
-          description: "`id` de un cliente existente, `name` + `phone` (10 dígitos de México o E.164), o `walk_in` (cliente casual, si el negocio tiene esa función)"
+          description: "`id` de un cliente existente, `name` + `phone` (10 dígitos de México o E.164), o `walk_in` (cliente casual, si el negocio tiene esa función; `name` y `phone` opcionales quedan solo en esta reserva)"
           properties:
             walk_in: { type: boolean }
             id: { type: string, format: uuid }

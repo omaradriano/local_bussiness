@@ -4,10 +4,11 @@
     "giftOrder",
     "customOrder",
     "bookingDocuments",
-    "dayBoard"
+    "dayBoard",
+    "walkIn",
+    "quickSale"
   ],
   "optional_features": [
-    "walkIn",
     "productSales"
   ],
   "settings": {

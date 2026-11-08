@@ -34,7 +34,8 @@ type CustomerInput struct {
 	Name  string `json:"name"`
 	Phone string `json:"phone"`
 	Email string `json:"email"`
-	// A walk-in nobody registers (barbershops): the booking goes to the business's «Cliente casual».
+	// A walk-in nobody registers: the booking goes to the business's «Cliente casual», with the
+	// optional Name and Phone kept only on the booking.
 	WalkIn bool `json:"walk_in"`
 	// The customer accepted the business's privacy notice (recorded once per version).
 	PrivacyAccepted bool `json:"privacy_accepted"`
@@ -107,6 +108,11 @@ func (in *CreateInput) Validate() error {
 	}
 	if in.Quantity < 1 || in.Quantity > 100 {
 		return Invalid{"quantity", "La cantidad debe ser de 1 a 100."}
+	}
+	if in.Customer.ID == "" && in.Customer.WalkIn {
+		if err := walkInDetails(&in.Customer); err != nil {
+			return err
+		}
 	}
 	if in.Customer.ID == "" && !in.Customer.WalkIn {
 		in.Customer.Name = strings.TrimSpace(in.Customer.Name)
@@ -262,13 +268,14 @@ func Create(ctx context.Context, db store.DB, businessID string, in CreateInput,
 	err = tx.QueryRow(ctx, `
 		insert into public.bookings (business_id, customer_id, kind, status, starts_at, ends_at, fulfillment, delivery_address,
 		  subtotal, deposit_required, total, notes, source, hold_expires_at, idempotency_key, created_by, discount_type, discount_value, discount,
-		  recipient_name, recipient_phone, card_message)
+		  recipient_name, recipient_phone, card_message, walk_in_name, walk_in_phone)
 		values ($1, $2, $3, $4, $5, $6, nullif($7, ''), nullif($8, ''), $9, $10, $11, nullif($12, ''), $13, $14, nullif($15, ''), nullif($16, '')::uuid,
-		  nullif($17, ''), $18, $19, nullif($20, ''), nullif($21, ''), nullif($22, ''))
+		  nullif($17, ''), $18, $19, nullif($20, ''), nullif($21, ''), nullif($22, ''), nullif($23, ''), nullif($24, ''))
 		returning id::text`,
 		businessID, customerID, it.Kind, status, start, end, in.Fulfillment, in.DeliveryAddress,
 		q.Subtotal, q.Advance, q.Total, strings.TrimSpace(in.Notes), in.Source, hold, in.IdempotencyKey, in.CreatedBy,
-		deref(in.Discount).Type, deref(in.Discount).Value, q.Discount, in.RecipientName, in.RecipientPhone, in.CardMessage).Scan(&bookingID)
+		deref(in.Discount).Type, deref(in.Discount).Value, q.Discount, in.RecipientName, in.RecipientPhone, in.CardMessage,
+		walkIn(in.Customer).Name, walkIn(in.Customer).Phone).Scan(&bookingID)
 	if isUnique(err) && in.IdempotencyKey != "" {
 		tx.Rollback(ctx) // a concurrent retry with the same key won: return that one
 		id, err := idByKey(ctx, db, businessID, in.IdempotencyKey)
@@ -424,4 +431,12 @@ func idByKey(ctx context.Context, db store.DB, businessID, key string) (string, 
 func isUnique(err error) bool {
 	var pgErr *pgconn.PgError
 	return errors.As(err, &pgErr) && pgErr.Code == "23505"
+}
+
+// walkIn: the name and phone a walk-in left on the booking (empty for a registered customer).
+func walkIn(c CustomerInput) CustomerInput {
+	if c.ID != "" || !c.WalkIn {
+		return CustomerInput{}
+	}
+	return c
 }

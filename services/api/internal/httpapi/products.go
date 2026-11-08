@@ -11,7 +11,6 @@ import (
 
 	"github.com/omaradriano/local_bussiness/services/api/internal/apierr"
 	"github.com/omaradriano/local_bussiness/services/api/internal/auth"
-	"github.com/omaradriano/local_bussiness/services/api/internal/features"
 	"github.com/omaradriano/local_bussiness/services/api/internal/finances"
 	"github.com/omaradriano/local_bussiness/services/api/internal/products"
 )
@@ -22,7 +21,7 @@ type ProductsRepo interface {
 	Create(ctx context.Context, businessID string, p products.Product) (products.Product, error)
 	Update(ctx context.Context, businessID string, p products.Product) (products.Product, error)
 	Purchase(ctx context.Context, businessID, productID string, quantity int, unitCost int64, on time.Time, actor string) (products.Product, error)
-	Sell(ctx context.Context, businessID string, in []products.LineInput, method, bookingID, actor string, now time.Time) (products.Sale, error)
+	Sell(ctx context.Context, businessID string, in products.SaleInput, actor string, now time.Time) (products.Sale, error)
 	CancelSale(ctx context.Context, businessID, saleID string) error
 	Sales(ctx context.Context, businessID string, start, end time.Time) ([]products.Sale, error)
 	StatsFor(ctx context.Context, businessID string, start, end, from, to time.Time) (products.Stats, error)
@@ -45,17 +44,16 @@ func writeProducts(w http.ResponseWriter, r *http.Request, status int, v any, er
 	}
 }
 
-// requireFeature: the route only works when the business has the feature active.
-func (d Deps) requireFeature(feature string) func(http.Handler) http.Handler {
+// requireFeature: the route only works when the business has one of the features active.
+func (d Deps) requireFeature(keys ...string) func(http.Handler) http.Handler {
 	return func(next http.Handler) http.Handler {
 		return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-			m, _ := auth.MemberFrom(r.Context())
-			st, err := d.Settings.Get(r.Context(), m.BusinessID)
+			active, err := d.activeFeatures(r)
 			if err != nil {
 				internalError(w, r, "features", err)
 				return
 			}
-			if !slices.ContainsFunc(st.Features, func(f features.State) bool { return f.Key == feature && f.Active }) {
+			if !slices.ContainsFunc(keys, func(f string) bool { return slices.Contains(active, f) }) {
 				apierr.Write(w, http.StatusForbidden, "feature_off", "Tu negocio no tiene esta función activa.")
 				return
 			}
@@ -64,7 +62,24 @@ func (d Deps) requireFeature(feature string) func(http.Handler) http.Handler {
 	}
 }
 
-// mountProducts: products for sale, sales, merchandise purchases and their stats (feature productSales).
+// activeFeatures: the keys of the business's active features.
+func (d Deps) activeFeatures(r *http.Request) ([]string, error) {
+	m, _ := auth.MemberFrom(r.Context())
+	st, err := d.Settings.Get(r.Context(), m.BusinessID)
+	if err != nil {
+		return nil, err
+	}
+	var out []string
+	for _, f := range st.Features {
+		if f.Active {
+			out = append(out, f.Key)
+		}
+	}
+	return out, nil
+}
+
+// mountProducts: products for sale, merchandise purchases and their stats (feature productSales),
+// and sales: of those products, or quick sales of catalog items and free amounts (feature quickSale).
 func mountProducts(r chi.Router, d Deps) {
 	r.Group(func(r chi.Router) {
 		r.Use(d.requireFeature("productSales"))
@@ -139,15 +154,15 @@ func mountProducts(r chi.Router, d Deps) {
 			st, err := d.Products.StatsFor(r.Context(), m.BusinessID, start, end, from, to)
 			writeProducts(w, r, http.StatusOK, st, err)
 		})
+	})
+
+	r.Group(func(r chi.Router) {
+		r.Use(d.requireFeature("productSales", "quickSale"))
 
 		// Anyone on the team sells at the counter; only the owner cancels a sale.
 		r.Post("/sales", func(w http.ResponseWriter, r *http.Request) {
 			m, _ := auth.MemberFrom(r.Context())
-			var body struct {
-				Lines     []products.LineInput `json:"lines"`
-				Method    string               `json:"method"`
-				BookingID string               `json:"booking_id"`
-			}
+			var body products.SaleInput
 			if !decode(w, r, &body) {
 				return
 			}
@@ -155,7 +170,19 @@ func mountProducts(r chi.Router, d Deps) {
 				invalid(w, "La reserva no existe.", map[string]string{"booking_id": "Reserva inválida."})
 				return
 			}
-			sale, err := d.Products.Sell(r.Context(), m.BusinessID, body.Lines, body.Method, body.BookingID, m.UserID, d.now())
+			for _, l := range body.Lines {
+				if (l.ProductID != "" && !auth.IsUUID(l.ProductID)) || (l.ItemID != "" && !auth.IsUUID(l.ItemID)) {
+					invalid(w, "Revisa los datos.", map[string]string{"lines": "Un concepto no existe."})
+					return
+				}
+			}
+			active, err := d.activeFeatures(r)
+			if err != nil {
+				internalError(w, r, "features", err)
+				return
+			}
+			body.Retail, body.Quick = slices.Contains(active, "productSales"), slices.Contains(active, "quickSale")
+			sale, err := d.Products.Sell(r.Context(), m.BusinessID, body, m.UserID, d.now())
 			writeProducts(w, r, http.StatusCreated, sale, err)
 		})
 		r.Get("/sales", func(w http.ResponseWriter, r *http.Request) {
