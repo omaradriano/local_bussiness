@@ -1,5 +1,5 @@
 import type { components } from '@lb/api-client';
-import { formatMXN } from '@lb/shared';
+import { formatMXN, formatPhone, WALK_IN_PHONE } from '@lb/shared';
 import { Ionicons } from '@expo/vector-icons';
 import { router } from 'expo-router';
 import { Pressable, View } from 'react-native';
@@ -18,7 +18,9 @@ export function BookingCell({ businessId, b, time }: { businessId: string; b: Su
       style={({ pressed }) => ({ flexDirection: 'row', alignItems: 'center', gap: 12, paddingVertical: 12, paddingHorizontal: 16, backgroundColor: pressed ? ui.fill : 'transparent' })}>
       <View style={{ flex: 1, minWidth: 0, gap: 4 }}>
         <Text numberOfLines={1}>{what}</Text>
-        <Text variant="footnote" color="labelSecondary" numberOfLines={1}>{time} · {b.customer_name}</Text>
+        <Text variant="footnote" color="labelSecondary" numberOfLines={1}>
+          {[time, b.customer_name, b.customer_phone !== WALK_IN_PHONE ? formatPhone(b.customer_phone) : null].filter(Boolean).join(' · ')}
+        </Text>
         <StatusBadge status={b.status} />
       </View>
       <Text color="labelSecondary" style={{ fontVariant: ['tabular-nums'] }}>{formatMXN(b.total)}</Text>

@@ -36,12 +36,17 @@ export default function QuickSale() {
   const [errors, setErrors] = useState<Record<string, string>>({});
   const [busy, setBusy] = useState(false);
   const [sales, setSales] = useState<Sale[] | null>(null);
+  const [loadError, setLoadError] = useState<string | null>(null); // shown with a retry, never as an empty catalog
   const today = todayISO();
   const retail = has('productSales');
 
   const load = useCallback(() => {
     const path = { businessId };
-    api.GET('/v1/b/{businessId}/catalog', { params: { path } }).then(({ data }) => setItems(data?.items.filter((i) => i.active) ?? []));
+    setLoadError(null);
+    api.GET('/v1/b/{businessId}/catalog', { params: { path } }).then(({ data, error, response }) => {
+      if (data) setItems(data.items.filter((i) => i.active));
+      else setLoadError(`${strings.bookings.catalogError} ${errorText(error, response.status)}`);
+    });
     if (retail) api.GET('/v1/b/{businessId}/products', { params: { path } }).then(({ data }) => setProducts(data?.products.filter((p) => p.active) ?? []));
     api.GET('/v1/b/{businessId}/sales', { params: { path, query: { from: today, to: today } } }).then(({ data }) => setSales(data?.sales ?? []));
   }, [businessId, retail, today]);
@@ -80,6 +85,14 @@ export default function QuickSale() {
     load();
   }
 
+  if (loadError) {
+    return (
+      <Screen>
+        <Notice tone="warning">{loadError}</Notice>
+        <Button onPress={load} style={{ marginTop: 12 }}>{strings.common.retry}</Button>
+      </Screen>
+    );
+  }
   if (!business || !items) return <ActivityIndicator style={{ marginTop: 24 }} />;
   const total = cartTotal(cart);
   const state = (i: number): StepState => (i === 0 ? (cart.length ? 'done' : 'current') : cart.length ? 'current' : 'upcoming');

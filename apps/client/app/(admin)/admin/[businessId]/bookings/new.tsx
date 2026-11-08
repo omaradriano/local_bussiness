@@ -1,7 +1,7 @@
 import type { components } from '@lb/api-client';
 import { addDays, discountInput, engineFor, firstOfMonth, futureTime, nextHour, parsePesos, formatMXN, hhmm, lastOfMonth, localToISO, strings, term, todayISO, type DiscountMode } from '@lb/shared';
 import { router, Stack, useLocalSearchParams } from 'expo-router';
-import { useEffect, useMemo, useState } from 'react';
+import { useCallback, useEffect, useMemo, useState } from 'react';
 import { ActivityIndicator, Switch, View } from 'react-native';
 import { Calendar, type DayInfo } from '../../../../../components/Calendar';
 import { CustomerPicker, isWalkIn, type PickedCustomer } from '../../../../../components/CustomerPicker';
@@ -11,7 +11,7 @@ import { errorText, fieldErrors } from '../../../../../lib/errors';
 import { useBusiness } from '../../../../../lib/useMe';
 import { useSettings } from '../../../../../lib/useSettings';
 import { useTexts } from '../../../../../lib/useTexts';
-import { Button, Cell, Chip, Chips, Field as UIField, Group, Notice, Row, Screen, Segmented, Step, Text, useToast, useUI, type StepState } from '../../../../../ui';
+import { Button, Cell, Chip, Chips, Field as UIField, Group, Notice, Row, Screen, Segmented, Step, SubStep, Text, useToast, useUI, type StepState } from '../../../../../ui';
 
 type Item = components['schemas']['CatalogItem'];
 type Availability = components['schemas']['Availability'];
@@ -89,11 +89,18 @@ export default function NewBooking() {
   const idempotencyKey = useMemo(() => `adm-${Date.now()}-${Math.random().toString(36).slice(2, 10)}`, []);
   const qty = Math.max(1, Number(quantity) || 1);
 
-  useEffect(() => {
+  // A failed load is shown with a retry, never as an empty catalog.
+  const [loadError, setLoadError] = useState<string | null>(null);
+  const loadCatalog = useCallback(() => {
     const path = { businessId };
-    api.GET('/v1/b/{businessId}/catalog', { params: { path } }).then(({ data }) => setItems(data?.items.filter((i) => i.active) ?? []));
+    setLoadError(null);
+    api.GET('/v1/b/{businessId}/catalog', { params: { path } }).then(({ data, error, response }) => {
+      if (data) setItems(data.items.filter((i) => i.active));
+      else setLoadError(`${t.catalogError} ${errorText(error, response.status)}`);
+    });
     api.GET('/v1/b/{businessId}/staff', { params: { path } }).then(({ data }) => setStaff(data?.staff ?? []));
   }, [businessId]);
+  useEffect(loadCatalog, [loadCatalog]);
 
   // Picking today with a time already past: show the corrected time right away.
   useEffect(() => { if (from) setTime((tm) => futureTime(from, tm)); }, [from]);
@@ -225,6 +232,14 @@ export default function NewBooking() {
     toast(errorText(res.error, res.response.status), 'error');
   }
 
+  if (loadError) {
+    return (
+      <Screen>
+        <Notice tone="warning">{loadError}</Notice>
+        <Button onPress={loadCatalog} style={{ marginTop: 12 }}>{strings.common.retry}</Button>
+      </Screen>
+    );
+  }
   if (!business || !items) return <ActivityIndicator style={{ marginTop: 24 }} />;
   const bookingTerm = term(business.vertical, 'booking') ?? '';
   const canSave = !!item && (isSlot ? !!slot : isDay ? !!from && !!outISO : !!exact?.available);
@@ -382,13 +397,16 @@ export default function NewBooking() {
         <Step inline n={4} title={s.payment.title} description={texts.newBooking.paymentHint} state={item ? state(3) : 'upcoming'}>
           {item && (
             <>
-              <Text variant="subhead" color="labelSecondary">{t.discount.label}</Text>
-              <DiscountFields mode={discMode} text={discText} onMode={setDiscMode} onText={setDiscText} error={errors.discount ?? errors['discount.value']} />
-              <Segmented options={(['none', 'total', 'partial'] as const).map((m) => ({ value: m, label: t.payModes[m] }))} value={payMode} onChange={setPayMode} />
-              {payMode !== 'none' && (
-                <Segmented options={(['cash', 'transfer', 'card'] as const).map((m) => ({ value: m, label: t.methods[m] }))} value={payMethod} onChange={setPayMethod} />
-              )}
-              {payMode === 'partial' && <Field label={t.amount} value={payAmount} onChange={setPayAmount} keyboard="numeric" error={errors.amount} />}
+              <SubStep title={t.discount.label} description={t.discountHint}>
+                <DiscountFields mode={discMode} text={discText} onMode={setDiscMode} onText={setDiscText} error={errors.discount ?? errors['discount.value']} />
+              </SubStep>
+              <SubStep title={t.payNow} description={t.payNowHint}>
+                <Segmented options={(['none', 'total', 'partial'] as const).map((m) => ({ value: m, label: t.payModes[m] }))} value={payMode} onChange={setPayMode} />
+                {payMode !== 'none' && (
+                  <Segmented options={(['cash', 'transfer', 'card'] as const).map((m) => ({ value: m, label: t.methods[m] }))} value={payMethod} onChange={setPayMethod} />
+                )}
+                {payMode === 'partial' && <Field label={t.amount} value={payAmount} onChange={setPayAmount} keyboard="numeric" error={errors.amount} />}
+              </SubStep>
               {quote && (
                 <View style={{ gap: 6 }}>
                   {quote.discount > 0 && <Row label={t.discount.label} value={`− ${formatMXN(quote.discount)}`} />}

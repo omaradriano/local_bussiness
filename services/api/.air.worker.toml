@@ -9,7 +9,9 @@ include_ext = ["go", "json"]
 exclude_dir = ["tmp", "bin"]
 exclude_regex = ["_test\\.go$"]
 delay = 500
-kill_delay = "2s"
+# The worker waits up to 20 s for running jobs on stop; a shorter delay left old workers alive,
+# each holding its database connections (the staging pooler allows 15 in total).
+kill_delay = "25s"
 send_interrupt = true
 
 [log]
