@@ -67,7 +67,11 @@ export default function Board() {
         <Text variant="headline" style={{ flex: 1, textAlign: 'center', textTransform: 'capitalize' }}>{label}</Text>
         <DayButton icon="chevron-forward" label={t.nextDay} onPress={() => setDay(addDays(day, 1))} />
       </View>
-      {day !== todayISO() && <Button size="sm" onPress={() => setDay(todayISO())} style={{ marginBottom: 12 }}>{t.today}</Button>}
+      <View style={{ flexDirection: 'row', gap: 8, marginBottom: 12 }}>
+        {day !== todayISO() && <Button size="sm" onPress={() => setDay(todayISO())} style={{ flex: 1 }}>{t.today}</Button>}
+        <Button size="sm" icon="document-text" style={{ flex: 1 }}
+          onPress={() => router.push({ pathname: '/admin/[businessId]/production', params: { businessId, day } })}>{strings.production.open}</Button>
+      </View>
 
       {error && <Notice tone="warning">{error}</Notice>}
       {!rows && !error && <ActivityIndicator />}
