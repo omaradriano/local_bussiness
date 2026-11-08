@@ -85,11 +85,12 @@ func TestIntegrationProductsFlow(t *testing.T) {
 	free := int64(5000)
 	quick := SaleInput{Lines: []LineInput{{ItemID: corte, Quantity: 1}, {Name: "Propina", Price: &free, Quantity: 1}, {ProductID: cera.ID, Quantity: 1}},
 		Method: "cash", CustomerName: "Don Beto", Quick: true}
-	if _, err := r.Sell(ctx, biz, quick, "", now); !errors.As(err, &bad) {
+	later := now.Add(time.Minute) // after the first sale, so the list (newest first) has a fixed order
+	if _, err := r.Sell(ctx, biz, quick, "", later); !errors.As(err, &bad) {
 		t.Fatalf("products without productSales: %v", err)
 	}
 	quick.Retail = true
-	q, err := r.Sell(ctx, biz, quick, "", now)
+	q, err := r.Sell(ctx, biz, quick, "", later)
 	if err != nil || q.Total != 20000+5000+15000 || *q.CustomerName != "Don Beto" {
 		t.Fatalf("quick sale: %+v %v", q, err)
 	}
