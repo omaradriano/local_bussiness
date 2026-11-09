@@ -839,9 +839,11 @@ export const strings = {
       hint: 'Tiempo libre después de cada cita para limpiar y prepararse. Aplica a todos los servicios.',
     },
     delivery: {
-      title: 'Zonas de entrega',
+      title: 'Pedidos y entregas',
       hint: 'Al tomar un pedido a domicilio se elige la zona y se suma su costo de envío. Sin zonas, se entrega sin costo de envío.',
       empty: 'Sin zonas configuradas.',
+      perDay: 'Pedidos máximos por día',
+      perDayHint: 'Para todo el negocio, además del cupo de cada arreglo. Vacío = sin límite.',
       zone: 'Zona',
       fee: 'Envío (pesos)',
       add: 'Agregar zona',

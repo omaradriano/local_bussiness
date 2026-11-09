@@ -75,6 +75,13 @@ func TestSettingsSectionsDefaultsAndPatch(t *testing.T) {
 	if len(errs) != 0 || next.General.DepositPercent != 50 || next.General.HoldHours != 4 || next.Delivery.Zones[0].Name != "Centro" {
 		t.Fatalf("apply: %+v %v", next, errs)
 	}
+	// Orders per day for the whole business; 0 = no limit (what availability reads).
+	if c := From([]byte(`{"daily_capacity": 12}`)).Delivery.DailyCapacity; c != 12 {
+		t.Fatalf("daily capacity from settings: %d", c)
+	}
+	if next, errs := s.Apply(Patch{Delivery: &DeliveryPatch{DailyCapacity: ptr(0)}}); len(errs) != 0 || next.Delivery.DailyCapacity != 0 || next.Delivery.Zones == nil {
+		t.Fatalf("no limit: %+v %v", next.Delivery, errs)
+	}
 	// Only the touched sections are validated.
 	cases := []struct {
 		name  string
@@ -86,6 +93,8 @@ func TestSettingsSectionsDefaultsAndPatch(t *testing.T) {
 		{"zona sin nombre", Patch{Delivery: &DeliveryPatch{Zones: &[]Zone{{Name: " ", Fee: 1}}}}, "delivery_zones"},
 		{"zonas repetidas", Patch{Delivery: &DeliveryPatch{Zones: &[]Zone{{Name: "Centro"}, {Name: "centro"}}}}, "delivery_zones"},
 		{"envío negativo", Patch{Delivery: &DeliveryPatch{Zones: &[]Zone{{Name: "Sur", Fee: -1}}}}, "delivery_zones"},
+		{"1001 pedidos al día", Patch{Delivery: &DeliveryPatch{DailyCapacity: ptr(1001)}}, "daily_capacity"},
+		{"pedidos al día negativos", Patch{Delivery: &DeliveryPatch{DailyCapacity: ptr(-1)}}, "daily_capacity"},
 		{"multiplicador 11", Patch{Rentals: &RentalsPatch{LateFeeMultiplier: ptr(11.0)}}, "late_fee_multiplier"},
 		{"margen de 300 min", Patch{Agenda: &AgendaPatch{BufferMinutes: ptr(300)}}, "buffer_minutes"},
 	}

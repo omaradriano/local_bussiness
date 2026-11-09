@@ -1905,6 +1905,8 @@ export interface components {
             };
             delivery: {
                 delivery_zones: components["schemas"]["DeliveryZone"][];
+                /** @description Pedidos por día de todo el negocio; 0 = sin límite */
+                daily_capacity: number;
             };
             /** @description Responsable de los datos en el aviso de privacidad del negocio; vacío = nombre del negocio y su WhatsApp */
             privacy: {
@@ -4224,6 +4226,8 @@ export interface operations {
                     };
                     delivery?: {
                         delivery_zones?: components["schemas"]["DeliveryZone"][];
+                        /** @description Pedidos por día de todo el negocio; 0 = sin límite */
+                        daily_capacity?: number;
                     };
                     privacy?: {
                         privacy_legal_name?: string;

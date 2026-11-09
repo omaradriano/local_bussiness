@@ -35,6 +35,7 @@ export default function SettingsScreen() {
   const [inspectionOn, setInspectionOn] = useState(false);
   const [hours, setHours] = useState('1');
   const [zones, setZones] = useState<ZoneRow[]>([]);
+  const [perDay, setPerDay] = useState('');
   const [privacy, setPrivacy] = useState<Settings['privacy']>({ privacy_legal_name: '', privacy_address: '', privacy_email: '' });
   const [errors, setErrors] = useState<Record<string, string>>({});
   const [busy, setBusy] = useState(false);
@@ -51,6 +52,7 @@ export default function SettingsScreen() {
     setInspectionOn(settings.rentals.inspection_minutes > 0);
     setHours(String(Math.max(1, Math.round(settings.rentals.inspection_minutes / 60))));
     setZones(settings.delivery.delivery_zones.map((z) => ({ name: z.name, fee: centavosToInput(z.fee) })));
+    setPerDay(settings.delivery.daily_capacity ? String(settings.delivery.daily_capacity) : '');
     setPrivacy(settings.privacy);
   }, [settings]);
 
@@ -66,6 +68,7 @@ export default function SettingsScreen() {
     if (has('inspection') && inspectionOn && (!Number.isInteger(h) || h < 1 || h > 168)) local.inspection_minutes = t.inspectionHoursInvalid;
     const fees = zones.map((z) => parsePesos(z.fee || '0'));
     if (fees.some((f) => f === null)) local.delivery_zones = strings.catalog.invalidMoney;
+    if (perDay.trim() && !/^\d+$/.test(perDay.trim())) local.daily_capacity = strings.catalog.invalidNumber;
     if (Object.keys(local).length) return setErrors(local);
     setBusy(true);
     setErrors({});
@@ -78,7 +81,7 @@ export default function SettingsScreen() {
         ...(has('rentals') ? {
           rentals: { ...r!, late_fee_multiplier: Number(multiplier.replace(',', '.')), inspection_minutes: inspectionOn ? h * 60 : 0 },
         } : {}),
-        ...(has('delivery') ? { delivery: { delivery_zones: zones.map((z, i) => ({ name: z.name, fee: fees[i]! })) } } : {}),
+        ...(has('delivery') ? { delivery: { delivery_zones: zones.map((z, i) => ({ name: z.name, fee: fees[i]! })), daily_capacity: Number(perDay.trim() || 0) } } : {}),
         privacy,
       },
     });
@@ -148,6 +151,8 @@ export default function SettingsScreen() {
     ),
     delivery: () => (
       <Group key="delivery" label={t.delivery.title} padded footer={errors.delivery_zones ?? t.delivery.hint}>
+        <Field label={t.delivery.perDay} value={perDay} onChangeText={setPerDay} keyboardType="numeric" editable={isOwner}
+          hint={t.delivery.perDayHint} error={errors.daily_capacity} />
         {zones.length === 0 && <Text color="labelSecondary" style={{ marginBottom: 12 }}>{t.delivery.empty}</Text>}
         {zones.map((z, i) => (
           <View key={i} style={{ flexDirection: 'row', gap: 8, alignItems: 'flex-start' }}>
