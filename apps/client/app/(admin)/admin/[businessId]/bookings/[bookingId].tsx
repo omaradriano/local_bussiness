@@ -136,7 +136,8 @@ export default function BookingDetail() {
   const stepState = (i: number): StepState => (rentalStep > i ? 'done' : rentalStep === i ? 'current' : 'upcoming');
   const isOther = (st: Booking['status']) => st === 'cancelled' || st === 'no_show';
   const otherActions = actions.filter(isOther);
-  const paid = b.balance.paid;
+  const extrasTotal = b.extras.reduce((n, x) => n + x.total, 0);
+  const paid = b.balance.paid + extrasTotal; // cancelling gives back (or keeps) the extras too
 
   return (
     <Screen>
@@ -259,7 +260,7 @@ export default function BookingDetail() {
               <Group label={qs.extras} footer={b.extras.length ? undefined : qs.addToOrderHint} padded>
                 <View style={{ gap: 8 }}>
                   {b.extras.map((x) => <Row key={x.id} label={`${x.items} · ${t.methods[x.method]}`} value={formatMXN(x.total)} />)}
-                  {b.extras.length > 0 && <Row label={qs.totalWithExtras} value={formatMXN(b.total + b.extras.reduce((n, x) => n + x.total, 0))} strong />}
+                  {b.extras.length > 0 && <Row label={qs.totalWithExtras} value={formatMXN(b.total + extrasTotal)} strong />}
                   {has('quickSale') && editable && (
                     <Button icon="add-circle" onPress={() => router.push({ pathname: '/admin/[businessId]/sales/new', params: { businessId, booking: b.id, who: b.customer.name } })}>
                       {qs.addToOrder}
@@ -307,7 +308,7 @@ export default function BookingDetail() {
         </Group>
 
         {otherActions.length > 0 && (
-          <Group label={t.otherActions} footer={confirmCancel ? (paid > 0 ? t.confirmCancelPaid(formatMXN(paid)) : t.confirmCancel) : undefined}>
+          <Group label={t.otherActions} footer={confirmCancel ? (paid > 0 ? t.confirmCancelPaid(formatMXN(paid)) + (extrasTotal ? t.cancelExtras(formatMXN(extrasTotal)) : '') : t.confirmCancel) : undefined}>
             {otherActions.map((st) => (st === 'cancelled' && confirmCancel && paid > 0 ? (
               <View key={st}>
                 <Cell label={t.cancelRefund(formatMXN(paid))} destructive onPress={() => move(st, 'refund')} />

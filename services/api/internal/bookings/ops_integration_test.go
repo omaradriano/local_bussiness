@@ -3,6 +3,7 @@ package bookings
 import (
 	"context"
 	"errors"
+	"strings"
 	"testing"
 )
 
@@ -277,5 +278,60 @@ func TestIntegrationOrderExtras(t *testing.T) {
 	got, err := Get(ctx, p, f.business, b.ID)
 	if err != nil || len(got.Extras) != 1 || got.Extras[0].Total != 35000 || got.Extras[0].Items != "2 × Chocolates, 1 × Globo" || got.Total != b.Total {
 		t.Fatalf("extras: %+v %v", got.Extras, err)
+	}
+}
+
+func TestIntegrationCancelWithExtras(t *testing.T) {
+	p := pool(t)
+	ctx := context.Background()
+	f := setup(t, p, "flowers", `{"deposit_percent": 50}`)
+	var choc string
+	if err := p.QueryRow(ctx, `insert into public.retail_products (business_id, name, price, cost, stock) values ($1, 'Chocolates', 10000, 5000, 10)
+		returning id::text`, f.business).Scan(&choc); err != nil {
+		t.Fatal(err)
+	}
+	// An order with 10,000 paid and a linked sale of 2 chocolates (already out of stock) plus a balloon.
+	order := func(phone string) Booking {
+		b, _, err := Create(ctx, p, f.business, CreateInput{Customer: cust(phone), ItemID: f.item, StartsAt: at("2026-11-02T18:00:00Z"),
+			Options: map[string]string{"Color": "Rojo"}, Source: "admin", InitialPayment: &Payment{Method: "cash", Amount: 10000}}, now)
+		if err != nil {
+			t.Fatal(err)
+		}
+		var sale string
+		if err := p.QueryRow(ctx, `insert into public.sales (business_id, booking_id, sold_at, method, total, cost_total) values ($1, $2, now(), 'card', 35000, 10000)
+			returning id::text`, f.business, b.ID).Scan(&sale); err != nil {
+			t.Fatal(err)
+		}
+		lines := [][]any{
+			{`insert into public.sale_lines (business_id, sale_id, product_id, quantity, unit_price, unit_cost) values ($1, $2, $3, 2, 10000, 5000)`, f.business, sale, choc},
+			{`insert into public.sale_lines (business_id, sale_id, name, quantity, unit_price, unit_cost) values ($1, $2, 'Globo', 1, 15000, 0)`, f.business, sale},
+			{`update public.retail_products set stock = stock - 2 where business_id = $1 and id = $2`, f.business, choc},
+		}
+		for _, l := range lines {
+			if _, err := p.Exec(ctx, l[0].(string), l[1:]...); err != nil {
+				t.Fatal(err)
+			}
+		}
+		return b
+	}
+	stock := func() (n int) {
+		p.QueryRow(ctx, `select stock from public.retail_products where id = $1`, choc).Scan(&n)
+		return n
+	}
+	var inv Invalid
+	a := order("6148880011")
+	if _, err := TransitionPaid(ctx, p, f.business, a.ID, "cancelled", "", "", ""); !errors.As(err, &inv) || inv.Field != "paid" || !strings.Contains(inv.Message, "$450.00") {
+		t.Fatalf("cancel without choosing should name the 450 paid with extras: %+v %v", inv, err)
+	}
+	// Given back: the advance is refunded and the linked sale is undone, with its stock back.
+	got, err := TransitionPaid(ctx, p, f.business, a.ID, "cancelled", PaidRefund, "", "")
+	if err != nil || got.Balance.Paid != 0 || len(got.Extras) != 0 || stock() != 10 {
+		t.Fatalf("refund: %+v extras=%d stock=%d %v", got.Balance, len(got.Extras), stock(), err)
+	}
+	// Kept: the sale stays (and so does its income and stock out).
+	b := order("6148880012")
+	got, err = TransitionPaid(ctx, p, f.business, b.ID, "cancelled", PaidKeep, "", "")
+	if err != nil || got.Balance.Paid != 10000 || len(got.Extras) != 1 || stock() != 8 {
+		t.Fatalf("keep: %+v extras=%d stock=%d %v", got.Balance, len(got.Extras), stock(), err)
 	}
 }
