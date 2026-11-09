@@ -2,6 +2,7 @@ package bookings
 
 import (
 	"context"
+	"strings"
 	"testing"
 	"time"
 )
@@ -50,8 +51,13 @@ func TestIntegrationF3_3_ApartadoSinAnticipoExpiraYLibera(t *testing.T) {
 	if got, _ := Get(ctx, p, f.business, part.ID); got.Status != "pending_deposit" {
 		t.Fatalf("partly paid hold expired: %s", got.Status)
 	}
-	if got, err := Transition(ctx, p, f.business, part.ID, "confirmed", "", ""); err != nil || got.Status != "confirmed" {
+	got, err = Transition(ctx, p, f.business, part.ID, "confirmed", "", "")
+	if err != nil || got.Status != "confirmed" {
 		t.Fatalf("confirm with part of the advance: %v", err)
+	}
+	// The history says it was confirmed short of the advance.
+	if n := got.Events[len(got.Events)-1].Note; n == nil || !strings.Contains(*n, "anticipo parcial ($10.00 de") {
+		t.Fatalf("partial confirm note: %v", n)
 	}
 }
 
