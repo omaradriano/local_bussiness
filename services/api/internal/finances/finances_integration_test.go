@@ -49,7 +49,16 @@ func TestIntegrationSummary(t *testing.T) {
 	exec(`insert into public.expenses (business_id, spent_on, category, amount) values
 		($1, '2026-11-03', 'transport', 40000), ($1, '2026-12-03', 'transport', 1), ($2, '2026-11-03', 'transport', 777)`, biz, other)
 
+	exec(`insert into public.retail_products (id, business_id, name, price) values ('00000000-0000-0000-0000-0000000000e6', $1, 'Chocolates', 9000)`, biz)
+	exec(`insert into public.stock_purchases (business_id, product_id, quantity, unit_cost, purchased_on) values ($1, '00000000-0000-0000-0000-0000000000e6', 20, 5000, '2026-11-04')`, biz)
+
 	r := Repo{DB: tx}
+	// Merchandise bought shows up in the expenses list (read-only), next to the expenses.
+	spent, err := r.Expenses(ctx, biz, d("2026-11-01"), d("2026-11-30"))
+	if err != nil || len(spent) != 2 || !spent[0].Purchase || spent[0].Category != "merchandise" || spent[0].Amount != 100000 ||
+		*spent[0].Description != "20 × Chocolates" || spent[1].Purchase || spent[1].Amount != 40000 {
+		t.Fatalf("expenses with purchases: %+v %v", spent, err)
+	}
 	// A truck bought 1 Nov: 1,000 down, 12 × 500 from 1 Nov.
 	if _, err := r.AddPlan(ctx, biz, Plan{Description: "Camioneta", Category: "asset", PurchasedOn: d("2026-11-01"), DownPayment: 100000,
 		InstallmentAmount: 50000, Installments: 12, FirstDue: d("2026-11-01")}, ""); err != nil {

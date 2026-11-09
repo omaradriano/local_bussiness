@@ -138,7 +138,7 @@ export default function Expenses() {
           {list.length === 0 ? <Cell label={t.emptyExpenses} /> : null}
           {list.map((e) => (
             <Cell key={e.id} label={e.description || t.categories[e.category]} sublabel={`${day(e.spent_on)} · ${t.categories[e.category]}`}
-              value={formatMXN(e.amount)} accessory={trash(() => remove('expense', e.id), e.description ?? '')} />
+              value={formatMXN(e.amount)} accessory={e.purchase ? undefined : trash(() => remove('expense', e.id), e.description ?? '')} />
           ))}
         </Group>
       )}
