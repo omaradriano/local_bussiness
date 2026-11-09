@@ -23,9 +23,11 @@ export function forwardMove(next: string[], fulfillment?: string | null): string
   return ahead[0] ?? null;
 }
 
-/** Money still missing on a card: the advance before it's confirmed, or the rest before it's handed over. */
+const TO_HAND_OVER = new Set(['confirmed', 'in_progress', 'ready', 'out_for_delivery']);
+
+/** Money still missing on a card: the advance before it's confirmed, or the rest to collect before it's handed over. */
 export function paymentAlert(b: { status: string; due: number }): 'advance' | 'balance' | null {
   if (b.status === 'pending_deposit') return 'advance';
-  if ((b.status === 'ready' || b.status === 'out_for_delivery') && b.due > 0) return 'balance';
+  if (TO_HAND_OVER.has(b.status) && b.due > 0) return 'balance';
   return null;
 }
