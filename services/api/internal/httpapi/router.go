@@ -362,6 +362,16 @@ func invalid(w http.ResponseWriter, message string, errs map[string]string) {
 	apierr.JSON(w, http.StatusUnprocessableEntity, apierr.Error{Code: "validation_failed", Message: message, Details: errs})
 }
 
+// oneOr: the only field error as the message (it says what to fix), or the general line when there are several.
+func oneOr(errs map[string]string, general string) string {
+	if len(errs) == 1 {
+		for _, m := range errs {
+			return m
+		}
+	}
+	return general
+}
+
 func NewRouter(d Deps) http.Handler {
 	r := chi.NewRouter()
 	r.Use(middleware.RequestID, middleware.Recoverer, monitor.Middleware) // monitor reports a panic, Recoverer answers 500
@@ -746,7 +756,7 @@ func NewRouter(d Deps) http.Handler {
 				}
 				it := body.Item.Normalize()
 				if errs := it.Validate(); len(errs) > 0 {
-					invalid(w, "Revisa los datos del artículo.", errs)
+					invalid(w, oneOr(errs, "Revisa los datos marcados."), errs)
 					return
 				}
 				values, ok := d.customValues(w, r, it.Kind, "item", &it.CustomValues, nil)
@@ -790,7 +800,7 @@ func NewRouter(d Deps) http.Handler {
 				}
 				it := current.Apply(p).Normalize()
 				if errs := it.Validate(); len(errs) > 0 {
-					invalid(w, "Revisa los datos del artículo.", errs)
+					invalid(w, oneOr(errs, "Revisa los datos marcados."), errs)
 					return
 				}
 				values, ok := d.customValues(w, r, it.Kind, "item", p.CustomValues, current.CustomValues)

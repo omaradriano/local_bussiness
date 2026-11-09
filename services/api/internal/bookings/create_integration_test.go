@@ -5,6 +5,7 @@ import (
 	"crypto/rand"
 	"encoding/hex"
 	"errors"
+	"strings"
 	"os"
 	"sync"
 	"testing"
@@ -530,5 +531,22 @@ func TestIntegrationWalkInWithName(t *testing.T) {
 	var registered int
 	if err := p.QueryRow(ctx, `select count(*) from public.customers where business_id = $1 and not walk_in`, f.business).Scan(&registered); err != nil || registered != 0 {
 		t.Fatalf("customers registered: %d %v", registered, err)
+	}
+}
+
+// When an order can't be taken, the API says why: a day that's gone (or closed), or how many are left.
+func TestIntegrationOrderUnavailableReasons(t *testing.T) {
+	p := pool(t)
+	ctx := context.Background()
+	f := setup(t, p, "flowers", `{"daily_capacity": 3}`)
+	in := func(start string, qty int) CreateInput {
+		return CreateInput{Customer: cust("6141110031"), ItemID: f.item, StartsAt: at(start), Quantity: qty, Options: map[string]string{"Color": "Rojo"}, Source: "admin"}
+	}
+	var bad Invalid
+	if _, _, err := Create(ctx, p, f.business, in("2026-10-30T18:00:00Z", 1), now); !errors.As(err, &bad) || bad.Field != "starts_at" {
+		t.Fatalf("a past day: %v", err)
+	}
+	if _, _, err := Create(ctx, p, f.business, in("2026-11-02T18:00:00Z", 5), now); !errors.As(err, &bad) || bad.Field != "quantity" || !strings.Contains(bad.Message, "3") {
+		t.Fatalf("more than left: %v", err)
 	}
 }
