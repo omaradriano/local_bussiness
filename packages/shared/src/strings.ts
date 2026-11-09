@@ -377,6 +377,12 @@ export const strings = {
     noSales: 'Sin ventas hoy.',
     cancel: 'Cancelar venta',
     cancelled: 'Venta cancelada.',
+    forOrder: (who: string) => `Se agrega al pedido de ${who}; se cobra ahora y aparece en el pedido.`,
+    addToOrder: 'Agregar productos',
+    addToOrderHint: 'Chocolates, globos… se cobran en el momento y quedan dentro del pedido.',
+    extras: 'Extras',
+    extrasPaid: 'Extras (pagados)',
+    totalWithExtras: 'Total con extras',
   },
   production: {
     title: 'Hoja de producción',

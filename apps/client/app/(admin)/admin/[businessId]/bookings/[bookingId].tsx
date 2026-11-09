@@ -1,7 +1,7 @@
 import type { components } from '@lb/api-client';
 import { engineFor, formatMXN, formatPhone, hhmm, strings, term, WALK_IN_PHONE } from '@lb/shared';
-import { router, Stack, useLocalSearchParams } from 'expo-router';
-import { useCallback, useEffect, useState } from 'react';
+import { router, Stack, useFocusEffect, useLocalSearchParams } from 'expo-router';
+import { useCallback, useState } from 'react';
 import { ActivityIndicator, Linking, View } from 'react-native';
 import { BookingDocuments } from '../../../../../components/BookingDocuments';
 import { ExtendRental } from '../../../../../components/ExtendRental';
@@ -19,6 +19,7 @@ import { Button, Cell, Field, Group, Notice, Row, Screen, Step, SubStep, Text, u
 type Booking = components['schemas']['Booking'];
 type BookingStep = Booking['steps'][number];
 const t = strings.bookings;
+const qs = strings.quickSale;
 
 const when = (iso: string) =>
   new Date(iso).toLocaleString('es-MX', { weekday: 'short', day: 'numeric', month: 'short', hour: '2-digit', minute: '2-digit' });
@@ -50,10 +51,11 @@ export default function BookingDetail() {
 
   const show = useCallback((data: Booking) => { setB(data); setPayOpen(false); }, []);
 
-  useEffect(() => {
+  // On focus: coming back from adding products (quick sale) shows them.
+  useFocusEffect(useCallback(() => {
     api.GET('/v1/b/{businessId}/bookings/{bookingId}', { params: { path } })
       .then(({ data, error, response }) => (data ? show(data) : setLoadError(errorText(error, response.status))));
-  }, [businessId, bookingId]); // eslint-disable-line react-hooks/exhaustive-deps
+  }, [businessId, bookingId])); // eslint-disable-line react-hooks/exhaustive-deps
 
   async function move(to: Booking['status'], paid?: 'refund' | 'keep') {
     setBusy(true);
@@ -253,6 +255,19 @@ export default function BookingDetail() {
         ) : (
           <>
             <Group label={t.total} padded><View style={{ gap: 12 }}>{balance}{payments}</View></Group>
+            {(b.extras.length > 0 || (has('quickSale') && editable)) && (
+              <Group label={qs.extras} footer={b.extras.length ? undefined : qs.addToOrderHint} padded>
+                <View style={{ gap: 8 }}>
+                  {b.extras.map((x) => <Row key={x.id} label={`${x.items} · ${t.methods[x.method]}`} value={formatMXN(x.total)} />)}
+                  {b.extras.length > 0 && <Row label={qs.totalWithExtras} value={formatMXN(b.total + b.extras.reduce((n, x) => n + x.total, 0))} strong />}
+                  {has('quickSale') && editable && (
+                    <Button icon="add-circle" onPress={() => router.push({ pathname: '/admin/[businessId]/sales/new', params: { businessId, booking: b.id, who: b.customer.name } })}>
+                      {qs.addToOrder}
+                    </Button>
+                  )}
+                </View>
+              </Group>
+            )}
             {editable && actions.filter((st) => !isOther(st)).length > 0 && (
               <Group label={t.actionsTitle} padded>
                 <View style={{ gap: 8 }}>

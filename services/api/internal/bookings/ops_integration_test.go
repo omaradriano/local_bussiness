@@ -240,3 +240,27 @@ func TestIntegrationCancelWithPayments(t *testing.T) {
 		t.Fatalf("keep: %+v %v", got.Balance, err)
 	}
 }
+
+func TestIntegrationOrderExtras(t *testing.T) {
+	p := pool(t)
+	ctx := context.Background()
+	f := setup(t, p, "flowers", `{}`)
+	b, _, err := Create(ctx, p, f.business, CreateInput{Customer: cust("6148880003"), ItemID: f.item, StartsAt: at("2026-11-02T18:00:00Z"),
+		Options: map[string]string{"Color": "Rojo"}, Source: "admin"}, now)
+	if err != nil {
+		t.Fatal(err)
+	}
+	var sale string
+	if err := p.QueryRow(ctx, `insert into public.sales (business_id, booking_id, sold_at, method, total, cost_total) values ($1, $2, now(), 'cash', 35000, 0)
+		returning id::text`, f.business, b.ID).Scan(&sale); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := p.Exec(ctx, `insert into public.sale_lines (business_id, sale_id, name, quantity, unit_price, unit_cost) values ($1, $2, 'Globo', 1, 15000, 0), ($1, $2, 'Chocolates', 2, 10000, 0)`,
+		f.business, sale); err != nil {
+		t.Fatal(err)
+	}
+	got, err := Get(ctx, p, f.business, b.ID)
+	if err != nil || len(got.Extras) != 1 || got.Extras[0].Total != 35000 || got.Extras[0].Items != "2 × Chocolates, 1 × Globo" || got.Total != b.Total {
+		t.Fatalf("extras: %+v %v", got.Extras, err)
+	}
+}

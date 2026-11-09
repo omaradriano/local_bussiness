@@ -1,7 +1,7 @@
 import type { components } from '@lb/api-client';
 import { addToCart, cartTotal, changeQuantity, formatMXN, parsePesos, saleLines, strings, todayISO, type CartLine } from '@lb/shared';
 import { Ionicons } from '@expo/vector-icons';
-import { Stack, useFocusEffect, useLocalSearchParams } from 'expo-router';
+import { router, Stack, useFocusEffect, useLocalSearchParams } from 'expo-router';
 import { useCallback, useState } from 'react';
 import { ActivityIndicator, Pressable, StyleSheet, View } from 'react-native';
 import { api } from '../../../../../lib/api';
@@ -19,7 +19,8 @@ const hour = (iso: string) => new Date(iso).toLocaleTimeString('es-MX', { hour: 
 
 /** Quick sale (feature quickSale): what the customer takes now, paid now; no date, no customer profile. */
 export default function QuickSale() {
-  const { businessId } = useLocalSearchParams<{ businessId: string }>();
+  // booking: added to an order from its detail (the sale is linked to it and we go back there).
+  const { businessId, booking, who } = useLocalSearchParams<{ businessId: string; booking?: string; who?: string }>();
   const { business } = useBusiness(businessId);
   const { has } = useTexts();
   const ui = useUI();
@@ -70,11 +71,12 @@ export default function QuickSale() {
     setBusy(true);
     setErrors({});
     const { data, error, response } = await api.POST('/v1/b/{businessId}/sales', {
-      params: { path: { businessId } }, body: { lines: saleLines(cart), method, customer_name: name, customer_phone: phone },
+      params: { path: { businessId } }, body: { lines: saleLines(cart), method, customer_name: name, customer_phone: phone, ...(booking ? { booking_id: booking } : {}) },
     });
     setBusy(false);
     if (!data) { setErrors(fieldErrors(error)); return toast(errorText(error, response.status), 'error'); }
     toast(t.sold);
+    if (booking) return router.back();
     setCart([]); setName(''); setPhone('');
     load();
   }
@@ -102,6 +104,7 @@ export default function QuickSale() {
     <Screen>
       <Stack.Screen options={{ title: t.title }} />
       <View style={{ gap: 16 }}>
+        {booking && <Notice tone="info">{t.forOrder(who ?? '')}</Notice>}
         <Step inline n={1} title={t.what.title} description={t.what.description} state={state(0)}>
           <Text variant="subhead" color="labelSecondary">{t.catalog}</Text>
           <Chips>
@@ -155,12 +158,14 @@ export default function QuickSale() {
           {errors.lines && <Notice tone="warning">{errors.lines}</Notice>}
         </Step>
 
-        <Step inline n={2} title={t.customer.title} description={t.customer.description} state={state(1)}>
-          <Field label={strings.customers.walkInName} value={name} onChangeText={setName} error={errors.customer_name} />
-          <Field label={strings.customers.walkInPhone} value={phone} onChangeText={setPhone} keyboardType="phone-pad" error={errors.customer_phone} />
-        </Step>
+        {!booking && (
+          <Step inline n={2} title={t.customer.title} description={t.customer.description} state={state(1)}>
+            <Field label={strings.customers.walkInName} value={name} onChangeText={setName} error={errors.customer_name} />
+            <Field label={strings.customers.walkInPhone} value={phone} onChangeText={setPhone} keyboardType="phone-pad" error={errors.customer_phone} />
+          </Step>
+        )}
 
-        <Step inline n={3} title={t.pay.title} description={t.pay.description} state={state(2)}>
+        <Step inline n={booking ? 2 : 3} title={t.pay.title} description={t.pay.description} state={state(2)}>
           <Segmented options={(['cash', 'transfer', 'card'] as Method[]).map((m) => ({ value: m, label: strings.bookings.methods[m] }))} value={method} onChange={setMethod} />
           <Row label={strings.products.total} value={formatMXN(total)} strong />
           <Button variant="primary" icon="checkmark-circle" busy={busy} disabled={!cart.length} onPress={charge}>{t.charge(formatMXN(total))}</Button>
