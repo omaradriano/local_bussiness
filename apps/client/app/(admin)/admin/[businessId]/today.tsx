@@ -1,5 +1,5 @@
 import type { components } from '@lb/api-client';
-import { addDays, agendaGroups, type AgendaGroup, strings, todayISO } from '@lb/shared';
+import { addDays, agendaGroups, dayStartISO, type AgendaGroup, strings, todayISO } from '@lb/shared';
 import { Stack, useFocusEffect, useLocalSearchParams } from 'expo-router';
 import { useCallback, useState } from 'react';
 import { ActivityIndicator } from 'react-native';
@@ -22,15 +22,17 @@ export default function Today() {
   const [error, setError] = useState<string | null>(null);
   const today = todayISO();
 
+  const tz = business?.timezone;
   const load = useCallback(async () => {
+    if (!tz) return; // the day starts at midnight in the business zone
     setError(null);
     // Today's window, plus a lookback so rentals that should have come back (overdue) show up.
-    const from = new Date(`${addDays(today, -60)}T00:00:00`).toISOString();
-    const to = new Date(`${addDays(today, 1)}T00:00:00`).toISOString();
+    const from = dayStartISO(addDays(today, -60), tz);
+    const to = dayStartISO(addDays(today, 1), tz);
     const { data, error, response } = await api.GET('/v1/b/{businessId}/bookings', { params: { path: { businessId }, query: { from, to } } });
     if (data) setRows(data.bookings);
     else setError(errorText(error, response.status));
-  }, [businessId, today]);
+  }, [businessId, today, tz]);
 
   useFocusEffect(useCallback(() => { load(); }, [load]));
 

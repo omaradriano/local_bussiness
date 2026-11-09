@@ -2822,12 +2822,13 @@ components:
 
     Membership:
       type: object
-      required: [business_id, slug, name, vertical, role, features, account]
+      required: [business_id, slug, name, vertical, role, timezone, features, account]
       properties:
         business_id: { type: string, format: uuid }
         slug: { type: string }
         name: { type: string }
         vertical: { $ref: "#/components/schemas/Vertical" }
         role: { $ref: "#/components/schemas/Role" }
+        timezone: { type: string, description: "Zona del negocio (IANA); sus días empiezan a medianoche ahí" }
         account: { $ref: "#/components/schemas/AccountPlan" }
         features: { type: array, items: { $ref: "#/components/schemas/Feature" }, description: "Funciones activas (disponibles y encendidas)" }

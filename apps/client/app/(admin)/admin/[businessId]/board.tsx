@@ -1,5 +1,5 @@
 import type { components } from '@lb/api-client';
-import { addDays, boardColumns, forwardMove, hhmm, strings, todayISO, type BoardStatus } from '@lb/shared';
+import { addDays, boardColumns, dayStartISO, forwardMove, hhmm, strings, todayISO, type BoardStatus } from '@lb/shared';
 import { Ionicons } from '@expo/vector-icons';
 import { router, Stack, useFocusEffect, useLocalSearchParams } from 'expo-router';
 import { useCallback, useState } from 'react';
@@ -27,14 +27,16 @@ export default function Board() {
   const [tab, setTab] = useState<BoardStatus>('confirmed');
   const [busyId, setBusyId] = useState<string | null>(null);
 
+  const tz = business?.timezone;
   const load = useCallback(async () => {
+    if (!tz) return; // the day starts at midnight in the business zone
     setError(null);
-    const from = new Date(`${day}T00:00:00`).toISOString();
-    const to = new Date(`${addDays(day, 1)}T00:00:00`).toISOString();
+    const from = dayStartISO(day, tz);
+    const to = dayStartISO(addDays(day, 1), tz);
     const { data, error, response } = await api.GET('/v1/b/{businessId}/bookings', { params: { path: { businessId }, query: { from, to, status: 'all' } } });
     if (data) setRows(data.bookings);
     else setError(errorText(error, response.status));
-  }, [businessId, day]);
+  }, [businessId, day, tz]);
 
   useFocusEffect(useCallback(() => { setRows(null); load(); }, [load]));
 

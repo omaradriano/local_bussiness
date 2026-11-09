@@ -1,5 +1,5 @@
 import type { components } from '@lb/api-client';
-import { addDays, hhmm, productionSheet, strings, todayISO } from '@lb/shared';
+import { addDays, dayStartISO, hhmm, productionSheet, strings, todayISO } from '@lb/shared';
 import { Stack, useFocusEffect, useLocalSearchParams } from 'expo-router';
 import { useCallback, useState } from 'react';
 import { ActivityIndicator, Platform, StyleSheet, View } from 'react-native';
@@ -20,14 +20,16 @@ export default function Production() {
   const [rows, setRows] = useState<Summary[] | null>(null);
   const [error, setError] = useState<string | null>(null);
 
+  const tz = business?.timezone;
   useFocusEffect(useCallback(() => {
+    if (!tz) return; // the day starts at midnight in the business zone
     setRows(null);
     setError(null);
-    const from = new Date(`${day}T00:00:00`).toISOString();
-    const to = new Date(`${addDays(day, 1)}T00:00:00`).toISOString();
+    const from = dayStartISO(day, tz);
+    const to = dayStartISO(addDays(day, 1), tz);
     api.GET('/v1/b/{businessId}/bookings', { params: { path: { businessId }, query: { from, to, status: 'all' } } })
       .then(({ data, error, response }) => (data ? setRows(data.bookings) : setError(errorText(error, response.status))));
-  }, [businessId, day]));
+  }, [businessId, day, tz]));
 
   if (!business) return <ActivityIndicator style={{ marginTop: 24 }} />;
   const sheet = rows ? productionSheet(rows) : null;

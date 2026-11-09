@@ -65,3 +65,18 @@ export function futureTime(date: string, time: string, now = new Date()): string
   const [h, m] = t.split(':').map(Number);
   return h * 60 + m <= now.getHours() * 60 + now.getMinutes() ? nextHour(now) : t;
 }
+
+/** Minutes the zone is ahead of UTC at instant `ms` (Chihuahua: -360). */
+function zoneOffset(ms: number, timeZone: string): number {
+  const p = Object.fromEntries(new Intl.DateTimeFormat('en-US', { timeZone, hourCycle: 'h23', year: 'numeric', month: '2-digit', day: '2-digit', hour: '2-digit', minute: '2-digit' })
+    .formatToParts(new Date(ms)).map((x) => [x.type, Number(x.value)]));
+  return (Date.UTC(p.year, p.month - 1, p.day, p.hour, p.minute) - Math.floor(ms / 60000) * 60000) / 60000;
+}
+
+/** "2026-11-02" → the ISO instant that day starts in the business zone (not the device's). */
+export function dayStartISO(day: string, timeZone: string): string {
+  const [y, m, d] = day.split('-').map(Number);
+  const guess = Date.UTC(y, m - 1, d);
+  const first = guess - zoneOffset(guess, timeZone) * 60000;
+  return new Date(guess - zoneOffset(first, timeZone) * 60000).toISOString(); // second pass: a DST change that night
+}
