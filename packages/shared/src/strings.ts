@@ -726,6 +726,7 @@ export const strings = {
     paySaved: 'Paga guardada.',
     savePay: 'Guardar',
     noStaff: 'No hay personas en el equipo.',
+    addStaff: 'Agregar personas',
     invalidDate: 'Escribe la fecha como AAAA-MM-DD.',
   },
   platform: {
