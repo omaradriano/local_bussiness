@@ -47,6 +47,7 @@ type Booking struct {
 	Units           []Ref      `json:"units"` // which pieces go out (rental); Name = code
 	Fulfillment     *string    `json:"fulfillment"`
 	DeliveryAddress *string    `json:"delivery_address"`
+	DeliveryZone    *string    `json:"delivery_zone"`
 	RecipientName   *string    `json:"recipient_name"`  // giftOrder
 	RecipientPhone  *string    `json:"recipient_phone"` // giftOrder
 	CardMessage     *string    `json:"card_message"`    // giftOrder
@@ -121,7 +122,7 @@ func Get(ctx context.Context, db store.DB, businessID, id string) (Booking, erro
 	err := db.QueryRow(ctx, `
 		select b.id::text, b.kind, b.status, b.starts_at, b.ends_at,
 		       c.id::text, coalesce(b.walk_in_name, c.name), coalesce(b.walk_in_phone, c.phone), c.walk_in,
-		       b.fulfillment, b.delivery_address, b.recipient_name, b.recipient_phone, b.card_message, b.subtotal, b.discount_type, b.discount_value, b.discount, b.deposit_required, b.total, b.notes, b.source,
+		       b.fulfillment, b.delivery_address, b.delivery_zone, b.recipient_name, b.recipient_phone, b.card_message, b.subtotal, b.discount_type, b.discount_value, b.discount, b.deposit_required, b.total, b.notes, b.source,
 		       b.hold_expires_at, b.public_token, b.created_at,
 		       coalesce((select jsonb_agg(jsonb_build_object('item_id', bi.item_id, 'name', i.name, 'quantity', bi.quantity,
 		                 'unit_price', bi.unit_price, 'options', bi.options) order by i.name)
@@ -133,7 +134,7 @@ func Get(ctx context.Context, db store.DB, businessID, id string) (Booking, erro
 		from public.bookings b join public.customers c on c.id = b.customer_id
 		where b.business_id = $1 and b.id = $2`, businessID, id).Scan(
 		&b.ID, &b.Kind, &b.Status, &b.StartsAt, &b.EndsAt, &b.Customer.ID, &b.Customer.Name, &b.Customer.Phone, &b.Customer.WalkIn,
-		&b.Fulfillment, &b.DeliveryAddress, &b.RecipientName, &b.RecipientPhone, &b.CardMessage, &b.Subtotal, &b.DiscountType, &b.DiscountValue, &b.Discount, &b.DepositRequired, &b.Total, &b.Notes, &b.Source,
+		&b.Fulfillment, &b.DeliveryAddress, &b.DeliveryZone, &b.RecipientName, &b.RecipientPhone, &b.CardMessage, &b.Subtotal, &b.DiscountType, &b.DiscountValue, &b.Discount, &b.DepositRequired, &b.Total, &b.Notes, &b.Source,
 		&b.HoldExpiresAt, &b.PublicToken, &b.CreatedAt, &items, &staff, &units)
 	if errors.Is(err, pgx.ErrNoRows) {
 		return b, ErrNotFound

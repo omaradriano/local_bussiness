@@ -74,11 +74,14 @@ export function PaymentForm({ businessId, booking, types, suggested, onDone }: {
 
   return (
     <View style={{ gap: 12 }}>
-      <Chips>
-        {types.map((pt) => <Chip key={pt} selected={type === pt} onPress={() => setType(pt)}>{t.paymentTypes[pt]}</Chip>)}
-      </Chips>
+      {/* Without custody, advance and balance both just count as paid: no choice to make (Q7). */}
+      {engineFor(booking.kind).custody && (
+        <Chips>
+          {types.map((pt) => <Chip key={pt} selected={type === pt} onPress={() => setType(pt)}>{t.paymentTypes[pt]}</Chip>)}
+        </Chips>
+      )}
       <Segmented options={(['cash', 'transfer', 'card'] as Method[]).map((m) => ({ value: m, label: t.methods[m] }))} value={method} onChange={setMethod} />
-      <Field label={t.amount} value={amount} onChangeText={setAmount} keyboardType="decimal-pad" error={error} />
+      <Field label={t.amount} value={amount} onChangeText={(v) => { setAmount(v); setError(undefined); }} keyboardType="decimal-pad" error={error} />
       {method !== 'cash' && (
         <View style={{ gap: 8 }}>
           <Text variant="footnote" color="labelSecondary">{t.evidenceHint[method]}</Text>

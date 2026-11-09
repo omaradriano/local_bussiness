@@ -245,6 +245,9 @@ func TestIntegrationCreateBooking(t *testing.T) {
 		if s := got[0]; deref(s.DeliveryAddress) != "Av. Juárez 100" || deref(s.DeliveryZone) != "Centro" || s.Due != 76000-38000 {
 			t.Fatalf("route data: %+v", s)
 		}
+		if d, _ := Get(ctx, p, f.business, b.ID); deref(d.DeliveryZone) != "Centro" {
+			t.Fatalf("zone in the detail: %v", d.DeliveryZone)
+		}
 	})
 
 	t.Run("florería: personalizado con precio libre, quién recibe, dedicatoria y horario", func(t *testing.T) {
