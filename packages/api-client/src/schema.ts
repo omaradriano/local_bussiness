@@ -1731,7 +1731,7 @@ export interface components {
             }[];
         };
         /** @enum {string} */
-        ExpenseCategory: "transport" | "maintenance" | "rent" | "utilities" | "supplies" | "asset" | "advertising" | "taxes" | "payroll" | "other";
+        ExpenseCategory: "transport" | "maintenance" | "rent" | "utilities" | "supplies" | "asset" | "advertising" | "taxes" | "payroll" | "other" | "merchandise";
         Expense: {
             /** Format: uuid */
             id: string;
@@ -1747,6 +1747,8 @@ export interface components {
              * @description Cobro confirmado de un gasto recurrente
              */
             recurring_id: string | null;
+            /** @description Compra de mercancía (categoría merchandise); se ve aquí y se cambia en Productos */
+            purchase: boolean;
         };
         /** @enum {string} */
         Frequency: "weekly" | "biweekly" | "monthly" | "yearly";

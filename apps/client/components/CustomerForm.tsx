@@ -50,6 +50,7 @@ export function CustomerForm({ businessId, customer, isOwner, onSaved, onExistin
     const local: Record<string, string> = {};
     if (!phone) local.phone = t.invalidPhone;
     if (gPhone === null) local.guarantor_phone = t.invalidPhone;
+    if (!customer && !f.privacy) local.privacy_accepted = strings.privacy.customerRequired;
     if (Object.keys(local).length) return setErrors(local);
     setBusy(true);
     setErrors({});
@@ -90,7 +91,7 @@ export function CustomerForm({ businessId, customer, isOwner, onSaved, onExistin
           <Cell label={t.trustedShort} accessory={<Switch accessibilityLabel={t.trusted} value={f.trusted} onValueChange={(trusted) => set({ trusted })} />} />
         </Group>
       )}
-      <Group footer={accepted ? undefined : strings.privacy.customerHint}>
+      <Group footer={accepted ? undefined : errors.privacy_accepted ?? strings.privacy.customerHint}>
         {accepted
           ? <Cell icon="shield-checkmark" tint={ui.success} label={strings.privacy.customerAccepted(new Date(accepted).toLocaleDateString('es-MX', { day: 'numeric', month: 'long', year: 'numeric' }))} />
           : <Cell label={strings.privacy.customer} accessory={

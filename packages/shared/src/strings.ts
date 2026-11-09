@@ -566,6 +566,7 @@ export const strings = {
     required: 'Acepta los términos y condiciones y el aviso de privacidad para crear tu cuenta.',
     customer: 'Aceptó el aviso de privacidad',
     customerHint: 'Antes de guardar sus datos, enséñale al cliente el aviso de tu negocio y pregúntale si lo acepta.',
+    customerRequired: 'Antes de guardar, el cliente debe aceptar el aviso de privacidad.',
     customerAccepted: (date: string) => `Aceptó el aviso de privacidad el ${date}.`,
     seeBusiness: 'Ver el aviso del negocio',
     settings: {
@@ -579,6 +580,7 @@ export const strings = {
     },
   },
   products: {
+    loadError: 'No se pudieron cargar los productos.',
     title: 'Productos',
     hint: 'Vender, inventario y estadísticas',
     tabs: { sell: 'Vender', inventory: 'Inventario', stats: 'Estadísticas' },

@@ -49,7 +49,10 @@ export default function QuickSale() {
       else setLoadError(`${strings.bookings.catalogError} ${errorText(error, response.status)}`);
     });
     // Always asked (the API answers 403 without productSales): gating on `has` raced the business loading.
-    api.GET('/v1/b/{businessId}/products', { params: { path } }).then(({ data }) => setProducts(data?.products.filter((p) => p.active) ?? []));
+    api.GET('/v1/b/{businessId}/products', { params: { path } }).then(({ data, error, response }) => {
+      if (data) setProducts(data.products.filter((p) => p.active));
+      else setLoadError(`${strings.products.loadError} ${errorText(error, response.status)}`);
+    });
     api.GET('/v1/b/{businessId}/sales', { params: { path, query: { from: today, to: today } } }).then(({ data }) => setSales(data?.sales ?? []));
   }, [businessId, today]);
   useFocusEffect(load);

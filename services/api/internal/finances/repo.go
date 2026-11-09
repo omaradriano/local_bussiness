@@ -34,6 +34,7 @@ type Expense struct {
 	Description *string   `json:"description"`
 	CreatedAt   time.Time `json:"created_at"`
 	RecurringID *string   `json:"recurring_id"` // a confirmed charge of a recurring expense
+	Purchase    bool      `json:"purchase"`     // merchandise bought (from Productos): listed here, changed there
 }
 
 func (e Expense) Validate() error {
@@ -114,8 +115,13 @@ func (p Pay) Validate() error {
 type Repo struct{ DB store.DB }
 
 func (r Repo) Expenses(ctx context.Context, businessID string, from, to Day) ([]Expense, error) {
-	rows, err := r.DB.Query(ctx, `select id::text, spent_on, category, amount, description, created_at, recurring_id::text from public.expenses
-		where business_id = $1 and spent_on between $2 and $3 order by spent_on desc, created_at desc`, businessID, from, to)
+	rows, err := r.DB.Query(ctx, `select id::text, spent_on, category, amount, description, created_at, recurring_id::text, false from public.expenses
+		where business_id = $1 and spent_on between $2 and $3
+		union all
+		select sp.id::text, sp.purchased_on, 'merchandise', sp.quantity * sp.unit_cost, sp.quantity || ' × ' || p.name, sp.created_at, null, true
+		from public.stock_purchases sp join public.retail_products p on p.id = sp.product_id
+		where sp.business_id = $1 and sp.purchased_on between $2 and $3
+		order by 2 desc, 6 desc`, businessID, from, to)
 	if err != nil {
 		return nil, err
 	}

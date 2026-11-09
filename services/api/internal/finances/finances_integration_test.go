@@ -49,7 +49,16 @@ func TestIntegrationSummary(t *testing.T) {
 	exec(`insert into public.expenses (business_id, spent_on, category, amount) values
 		($1, '2026-11-03', 'transport', 40000), ($1, '2026-12-03', 'transport', 1), ($2, '2026-11-03', 'transport', 777)`, biz, other)
 
+	exec(`insert into public.retail_products (id, business_id, name, price) values ('00000000-0000-0000-0000-0000000000e6', $1, 'Chocolates', 9000)`, biz)
+	exec(`insert into public.stock_purchases (business_id, product_id, quantity, unit_cost, purchased_on) values ($1, '00000000-0000-0000-0000-0000000000e6', 20, 5000, '2026-11-04')`, biz)
+
 	r := Repo{DB: tx}
+	// Merchandise bought shows up in the expenses list (read-only), next to the expenses.
+	spent, err := r.Expenses(ctx, biz, d("2026-11-01"), d("2026-11-30"))
+	if err != nil || len(spent) != 2 || !spent[0].Purchase || spent[0].Category != "merchandise" || spent[0].Amount != 100000 ||
+		*spent[0].Description != "20 × Chocolates" || spent[1].Purchase || spent[1].Amount != 40000 {
+		t.Fatalf("expenses with purchases: %+v %v", spent, err)
+	}
 	// A truck bought 1 Nov: 1,000 down, 12 × 500 from 1 Nov.
 	if _, err := r.AddPlan(ctx, biz, Plan{Description: "Camioneta", Category: "asset", PurchasedOn: d("2026-11-01"), DownPayment: 100000,
 		InstallmentAmount: 50000, Installments: 12, FirstDue: d("2026-11-01")}, ""); err != nil {
@@ -76,11 +85,11 @@ func TestIntegrationSummary(t *testing.T) {
 	if s.Income.Total != 60000 || part(s.Income, "bookings") != 50000 || part(s.Income, "fees") != 10000 {
 		t.Fatalf("income: %+v", s.Income)
 	}
-	// Expenses: gasoline 400, truck down payment 1,000 + one installment 500, commission 30 % of 500.
-	if part(s.Expenses, "transport") != 40000 || part(s.Expenses, "asset") != 150000 || part(s.Expenses, "commissions") != 15000 {
+	// Expenses: gasoline 400, truck down payment 1,000 + one installment 500, commission 30 % of 500, 20 chocolates bought 1,000.
+	if part(s.Expenses, "transport") != 40000 || part(s.Expenses, "asset") != 150000 || part(s.Expenses, "commissions") != 15000 || part(s.Expenses, "merchandise") != 100000 {
 		t.Fatalf("expenses: %+v", s.Expenses)
 	}
-	if s.Profit != 60000-(40000+150000+15000) || len(s.Plans) != 1 || s.Plans[0].Remaining != 10*50000 || len(s.Payroll) != 1 {
+	if s.Profit != 60000-(40000+150000+15000+100000) || len(s.Plans) != 1 || s.Plans[0].Remaining != 10*50000 || len(s.Payroll) != 1 {
 		t.Fatalf("profit %d plans %+v payroll %+v", s.Profit, s.Plans, s.Payroll)
 	}
 	// Bookings by status: the November haircut and a cancelled one; December's doesn't count.

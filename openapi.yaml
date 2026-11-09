@@ -2291,11 +2291,11 @@ components:
 
     ExpenseCategory:
       type: string
-      enum: [transport, maintenance, rent, utilities, supplies, asset, advertising, taxes, payroll, other]
+      enum: [transport, maintenance, rent, utilities, supplies, asset, advertising, taxes, payroll, other, merchandise]
 
     Expense:
       type: object
-      required: [id, spent_on, category, amount, description, created_at, recurring_id]
+      required: [id, spent_on, category, amount, description, created_at, recurring_id, purchase]
       properties:
         id: { type: string, format: uuid }
         spent_on: { type: string, description: "Fecha (medianoche UTC); usar los primeros 10 caracteres" }
@@ -2304,6 +2304,7 @@ components:
         description: { type: [string, "null"] }
         created_at: { type: string, format: date-time }
         recurring_id: { type: [string, "null"], format: uuid, description: "Cobro confirmado de un gasto recurrente" }
+        purchase: { type: boolean, description: "Compra de mercancía (categoría merchandise); se ve aquí y se cambia en Productos" }
 
     Frequency:
       type: string

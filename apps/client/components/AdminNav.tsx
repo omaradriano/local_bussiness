@@ -53,7 +53,12 @@ function useNav() {
   const current = groups.flatMap((g) => g.sections.map((sec) => sec.path))
     .filter((p) => rest === p || rest.startsWith(`${p}/`)).sort((a, b) => b.length - a.length)[0];
   const go = (path: string) => router.push(`/admin/${businessId}${path}` as Href);
-  return { business, groups, add, active: (path: string) => path === current, go };
+  return { business, groups, add, active: (path: string) => path === current, go, isSection: rest === current };
+}
+
+/** The screen is one of the menu's sections (a root: the sidebar or ☰ menu moves between them, no back arrow). */
+export function useIsSection(): boolean {
+  return useNav()?.isSection ?? false;
 }
 
 /** Header part of the navigation: the ☰ menu on phones; on wide screens the sidebar takes over. */

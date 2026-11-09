@@ -11,7 +11,7 @@ export const flowers = {
   texts: {
     bookings: {
       plural: 'Pedidos',
-      searchPlaceholder: 'Cliente, teléfono o arreglo',
+      searchPlaceholder: 'Cliente, quien recibe, teléfono o arreglo',
       empty: 'No hay pedidos con estos filtros.',
       ofCustomer: 'Pedidos de este cliente',
       noneThatDay: 'Sin pedidos ese día.',

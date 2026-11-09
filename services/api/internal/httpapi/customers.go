@@ -71,6 +71,7 @@ func mountCustomers(r chi.Router, d Deps) {
 			internalError(w, r, "customer rules", err)
 			return
 		}
+		rules.RequirePrivacy = create
 		if errs := c.Validate(rules); len(errs) > 0 {
 			invalid(w, "Revisa los datos del cliente.", errs)
 			return
