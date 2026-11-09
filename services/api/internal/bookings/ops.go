@@ -120,7 +120,14 @@ func TransitionPaid(ctx context.Context, db store.DB, businessID, id, to, paid, 
 	case to == "out_for_delivery" && b.fulfillment != "delivery":
 		return Booking{}, Invalid{"status", "Este pedido se recoge en el local; no sale a entrega."}
 	}
-	if Releases(to) && bal.Paid > 0 {
+	var extras int64 // linked quick sales (1.3) follow the same choice as what was paid toward the order
+	if Releases(to) {
+		if err := tx.QueryRow(ctx, `select coalesce(sum(total), 0) from public.sales where business_id = $1 and booking_id = $2`,
+			businessID, id).Scan(&extras); err != nil {
+			return Booking{}, err
+		}
+	}
+	if collected := bal.Paid + extras; Releases(to) && collected > 0 {
 		switch paid {
 		case PaidRefund:
 			for _, r := range PaidByMethod(ps) {
@@ -130,11 +137,14 @@ func TransitionPaid(ctx context.Context, db store.DB, businessID, id, to, paid, 
 					return Booking{}, err
 				}
 			}
-			note = joinNote(note, fmt.Sprintf("Se devolvieron %s", mxn(bal.Paid)))
+			if err := undoSales(ctx, tx, businessID, id); err != nil {
+				return Booking{}, err
+			}
+			note = joinNote(note, fmt.Sprintf("Se devolvieron %s", mxn(collected)))
 		case PaidKeep:
-			note = joinNote(note, fmt.Sprintf("Se retienen %s como penalización", mxn(bal.Paid)))
+			note = joinNote(note, fmt.Sprintf("Se retienen %s como penalización", mxn(collected)))
 		default:
-			return Booking{}, Invalid{"paid", fmt.Sprintf("Ya se cobraron %s: elige si se devuelven o se retienen.", mxn(bal.Paid))}
+			return Booking{}, Invalid{"paid", fmt.Sprintf("Ya se cobraron %s: elige si se devuelven o se retienen.", mxn(collected))}
 		}
 	}
 	if pending, err := pendingSteps(ctx, tx, id, to); err != nil || len(pending) > 0 {
@@ -150,6 +160,19 @@ func TransitionPaid(ctx context.Context, db store.DB, businessID, id, to, paid, 
 		return Booking{}, err
 	}
 	return Get(ctx, db, businessID, id)
+}
+
+// undoSales deletes the quick sales linked to the booking and puts their products' stock back
+// (like products.CancelSale, for every sale of the booking).
+func undoSales(ctx context.Context, tx pgx.Tx, businessID, bookingID string) error {
+	if _, err := tx.Exec(ctx, `update public.retail_products p set stock = p.stock + q.quantity
+		from (select l.product_id, sum(l.quantity) as quantity from public.sale_lines l join public.sales s on s.id = l.sale_id
+		      where s.business_id = $1 and s.booking_id = $2 and l.product_id is not null group by l.product_id) q
+		where p.id = q.product_id and p.business_id = $1`, businessID, bookingID); err != nil {
+		return err
+	}
+	_, err := tx.Exec(ctx, `delete from public.sales where business_id = $1 and booking_id = $2`, businessID, bookingID)
+	return err
 }
 
 // pendingSteps lists the required steps still pending before reaching `to`.

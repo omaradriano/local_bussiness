@@ -308,6 +308,7 @@ export const strings = {
     cancelRefund: (amount: string) => `Cancelar y devolver ${amount}`,
     cancelKeep: (amount: string) => `Cancelar y retener ${amount}`,
     confirmCancelPaid: (amount: string) => `Ya se cobraron ${amount}. Si se devuelven, se registra la devolución y se resta de los ingresos; si se retienen, quedan como penalización.`,
+    cancelExtras: (amount: string) => ` Incluye ${amount} de extras: al devolverlos se cancela su venta y regresan las existencias.`,
     noteOptional: 'Nota (opcional)',
     paid: 'Pagado',
     due: 'Pendiente',
