@@ -1,5 +1,5 @@
 import type { components } from '@lb/api-client';
-import { engineFor, formatMXN, strings } from '@lb/shared';
+import { engineFor, formatMXN, strings, term } from '@lb/shared';
 import { router, Stack, useFocusEffect, useLocalSearchParams, type Href } from 'expo-router';
 import { useCallback, useState } from 'react';
 import { ActivityIndicator, View } from 'react-native';
@@ -21,7 +21,10 @@ const EXPENSE_KEYS = ['payroll', 'commissions', 'merchandise', 'transport', 'sup
 export default function Finances() {
   const { businessId } = useLocalSearchParams<{ businessId: string }>();
   const ui = useUI();
-  const { texts, kind, can, has } = useTexts();
+  const { texts, kind, can, has, vertical } = useTexts();
+  // Income by giro: «Pedidos» / «Citas» / «Rentas», and the catalog sold at the counter («Venta rápida de arreglos»).
+  const incomeLabel = (key: string) =>
+    key === 'bookings' ? texts.bookings.plural : key === 'counter' ? t.counterSales(term(vertical, 'catalog') ?? '') : t.incomeSources[key] ?? key;
   const [period, setPeriod] = useState<Period>(currentMonth);
   const [s, setS] = useState<Summary | null>(null);
   const [error, setError] = useState<string | null>(null);
@@ -73,7 +76,7 @@ export default function Finances() {
 
           <View style={{ backgroundColor: ui.surface, borderRadius: radius.md, padding: 16 }}>
             <Donut title={t.incomeChart} total={s.income.total} empty={t.noIncome} colorKeys={INCOME_KEYS}
-              slices={s.income.parts.map((p) => ({ key: p.key, label: t.incomeSources[p.key] ?? p.key, amount: p.amount }))} />
+              slices={s.income.parts.map((p) => ({ key: p.key, label: incomeLabel(p.key), amount: p.amount }))} />
           </View>
           <View style={{ backgroundColor: ui.surface, borderRadius: radius.md, padding: 16 }}>
             <Donut title={t.expensesChart} total={s.expenses.total} empty={t.noExpenses} colorKeys={EXPENSE_KEYS}

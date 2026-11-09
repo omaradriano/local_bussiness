@@ -642,6 +642,7 @@ export const strings = {
     noExpenses: 'Sin gastos en este periodo.',
     incomeHint: 'Cuenta lo cobrado en el periodo. Los depósitos de garantía no son ingreso: se devuelven.',
     incomeSources: { bookings: 'Servicios y rentas', fees: 'Recargos y daños', products: 'Venta de productos' } as Record<string, string>,
+    counterSales: (catalog: string) => `Venta rápida de ${catalog.toLowerCase()}`, // catalog items sold at the counter
     categories: {
       transport: 'Transporte y gasolina', maintenance: 'Mantenimiento', rent: 'Renta del local', utilities: 'Luz, agua e internet',
       supplies: 'Insumos', asset: 'Compra de equipo o vehículo', advertising: 'Publicidad', taxes: 'Impuestos', payroll: 'Sueldos',
