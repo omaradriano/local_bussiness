@@ -518,6 +518,15 @@ func TestIntegrationWalkInWithName(t *testing.T) {
 	if err != nil || len(got) != 1 || got[0].CustomerName != "Doña Mari" {
 		t.Fatalf("search by the walk-in's name: %+v %v", got, err)
 	}
+	// Accents and case don't matter, and the person who receives it counts.
+	if _, err := p.Exec(ctx, `update public.bookings set recipient_name = 'Lupita Pérez' where id = $1`, b.ID); err != nil {
+		t.Fatal(err)
+	}
+	for _, q := range []string{"DONA", "perez", "Pérez"} {
+		if got, err := History(ctx, p, f.business, HistoryFilter{Query: q}); err != nil || len(got) != 1 {
+			t.Fatalf("search %q: %d %v", q, len(got), err)
+		}
+	}
 	var registered int
 	if err := p.QueryRow(ctx, `select count(*) from public.customers where business_id = $1 and not walk_in`, f.business).Scan(&registered); err != nil || registered != 0 {
 		t.Fatalf("customers registered: %d %v", registered, err)

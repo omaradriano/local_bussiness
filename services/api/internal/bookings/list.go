@@ -108,6 +108,21 @@ type HistoryFilter struct {
 // ValidHistoryGroup reports whether g is a known group ("" = all).
 func ValidHistoryGroup(g string) bool { _, ok := historyGroups[g]; return ok || g == "" }
 
+// fold: a column lowercased and without accents, to compare with foldQuery.
+func fold(col string) string {
+	return "translate(lower(coalesce(" + col + ", '')), 'áéíóúüñ', 'aeiouun')"
+}
+
+// foldQuery is the search as a `like` pattern on folded text ("" = no search). Like's % and _ match literally.
+func foldQuery(q string) string {
+	q = strings.TrimSpace(q)
+	if q == "" {
+		return ""
+	}
+	q = strings.NewReplacer("á", "a", "é", "e", "í", "i", "ó", "o", "ú", "u", "ü", "u", "ñ", "n", `\`, `\\`, "%", `\%`, "_", `\_`).Replace(strings.ToLower(q))
+	return "%" + q + "%"
+}
+
 // History lists bookings newest first, for the history screen and a customer's profile.
 // Paged by (starts_at, id) so new rows never shift a page.
 func History(ctx context.Context, db store.DB, businessID string, f HistoryFilter) ([]Summary, error) {
@@ -124,13 +139,13 @@ func History(ctx context.Context, db store.DB, businessID string, f HistoryFilte
 		where b.business_id = $1
 		  and ($2::text[] is null or b.status = any($2))
 		  and ($3 = '' or c.id::text = $3)
-		  and ($4 = '' or c.name ilike '%' || $4 || '%' or b.walk_in_name ilike '%' || $4 || '%'
+		  and ($4 = '' or `+fold("c.name")+` like $4 or `+fold("b.walk_in_name")+` like $4 or `+fold("b.recipient_name")+` like $4
 		       or ($5 <> '' and (c.phone like '%' || $5 || '%' or b.walk_in_phone like '%' || $5 || '%'))
 		       or exists (select 1 from public.booking_items bi join public.catalog_items i on i.id = bi.item_id
-		                  where bi.booking_id = b.id and i.name ilike '%' || $4 || '%'))
+		                  where bi.booking_id = b.id and `+fold("i.name")+` like $4))
 		  and ($6::timestamptz is null or (b.starts_at, b.id::text) < ($6, $7))
 		order by b.starts_at desc, b.id desc
-		limit $8`, businessID, historyGroups[f.Group], f.CustomerID, strings.TrimSpace(f.Query), digits, f.Before, f.BeforeID, limit)
+		limit $8`, businessID, historyGroups[f.Group], f.CustomerID, foldQuery(f.Query), digits, f.Before, f.BeforeID, limit)
 	if err != nil {
 		return nil, err
 	}
