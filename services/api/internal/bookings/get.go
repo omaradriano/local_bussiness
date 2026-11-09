@@ -173,7 +173,7 @@ func Get(ctx context.Context, db store.DB, businessID, id string) (Booking, erro
 	if Releases(b.Status) {
 		b.Balance.Due = 0 // cancelled: nothing more to collect (what was paid was given back or kept)
 	}
-	b.Next = Next(b.Kind, b.Status)
+	b.Next = Next(b.Kind, b.Status, deref(b.Fulfillment))
 	if b.Next == nil {
 		b.Next = []string{}
 	}

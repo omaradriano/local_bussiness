@@ -71,6 +71,7 @@ type Membership struct {
 	Name       string   `json:"name"`
 	Vertical   string   `json:"vertical"`
 	Role       string   `json:"role"`
+	Timezone   string   `json:"timezone"` // the business's: its days start at midnight there
 	Features   []string `json:"features"` // active features; filled by the caller from the two below
 
 	// Plan of the owner's account (filled by the caller): the app shows the trial and read-only state.
@@ -83,7 +84,7 @@ type Membership struct {
 
 func (s *Store) Memberships(ctx context.Context, userID string) ([]Membership, error) {
 	rows, err := s.db.Query(ctx, `
-		select b.id::text, b.slug, b.name, b.vertical, m.role, '{}'::text[], b.feature_grants, b.plan, b.settings
+		select b.id::text, b.slug, b.name, b.vertical, m.role, b.timezone, '{}'::text[], b.feature_grants, b.plan, b.settings
 		from public.business_members m
 		join public.businesses b on b.id = m.business_id
 		where m.user_id = $1

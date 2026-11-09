@@ -35,7 +35,7 @@ func TestTimingModules(t *testing.T) {
 	if err := slotTiming(r); err != nil || !r.end.Equal(start.Add(45*time.Minute)) {
 		t.Fatalf("slot: end %v, err %v", r.end, err)
 	}
-	r = &reservation{in: &CreateInput{}, start: start}
+	r = &reservation{in: &CreateInput{}, start: start, hours: []availability.Shift{}} // no hours set: any time
 	if err := dayTiming(r); err != nil || r.end != nil {
 		t.Fatalf("day: end %v, err %v", r.end, err)
 	}

@@ -2247,6 +2247,8 @@ export interface components {
             name: string;
             vertical: components["schemas"]["Vertical"];
             role: components["schemas"]["Role"];
+            /** @description Zona del negocio (IANA); sus días empiezan a medianoche ahí */
+            timezone: string;
             account: components["schemas"]["AccountPlan"];
             /** @description Funciones activas (disponibles y encendidas) */
             features: components["schemas"]["Feature"][];

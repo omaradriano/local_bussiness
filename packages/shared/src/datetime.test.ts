@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { bookingDays, futureTime, hhmm, localToISO, monthWindow, nextHour, todayISO } from './datetime';
+import { bookingDays, dayStartISO, futureTime, hhmm, localToISO, monthWindow, nextHour, todayISO } from './datetime';
 
 describe('localToISO', () => {
   it('builds a local instant and round-trips the clock time', () => {
@@ -50,4 +50,16 @@ describe('futureTime', () => {
   it('keeps a later time today, normalized', () => expect(futureTime('2026-10-28', '17:30', now)).toBe('17:30'));
   it('leaves other days alone', () => expect(futureTime('2026-10-29', '08:00', now)).toBe('08:00'));
   it('caps late at night', () => expect(nextHour(new Date(2026, 9, 28, 23, 40))).toBe('23:00'));
+});
+
+describe('dayStartISO', () => {
+  it('starts the day at midnight in the business zone', () => {
+    expect(dayStartISO('2026-11-02', 'America/Chihuahua')).toBe('2026-11-02T06:00:00.000Z');
+    expect(dayStartISO('2026-11-02', 'UTC')).toBe('2026-11-02T00:00:00.000Z');
+    expect(dayStartISO('2026-11-02', 'Asia/Tokyo')).toBe('2026-11-01T15:00:00.000Z');
+  });
+  it('follows daylight saving time', () => {
+    expect(dayStartISO('2026-07-01', 'America/Tijuana')).toBe('2026-07-01T07:00:00.000Z');
+    expect(dayStartISO('2026-12-01', 'America/Tijuana')).toBe('2026-12-01T08:00:00.000Z');
+  });
 });

@@ -45,6 +45,14 @@ func (d Discount) Of(total int64) int64 {
 	return min(max(off, 0), max(total, 0))
 }
 
+// Exceeds refuses a fixed discount bigger than the total it comes off (a percent can't be).
+func (d Discount) Exceeds(total int64) error {
+	if d.Type == "amount" && d.Value > total {
+		return Invalid{"discount.value", fmt.Sprintf("El descuento es mayor que el total (%s).", mxn(total))}
+	}
+	return nil
+}
+
 // rescaleAdvance keeps the advance's proportion when the total changes from `from` to `to`.
 func rescaleAdvance(advance, from, to int64) int64 {
 	if from <= 0 {
@@ -82,6 +90,9 @@ func SetDiscount(ctx context.Context, db store.DB, businessID, id string, d Disc
 		return Booking{}, err
 	}
 	base := b.total + current // total before any discount
+	if err := d.Exceeds(base); err != nil {
+		return Booking{}, err
+	}
 	off := d.Of(base)
 	total := base - off
 	ps, err := payments(ctx, tx, id)

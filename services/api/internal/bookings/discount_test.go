@@ -65,3 +65,14 @@ func TestRescaleAdvance(t *testing.T) {
 		t.Fatalf("zero base: %d", got)
 	}
 }
+
+func TestDiscountExceeds(t *testing.T) {
+	if err := (Discount{Type: "amount", Value: 70000}).Exceeds(65000); invalidField(err) != "discount.value" {
+		t.Fatalf("amount over the total: %v", err)
+	}
+	for _, d := range []Discount{{Type: "amount", Value: 65000}, {Type: "percent", Value: 100}, {}} {
+		if err := d.Exceeds(65000); err != nil {
+			t.Fatalf("%+v: %v", d, err)
+		}
+	}
+}

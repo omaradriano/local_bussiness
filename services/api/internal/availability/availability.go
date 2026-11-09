@@ -53,6 +53,17 @@ func shiftsOn(loc *time.Location, date time.Time, shifts []Shift) []Interval {
 	return out
 }
 
+// OpenAt reports whether t falls in one of the business shifts of its local day. Closing time counts
+// as open, so a delivery can be set for the moment the shop closes.
+func OpenAt(loc *time.Location, t time.Time, shifts []Shift) bool {
+	for _, iv := range shiftsOn(loc, t.In(loc), shifts) {
+		if !t.Before(iv.Start) && !t.After(iv.End) {
+			return true
+		}
+	}
+	return false
+}
+
 func atClock(loc *time.Location, date time.Time, hhmm string) (time.Time, error) {
 	c, err := time.Parse("15:04", hhmm)
 	if err != nil {

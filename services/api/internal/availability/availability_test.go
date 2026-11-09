@@ -348,3 +348,20 @@ func TestClosedDaysBetween(t *testing.T) {
 		}
 	}
 }
+
+func TestOpenAt(t *testing.T) {
+	hours := append(weekdays("09:00", "14:00", 1), Shift{Weekday: 1, Opens: "16:00", Closes: "20:00"})
+	cases := map[string]bool{"08:59": false, "09:00": true, "13:59": true, "15:00": false, "20:00": true, "20:01": false, "23:00": false, "03:00": false}
+	for hhmm, want := range cases {
+		if got := OpenAt(chih, local(monday, hhmm), hours); got != want {
+			t.Errorf("%s: got %v, want %v", hhmm, got, want)
+		}
+	}
+	if OpenAt(chih, local("2026-11-03", "10:00"), hours) {
+		t.Error("Tuesday has no shifts: closed")
+	}
+	// UTC instant on Tuesday 02:00 is Monday 20:00 in Chihuahua.
+	if !OpenAt(chih, time.Date(2026, 11, 3, 2, 0, 0, 0, time.UTC), hours) {
+		t.Error("must read the business time zone")
+	}
+}
