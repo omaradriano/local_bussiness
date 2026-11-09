@@ -47,9 +47,10 @@ export default function QuickSale() {
       if (data) setItems(data.items.filter((i) => i.active));
       else setLoadError(`${strings.bookings.catalogError} ${errorText(error, response.status)}`);
     });
-    if (retail) api.GET('/v1/b/{businessId}/products', { params: { path } }).then(({ data }) => setProducts(data?.products.filter((p) => p.active) ?? []));
+    // Always asked (the API answers 403 without productSales): gating on `has` raced the business loading.
+    api.GET('/v1/b/{businessId}/products', { params: { path } }).then(({ data }) => setProducts(data?.products.filter((p) => p.active) ?? []));
     api.GET('/v1/b/{businessId}/sales', { params: { path, query: { from: today, to: today } } }).then(({ data }) => setSales(data?.sales ?? []));
-  }, [businessId, retail, today]);
+  }, [businessId, today]);
   useFocusEffect(load);
 
   // Free lines and described free-price items are each their own line.
