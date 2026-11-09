@@ -48,6 +48,27 @@ func ComputeBalance(total int64, payments []Payment) Balance {
 	return b
 }
 
+// PaidByMethod is what went toward the total, per method and net of what was already given back, so a
+// cancellation returns the money the way it came in. Methods follow paymentMethods; zeros are left out.
+func PaidByMethod(payments []Payment) []Payment {
+	by := map[string]int64{}
+	for _, p := range payments {
+		switch p.Type {
+		case "advance", "balance":
+			by[p.Method] += p.Amount
+		case "payment_refund":
+			by[p.Method] -= p.Amount
+		}
+	}
+	var out []Payment
+	for _, m := range paymentMethods {
+		if by[m] > 0 {
+			out = append(out, Payment{Method: m, Amount: by[m]})
+		}
+	}
+	return out
+}
+
 var (
 	paymentTypes   = []string{"advance", "balance", "security_deposit", "refund", "late_fee", "damage_fee"}
 	paymentMethods = []string{"cash", "transfer", "card"}
