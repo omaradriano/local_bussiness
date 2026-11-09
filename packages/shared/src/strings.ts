@@ -435,6 +435,8 @@ export const strings = {
     delivery: 'A domicilio',
     pickup: 'Recoge',
     for: (name: string) => `Para ${name}`,
+    missingAdvance: (due: string) => `Falta el anticipo · debe ${due}`,
+    missingBalance: (due: string) => `Cobrar ${due} antes de entregar`,
   },
   today: {
     groups: {

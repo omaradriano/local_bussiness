@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { boardColumns, forwardMove } from './board';
+import { boardColumns, forwardMove, paymentAlert } from './board';
 
 const row = (id: string, status: string, starts_at: string, next: string[] = []) => ({ id, status, starts_at, next });
 
@@ -31,5 +31,15 @@ describe('forwardMove', () => {
   it('ready: delivered at the counter unless it is a delivery', () => {
     expect(forwardMove(['out_for_delivery', 'completed'], 'pickup')).toBe('completed');
     expect(forwardMove(['out_for_delivery', 'completed'], 'delivery')).toBe('out_for_delivery');
+  });
+});
+
+describe('paymentAlert', () => {
+  it('warns of the missing advance, and of the rest only when the order is about to be handed over', () => {
+    expect(paymentAlert({ status: 'pending_deposit', due: 74000 })).toBe('advance');
+    expect(paymentAlert({ status: 'ready', due: 45000 })).toBe('balance');
+    expect(paymentAlert({ status: 'out_for_delivery', due: 1 })).toBe('balance');
+    expect(paymentAlert({ status: 'ready', due: 0 })).toBeNull();
+    expect(paymentAlert({ status: 'confirmed', due: 69000 })).toBeNull();
   });
 });
