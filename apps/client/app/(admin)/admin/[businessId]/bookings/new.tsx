@@ -402,7 +402,7 @@ export default function NewBooking() {
           {item && (
             <>
               <SubStep title={t.discount.label} description={t.discountHint}>
-                <DiscountFields mode={discMode} text={discText} onMode={setDiscMode} onText={setDiscText} error={errors.discount ?? errors['discount.value']} />
+                <DiscountFields mode={discMode} text={discText} onMode={setDiscMode} onText={setDiscText} error={errors.discount ?? errors['discount.value'] ?? (discount === undefined && discText.trim() ? t.discount.invalid : undefined)} />
               </SubStep>
               <SubStep title={t.payNow} description={t.payNowHint}>
                 <Segmented options={(['none', 'total', 'partial'] as const).map((m) => ({ value: m, label: t.payModes[m] }))} value={payMode} onChange={(m) => {
@@ -415,7 +415,8 @@ export default function NewBooking() {
                 {payMode === 'partial' && <Field label={t.amount} value={payAmount} onChange={setPayAmount} keyboard="numeric" error={errors.amount}
                   hint={quote?.deposit_required ? t.advanceHint(formatMXN(quote.deposit_required)) : undefined} />}
               </SubStep>
-              {quote && (
+              {/* An unreadable discount (e.g. 150 %): no totals until it's fixed, they would leave it out. */}
+              {quote && discount !== undefined && (
                 <View style={{ gap: 6 }}>
                   {quote.discount > 0 && <Row label={t.discount.label} value={`− ${formatMXN(quote.discount)}`} />}
                   <Row label={t.total} value={formatMXN(quote.total)} />
