@@ -164,6 +164,9 @@ func (r Repo) bookings(ctx context.Context, businessID string, start, end time.T
 		}
 		bal := bookings.ComputeBalance(b.Total, pays)
 		b.Paid, b.Due, b.Extra = bal.Paid, bal.Due, bal.Extra
+		if bookings.Releases(b.Status) {
+			b.Due = 0 // same as the booking's detail: a cancelled one owes nothing
+		}
 		out = append(out, b)
 	}
 	return out, rows.Err()

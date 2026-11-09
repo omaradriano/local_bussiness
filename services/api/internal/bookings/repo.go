@@ -23,8 +23,8 @@ func (r Repo) List(ctx context.Context, businessID string, f ListFilter) ([]Summ
 	return List(ctx, r.DB, businessID, f)
 }
 
-func (r Repo) Transition(ctx context.Context, businessID, id, to, actor, note string) (Booking, error) {
-	return Transition(ctx, r.DB, businessID, id, to, actor, note)
+func (r Repo) Transition(ctx context.Context, businessID, id, to, paid, actor, note string) (Booking, error) {
+	return TransitionPaid(ctx, r.DB, businessID, id, to, paid, actor, note)
 }
 
 func (r Repo) AddPayment(ctx context.Context, businessID, id string, p Payment, actor string, now time.Time, exists FileExists) (Booking, error) {

@@ -256,7 +256,7 @@ type BookingsRepo interface {
 	Create(ctx context.Context, businessID string, in bookings.CreateInput, now time.Time) (bookings.Booking, bool, error)
 	Get(ctx context.Context, businessID, id string) (bookings.Booking, error)
 	List(ctx context.Context, businessID string, f bookings.ListFilter) ([]bookings.Summary, error)
-	Transition(ctx context.Context, businessID, id, to, actor, note string) (bookings.Booking, error)
+	Transition(ctx context.Context, businessID, id, to, paid, actor, note string) (bookings.Booking, error)
 	AddPayment(ctx context.Context, businessID, id string, p bookings.Payment, actor string, now time.Time, exists bookings.FileExists) (bookings.Booking, error)
 	StepUpload(ctx context.Context, businessID, bookingID, stepID string) (string, error)
 	CompleteStep(ctx context.Context, businessID, bookingID, stepID string, sub steps.Submission, actor string, now time.Time, exists bookings.FileExists) (bookings.Booking, error)
@@ -1062,6 +1062,7 @@ func NewRouter(d Deps) http.Handler {
 					m, _ := auth.MemberFrom(r.Context())
 					var body struct {
 						To   string `json:"to"`
+						Paid string `json:"paid"` // refund | keep, when cancelling with payments
 						Note string `json:"note"`
 					}
 					if !decode(w, r, &body) {
@@ -1071,7 +1072,7 @@ func NewRouter(d Deps) http.Handler {
 						invalid(w, "La nota es muy larga.", map[string]string{"note": "Máximo 500 caracteres."})
 						return
 					}
-					b, err := d.Bookings.Transition(r.Context(), m.BusinessID, chi.URLParam(r, "bookingId"), body.To, m.UserID, body.Note)
+					b, err := d.Bookings.Transition(r.Context(), m.BusinessID, chi.URLParam(r, "bookingId"), body.To, body.Paid, m.UserID, body.Note)
 					writeBooking(w, r, b, err)
 				})
 

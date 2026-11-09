@@ -55,9 +55,9 @@ export default function BookingDetail() {
       .then(({ data, error, response }) => (data ? show(data) : setLoadError(errorText(error, response.status))));
   }, [businessId, bookingId]); // eslint-disable-line react-hooks/exhaustive-deps
 
-  async function move(to: Booking['status']) {
+  async function move(to: Booking['status'], paid?: 'refund' | 'keep') {
     setBusy(true);
-    const { data, error, response } = await api.POST('/v1/b/{businessId}/bookings/{bookingId}/transition', { params: { path }, body: { to } });
+    const { data, error, response } = await api.POST('/v1/b/{businessId}/bookings/{bookingId}/transition', { params: { path }, body: { to, paid } });
     setBusy(false);
     setConfirmCancel(false);
     if (data) { show(data); toast(t.statusChanged(texts.bookings.status[data.status])); return; }
@@ -134,6 +134,7 @@ export default function BookingDetail() {
   const stepState = (i: number): StepState => (rentalStep > i ? 'done' : rentalStep === i ? 'current' : 'upcoming');
   const isOther = (st: Booking['status']) => st === 'cancelled' || st === 'no_show';
   const otherActions = actions.filter(isOther);
+  const paid = b.balance.paid;
 
   return (
     <Screen>
@@ -291,11 +292,17 @@ export default function BookingDetail() {
         </Group>
 
         {otherActions.length > 0 && (
-          <Group label={t.otherActions} footer={confirmCancel ? t.confirmCancel : undefined}>
-            {otherActions.map((st) => (
+          <Group label={t.otherActions} footer={confirmCancel ? (paid > 0 ? t.confirmCancelPaid(formatMXN(paid)) : t.confirmCancel) : undefined}>
+            {otherActions.map((st) => (st === 'cancelled' && confirmCancel && paid > 0 ? (
+              <View key={st}>
+                <Cell label={t.cancelRefund(formatMXN(paid))} destructive onPress={() => move(st, 'refund')} />
+                <Cell label={t.cancelKeep(formatMXN(paid))} destructive onPress={() => move(st, 'keep')} />
+              </View>
+            ) : (
+              // A no-show keeps what was paid (the usual rule for a missed appointment).
               <Cell key={st} label={st === 'cancelled' && confirmCancel ? t.yesCancel : t.actions[st] ?? t.status[st]} destructive
-                onPress={() => (st === 'cancelled' && !confirmCancel ? setConfirmCancel(true) : move(st))} />
-            ))}
+                onPress={() => (st === 'cancelled' && !confirmCancel ? setConfirmCancel(true) : move(st, paid > 0 ? 'keep' : undefined))} />
+            )))}
           </Group>
         )}
       </View>

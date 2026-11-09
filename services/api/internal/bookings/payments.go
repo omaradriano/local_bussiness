@@ -38,6 +38,8 @@ func ComputeBalance(total int64, payments []Payment) Balance {
 			b.DepositHeld += p.Amount
 		case "refund":
 			b.DepositHeld -= p.Amount
+		case "payment_refund": // given back when the booking was cancelled
+			b.Paid -= p.Amount
 		case "late_fee", "damage_fee":
 			b.Extra += p.Amount
 		}

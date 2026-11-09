@@ -79,7 +79,19 @@ func setStatus(ctx context.Context, tx pgx.Tx, businessID, id, from, to, actor, 
 }
 
 // Transition applies a person's status change after checking the machine and the requirements.
+// What happens to the money already paid when a booking with payments is cancelled (or no-show).
+const (
+	PaidRefund = "refund" // given back: a payment_refund, it comes off the income
+	PaidKeep   = "keep"   // kept as a penalty: stays as income
+)
+
 func Transition(ctx context.Context, db store.DB, businessID, id, to, actor, note string) (Booking, error) {
+	return TransitionPaid(ctx, db, businessID, id, to, "", actor, note)
+}
+
+// TransitionPaid is Transition saying what to do with what was paid when it releases the booking;
+// a releasing move with payments requires that choice.
+func TransitionPaid(ctx context.Context, db store.DB, businessID, id, to, paid, actor, note string) (Booking, error) {
 	tx, err := db.Begin(ctx)
 	if err != nil {
 		return Booking{}, err
@@ -107,6 +119,21 @@ func Transition(ctx context.Context, db store.DB, businessID, id, to, actor, not
 		return Booking{}, Invalid{"status", fmt.Sprintf("Falta cobrar el saldo (%s).", mxn(bal.Due))}
 	case to == "out_for_delivery" && b.fulfillment != "delivery":
 		return Booking{}, Invalid{"status", "Este pedido se recoge en el local; no sale a entrega."}
+	}
+	if Releases(to) && bal.Paid > 0 {
+		switch paid {
+		case PaidRefund:
+			if _, err := tx.Exec(ctx, `insert into public.payments (business_id, booking_id, type, method, amount, paid_at, recorded_by, notes)
+				values ($1, $2, 'payment_refund', $3, $4, now(), nullif($5, '')::uuid, 'Devolución al cancelar')`,
+				businessID, id, ps[len(ps)-1].Method, bal.Paid, actor); err != nil {
+				return Booking{}, err
+			}
+			note = joinNote(note, fmt.Sprintf("Se devolvieron %s", mxn(bal.Paid)))
+		case PaidKeep:
+			note = joinNote(note, fmt.Sprintf("Se retienen %s como penalización", mxn(bal.Paid)))
+		default:
+			return Booking{}, Invalid{"paid", fmt.Sprintf("Ya se cobraron %s: elige si se devuelven o se retienen.", mxn(bal.Paid))}
+		}
 	}
 	if pending, err := pendingSteps(ctx, tx, id, to); err != nil || len(pending) > 0 {
 		if err != nil {
@@ -193,6 +220,13 @@ func AddPayment(ctx context.Context, db store.DB, businessID, id string, p Payme
 		return Booking{}, err
 	}
 	return Get(ctx, db, businessID, id)
+}
+
+func joinNote(note, add string) string {
+	if note = strings.TrimSpace(note); note == "" {
+		return add
+	}
+	return note + " · " + add
 }
 
 func label(status string) string {

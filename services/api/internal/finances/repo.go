@@ -295,9 +295,10 @@ func (r Repo) Summary(ctx context.Context, businessID string, from, to Day, now 
 	end := time.Date(to.Year(), to.Month(), to.Day(), 0, 0, 0, 0, loc).AddDate(0, 0, 1)
 
 	income := map[string]int64{}
-	rows, err := r.DB.Query(ctx, `select case when type in ('late_fee', 'damage_fee') then 'fees' else 'bookings' end, sum(amount)
+	rows, err := r.DB.Query(ctx, `select case when type in ('late_fee', 'damage_fee') then 'fees' else 'bookings' end,
+		  sum(case when type = 'payment_refund' then -amount else amount end)
 		from public.payments where business_id = $1 and paid_at >= $2 and paid_at < $3
-		  and type in ('advance', 'balance', 'late_fee', 'damage_fee') group by 1`, businessID, start, end)
+		  and type in ('advance', 'balance', 'late_fee', 'damage_fee', 'payment_refund') group by 1`, businessID, start, end)
 	if err != nil {
 		return out, err
 	}
@@ -365,10 +366,10 @@ func (r Repo) Summary(ctx context.Context, businessID string, from, to Day, now 
 	// evenly when a booking had more than one person.
 	collected := map[string]float64{}
 	rows, err = r.DB.Query(ctx, `
-		select br.staff_id::text, sum(p.amount::float8 / (select count(*) from public.booking_resources x
+		select br.staff_id::text, sum((case when p.type = 'payment_refund' then -p.amount else p.amount end)::float8 / (select count(*) from public.booking_resources x
 		                                                  where x.booking_id = p.booking_id and x.staff_id is not null))
 		from public.payments p join public.booking_resources br on br.booking_id = p.booking_id and br.staff_id is not null
-		where p.business_id = $1 and p.paid_at >= $2 and p.paid_at < $3 and p.type in ('advance', 'balance')
+		where p.business_id = $1 and p.paid_at >= $2 and p.paid_at < $3 and p.type in ('advance', 'balance', 'payment_refund')
 		group by 1`, businessID, start, end)
 	if err != nil {
 		return out, err

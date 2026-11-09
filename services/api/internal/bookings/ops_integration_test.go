@@ -209,3 +209,34 @@ func TestIntegrationReschedule(t *testing.T) {
 		t.Fatalf("cancelled: %v", err)
 	}
 }
+
+func TestIntegrationCancelWithPayments(t *testing.T) {
+	p := pool(t)
+	ctx := context.Background()
+	f := setup(t, p, "flowers", `{"deposit_percent": 50}`)
+	order := func(phone string) Booking {
+		b, _, err := Create(ctx, p, f.business, CreateInput{Customer: cust(phone), ItemID: f.item, StartsAt: at("2026-11-02T18:00:00Z"),
+			Options: map[string]string{"Color": "Rojo"}, Source: "admin", InitialPayment: &Payment{Method: "transfer", Amount: 50000}}, now)
+		if err != nil {
+			t.Fatal(err)
+		}
+		return b
+	}
+	var inv Invalid
+	a := order("6148880001")
+	if _, err := TransitionPaid(ctx, p, f.business, a.ID, "cancelled", "", "", ""); !errors.As(err, &inv) || inv.Field != "paid" {
+		t.Fatalf("cancel without choosing: %v", err)
+	}
+	// Given back: a payment_refund with the same method, nothing paid and nothing owed.
+	got, err := TransitionPaid(ctx, p, f.business, a.ID, "cancelled", PaidRefund, "", "")
+	last := got.Payments[len(got.Payments)-1]
+	if err != nil || got.Balance.Paid != 0 || got.Balance.Due != 0 || last.Type != "payment_refund" || last.Amount != 50000 || last.Method != "transfer" {
+		t.Fatalf("refund: %+v %+v %v", got.Balance, last, err)
+	}
+	// Kept as a penalty: still paid, nothing owed.
+	b := order("6148880002")
+	got, err = TransitionPaid(ctx, p, f.business, b.ID, "cancelled", PaidKeep, "", "Ya no lo quiso")
+	if err != nil || got.Balance.Paid != 50000 || got.Balance.Due != 0 || len(got.Payments) != 1 {
+		t.Fatalf("keep: %+v %v", got.Balance, err)
+	}
+}
