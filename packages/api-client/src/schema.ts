@@ -559,7 +559,7 @@ export interface paths {
             };
             cookie?: never;
         };
-        /** Precio antes de crear (mismas reglas que al crear, sin opciones ni envío) */
+        /** Precio antes de crear (mismas reglas que al crear, con opciones y envío) */
         get: operations["quoteBooking"];
         put?: never;
         post?: never;
@@ -3398,6 +3398,10 @@ export interface operations {
                 discount_value?: number;
                 /** @description Precio de un artículo con precio libre */
                 custom_price?: number;
+                /** @description JSON {opción: respuesta}; las que falten o no sean válidas no suman */
+                options?: string;
+                fulfillment?: "pickup" | "delivery";
+                delivery_zone?: string;
             };
             header?: never;
             path: {
@@ -3422,6 +3426,10 @@ export interface operations {
                         security_deposit: number;
                         /** @description Días que se cobran (renta) */
                         periods: number;
+                        /** @description Costo extra de las opciones, por pieza */
+                        options_extra: number;
+                        /** @description Envío de la zona elegida */
+                        delivery_fee: number;
                     };
                 };
             };

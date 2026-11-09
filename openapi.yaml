@@ -757,7 +757,7 @@ paths:
       - $ref: "#/components/parameters/BusinessId"
     get:
       operationId: quoteBooking
-      summary: Precio antes de crear (mismas reglas que al crear, sin opciones ni envío)
+      summary: Precio antes de crear (mismas reglas que al crear, con opciones y envío)
       parameters:
         - { name: item_id, in: query, required: true, schema: { type: string, format: uuid } }
         - { name: quantity, in: query, schema: { type: integer, minimum: 1, maximum: 100 } }
@@ -766,6 +766,9 @@ paths:
         - { name: discount_type, in: query, schema: { $ref: "#/components/schemas/DiscountType" } }
         - { name: discount_value, in: query, schema: { type: integer, minimum: 0 } }
         - { name: custom_price, in: query, schema: { type: integer, minimum: 1 }, description: "Precio de un artículo con precio libre" }
+        - { name: options, in: query, schema: { type: string }, description: "JSON {opción: respuesta}; las que falten o no sean válidas no suman" }
+        - { name: fulfillment, in: query, schema: { type: string, enum: [pickup, delivery] } }
+        - { name: delivery_zone, in: query, schema: { type: string } }
       responses:
         "200":
           description: OK
@@ -773,7 +776,7 @@ paths:
             application/json:
               schema:
                 type: object
-                required: [subtotal, discount, total, deposit_required, security_deposit, periods]
+                required: [subtotal, discount, total, deposit_required, security_deposit, periods, options_extra, delivery_fee]
                 properties:
                   subtotal: { type: integer }
                   discount: { type: integer, description: "Lo que el descuento quita del total" }
@@ -781,6 +784,8 @@ paths:
                   deposit_required: { type: integer }
                   security_deposit: { type: integer }
                   periods: { type: integer, description: "Días que se cobran (renta)" }
+                  options_extra: { type: integer, description: "Costo extra de las opciones, por pieza" }
+                  delivery_fee: { type: integer, description: "Envío de la zona elegida" }
         "422": { $ref: "#/components/responses/Error" }
 
   /v1/b/{businessId}/settings/documents:

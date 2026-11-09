@@ -25,7 +25,7 @@ function Field({ label, value, onChange, error, keyboard, hint, onBlur }: {
   return <UIField label={label} value={value} onChangeText={onChange} keyboardType={keyboard} error={error} hint={hint} onBlur={onBlur} />;
 }
 
-type Quote = { total: number; discount: number; deposit_required: number; security_deposit: number; periods: number };
+type Quote = { total: number; discount: number; deposit_required: number; security_deposit: number; periods: number; delivery_fee: number };
 
 export default function NewBooking() {
   const { businessId } = useLocalSearchParams<{ businessId: string }>();
@@ -160,6 +160,8 @@ export default function NewBooking() {
 
   // Price as soon as the dates (or the slot) are known: the API applies the same rules as when creating.
   const [quote, setQuote] = useState<Quote | null>(null);
+  // The zone's delivery is part of the total (Q1: «Pago total» charged it without showing it).
+  const delivering = e?.fulfillment === 'pickupOrDelivery' && zones.length > 0 && fulfillment === 'delivery';
   const quoteStart = isSlot ? slot?.starts_at : outISO;
   const quoteReady = !!item && !!quoteStart && (!isRange || !!exact?.available);
   useEffect(() => {
@@ -167,9 +169,10 @@ export default function NewBooking() {
     if (!item || !quoteReady || !quoteStart) return;
     api.GET('/v1/b/{businessId}/quote', {
       params: { path: { businessId }, query: { item_id: item.id, quantity: qty, starts_at: quoteStart, ...(isRange && backISO ? { ends_at: backISO } : {}),
-        ...(discount ? { discount_type: discount.type, discount_value: discount.value } : {}), ...(customPrice ? { custom_price: customPrice } : {}) } },
+        ...(discount ? { discount_type: discount.type, discount_value: discount.value } : {}), ...(customPrice ? { custom_price: customPrice } : {}),
+        ...(delivering ? { fulfillment: 'delivery' as const, delivery_zone: zone } : {}) } },
     }).then(({ data }) => setQuote(data ?? null));
-  }, [businessId, item, qty, quoteStart, backISO, quoteReady, discount?.type, discount?.value, customPrice]);
+  }, [businessId, item, qty, quoteStart, backISO, quoteReady, discount?.type, discount?.value, customPrice, delivering, zone]);
 
   function dayInfo(date: string): DayInfo {
     if (date < today) return { disabled: true };
@@ -393,6 +396,7 @@ export default function NewBooking() {
           {quote && (
             <View style={{ gap: 6 }}>
               {e?.pricing === 'perPeriod' && <Row label={s.dates.days} value={String(quote.periods)} />}
+              {quote.delivery_fee > 0 && <Row label={t.deliveryFee(zone)} value={formatMXN(quote.delivery_fee)} />}
               <Row label={t.total} value={formatMXN(quote.total)} strong />
               {quote.security_deposit > 0 && <Row label={s.dates.deposit} value={formatMXN(quote.security_deposit)} />}
             </View>
@@ -435,6 +439,7 @@ export default function NewBooking() {
               {/* An unreadable discount (e.g. 150 %): no totals until it's fixed, they would leave it out. */}
               {quote && discount !== undefined && (
                 <View style={{ gap: 6 }}>
+                  {quote.delivery_fee > 0 && <Row label={t.deliveryFee(zone)} value={formatMXN(quote.delivery_fee)} />}
                   {quote.discount > 0 && <Row label={t.discount.label} value={`− ${formatMXN(quote.discount)}`} />}
                   <Row label={t.total} value={formatMXN(quote.total)} />
                   <Row label={s.payment.now} value={formatMXN(paidNow)} />

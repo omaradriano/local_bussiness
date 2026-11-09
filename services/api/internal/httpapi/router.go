@@ -980,6 +980,11 @@ func NewRouter(d Deps) http.Handler {
 					}
 					in.CustomPrice = &p
 				}
+				in.Fulfillment, in.DeliveryZone = q.Get("fulfillment"), q.Get("delivery_zone")
+				if v := q.Get("options"); v != "" && json.Unmarshal([]byte(v), &in.Options) != nil {
+					invalid(w, "Opciones inválidas.", map[string]string{"options": "Opciones inválidas."})
+					return
+				}
 				if v := q.Get("discount_value"); v != "" {
 					in.Discount.Type = q.Get("discount_type")
 					if in.Discount.Value, err = strconv.ParseInt(v, 10, 64); err != nil {
