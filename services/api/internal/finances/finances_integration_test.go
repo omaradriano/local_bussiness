@@ -51,6 +51,10 @@ func TestIntegrationSummary(t *testing.T) {
 
 	exec(`insert into public.retail_products (id, business_id, name, price) values ('00000000-0000-0000-0000-0000000000e6', $1, 'Chocolates', 9000)`, biz)
 	exec(`insert into public.stock_purchases (business_id, product_id, quantity, unit_cost, purchased_on) values ($1, '00000000-0000-0000-0000-0000000000e6', 20, 5000, '2026-11-04')`, biz)
+	// A counter sale: a chocolate (product, 90) and an arrangement sold right there (counter, 140).
+	exec(`insert into public.sales (id, business_id, sold_at, method, total, cost_total) values ('00000000-0000-0000-0000-0000000000e7', $1, '2026-11-05T18:00:00Z', 'cash', 23000, 5000)`, biz)
+	exec(`insert into public.sale_lines (business_id, sale_id, product_id, quantity, unit_price, unit_cost) values ($1, '00000000-0000-0000-0000-0000000000e7', '00000000-0000-0000-0000-0000000000e6', 1, 9000, 5000)`, biz)
+	exec(`insert into public.sale_lines (business_id, sale_id, name, quantity, unit_price, unit_cost) values ($1, '00000000-0000-0000-0000-0000000000e7', 'Ramo', 1, 14000, 0)`, biz)
 
 	r := Repo{DB: tx}
 	// Merchandise bought shows up in the expenses list (read-only), next to the expenses.
@@ -82,14 +86,15 @@ func TestIntegrationSummary(t *testing.T) {
 		return 0
 	}
 	// Income: 300 + 200 (local 30 Nov) for services, 100 in fees; the deposit isn't income.
-	if s.Income.Total != 60000 || part(s.Income, "bookings") != 50000 || part(s.Income, "fees") != 10000 {
+	// Plus the counter sale: 90 in products, 140 at the counter.
+	if s.Income.Total != 83000 || part(s.Income, "bookings") != 50000 || part(s.Income, "fees") != 10000 || part(s.Income, "products") != 9000 || part(s.Income, "counter") != 14000 {
 		t.Fatalf("income: %+v", s.Income)
 	}
 	// Expenses: gasoline 400, truck down payment 1,000 + one installment 500, commission 30 % of 500, 20 chocolates bought 1,000.
 	if part(s.Expenses, "transport") != 40000 || part(s.Expenses, "asset") != 150000 || part(s.Expenses, "commissions") != 15000 || part(s.Expenses, "merchandise") != 100000 {
 		t.Fatalf("expenses: %+v", s.Expenses)
 	}
-	if s.Profit != 60000-(40000+150000+15000+100000) || len(s.Plans) != 1 || s.Plans[0].Remaining != 10*50000 || len(s.Payroll) != 1 {
+	if s.Profit != 83000-(40000+150000+15000+100000) || len(s.Plans) != 1 || s.Plans[0].Remaining != 10*50000 || len(s.Payroll) != 1 {
 		t.Fatalf("profit %d plans %+v payroll %+v", s.Profit, s.Plans, s.Payroll)
 	}
 	// Bookings by status: the November haircut and a cancelled one; December's doesn't count.

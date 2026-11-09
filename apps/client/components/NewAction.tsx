@@ -1,4 +1,4 @@
-import { strings, term } from '@lb/shared';
+import { strings, term, textsFor } from '@lb/shared';
 import { Ionicons } from '@expo/vector-icons';
 import { router, type Href } from 'expo-router';
 import { useRef, useState, type ComponentRef, type ReactNode, type RefObject } from 'react';
@@ -31,7 +31,7 @@ export function useNewAction(businessId: string): {
   const [at, setAt] = useState<Anchor | null>(null);
   const go = (path: string) => { setAt(null); router.push(`/admin/${businessId}${path}` as Href); };
   const n = strings.nav;
-  const booking: NewChoice = { icon: 'calendar', label: strings.bookings.new(term(business?.vertical ?? 'tool_rental', 'booking') ?? ''), sublabel: n.bookingHint, path: '/bookings/new' };
+  const booking: NewChoice = { icon: 'calendar', label: textsFor(business?.vertical ?? 'tool_rental').newBooking.title, sublabel: n.bookingHint, path: '/bookings/new' };
   // Quick sale covers catalog items, free amounts and products with stock; without it, the products' counter.
   const sale: NewChoice | null = has('quickSale')
     ? { icon: 'flash', label: strings.quickSale.open, sublabel: strings.quickSale.openHint, path: '/sales/new' }

@@ -1293,7 +1293,7 @@ func TestProductRoutes(t *testing.T) {
 		{"compra de mercancía", http.MethodPost, base + "/products/" + itemID + "/purchases", "ok", `{"quantity":5,"unit_cost":6500,"purchased_on":"2026-11-03"}`, http.StatusOK, `"stock":8`},
 		{"compra sin fecha", http.MethodPost, base + "/products/" + itemID + "/purchases", "ok", `{"quantity":5,"unit_cost":6500}`, http.StatusUnprocessableEntity, `"purchased_on"`},
 		{"empleado vende", http.MethodPost, base + "/sales", "staff", `{"lines":[{"product_id":"` + itemID + `","quantity":1}],"method":"cash"}`, http.StatusCreated, `"total":15000`},
-		{"venta vacía", http.MethodPost, base + "/sales", "staff", `{"lines":[],"method":"cash"}`, http.StatusUnprocessableEntity, `"lines"`},
+		{"venta vacía", http.MethodPost, base + "/sales", "staff", `{"lines":[],"method":"cash"}`, http.StatusUnprocessableEntity, `"message":"Agrega productos."`},
 		// The barbershop sells products with stock but has no quick sale: catalog items are refused.
 		{"sin venta rápida", http.MethodPost, base + "/sales", "staff", `{"lines":[{"item_id":"` + itemID + `","quantity":1}],"method":"cash"}`, http.StatusUnprocessableEntity, `"lines"`},
 		{"concepto inválido", http.MethodPost, base + "/sales", "staff", `{"lines":[{"item_id":"x","quantity":1}],"method":"cash"}`, http.StatusUnprocessableEntity, `"lines"`},

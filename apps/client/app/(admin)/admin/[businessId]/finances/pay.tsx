@@ -1,6 +1,6 @@
 import type { components } from '@lb/api-client';
 import { centavosToInput, engineFor, parsePesos, strings } from '@lb/shared';
-import { Stack, useLocalSearchParams } from 'expo-router';
+import { router, Stack, useLocalSearchParams } from 'expo-router';
 import { useEffect, useState } from 'react';
 import { ActivityIndicator, StyleSheet, View } from 'react-native';
 import { api } from '../../../../../lib/api';
@@ -67,7 +67,10 @@ export default function PayScreen() {
       <Text variant="largeTitle" accessibilityRole="header" style={{ marginBottom: 8 }}>{t.sections.pay}</Text>
       <Text variant="subhead" color="labelSecondary" style={{ marginBottom: 20 }}>{commissions ? t.payHint : t.payHintSalaryOnly}</Text>
       {!list && <ActivityIndicator />}
-      {list?.length === 0 && <EmptyState icon="people-outline" title={t.noStaff} />}
+      {list?.length === 0 && (
+        <EmptyState icon="people-outline" title={t.noStaff}
+          action={<Button icon="person-add" onPress={() => router.push({ pathname: '/admin/[businessId]/staff', params: { businessId } })}>{t.addStaff}</Button>} />
+      )}
       {!!list?.length && (
         <View style={{ backgroundColor: ui.surface, borderRadius: radius.sm, overflow: 'hidden' }}>
           {list.filter((p) => !p.deleted).map((p, i) => <PayCard key={p.staff_id} businessId={businessId} pay={p} first={i === 0} commissions={commissions} />)}

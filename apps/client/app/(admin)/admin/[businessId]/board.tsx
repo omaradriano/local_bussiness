@@ -1,5 +1,5 @@
 import type { components } from '@lb/api-client';
-import { addDays, boardColumns, dayStartISO, forwardMove, hhmm, strings, todayISO, type BoardStatus } from '@lb/shared';
+import { addDays, boardColumns, dayStartISO, forwardMove, hhmm, strings, todayISO, type BoardStatus, capFirst } from '@lb/shared';
 import { Ionicons } from '@expo/vector-icons';
 import { router, Stack, useFocusEffect, useLocalSearchParams } from 'expo-router';
 import { useCallback, useState } from 'react';
@@ -66,7 +66,7 @@ export default function Board() {
 
       <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8, marginBottom: 12 }}>
         <DayButton icon="chevron-back" label={t.prevDay} onPress={() => setDay(addDays(day, -1))} />
-        <Text variant="headline" style={{ flex: 1, textAlign: 'center', textTransform: 'capitalize' }}>{label}</Text>
+        <Text variant="headline" style={{ flex: 1, textAlign: 'center' }}>{capFirst(label)}</Text>
         <DayButton icon="chevron-forward" label={t.nextDay} onPress={() => setDay(addDays(day, 1))} />
       </View>
       <View style={{ flexDirection: 'row', gap: 8, marginBottom: 12 }}>

@@ -32,7 +32,7 @@ func writeProducts(w http.ResponseWriter, r *http.Request, status int, v any, er
 	var bad products.Invalid
 	switch {
 	case errors.As(err, &bad):
-		invalid(w, "Revisa los datos.", bad)
+		invalid(w, oneOr(bad, "Revisa los datos."), bad) // e.g. «Solo quedan 2 de Chocolates.»
 	case errors.Is(err, products.ErrNotFound):
 		notFound(w, "No existe.")
 	case err != nil:

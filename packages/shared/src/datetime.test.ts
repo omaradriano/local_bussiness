@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { bookingDays, dayStartISO, futureTime, hhmm, localToISO, monthWindow, nextHour, todayISO } from './datetime';
+import { bookingDays, capFirst, dayStartISO, futureTime, hhmm, localToISO, monthWindow, nextHour, todayISO } from './datetime';
 
 describe('localToISO', () => {
   it('builds a local instant and round-trips the clock time', () => {
@@ -62,4 +62,9 @@ describe('dayStartISO', () => {
     expect(dayStartISO('2026-07-01', 'America/Tijuana')).toBe('2026-07-01T07:00:00.000Z');
     expect(dayStartISO('2026-12-01', 'America/Tijuana')).toBe('2026-12-01T08:00:00.000Z');
   });
+});
+
+describe('capFirst', () => {
+  it('only the first letter', () => expect(capFirst('domingo, 8 de noviembre')).toBe('Domingo, 8 de noviembre'));
+  it('empty stays empty', () => expect(capFirst('')).toBe(''));
 });

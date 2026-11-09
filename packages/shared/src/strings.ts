@@ -98,7 +98,7 @@ export const strings = {
     deposit: 'Depósito de garantía (pesos)',
     lateFee: 'Recargo por día de retraso (pesos)',
     invalidMoney: 'Escribe una cantidad válida, por ejemplo 250 o 250.50.',
-    invalidNumber: 'Escribe un número entero.',
+    invalidNumber: 'Escribe un número entero, sin decimales ni signo menos.',
     onlyOwner: 'Solo el dueño puede editar el catálogo.',
     units: 'Unidades',
     unitsToCreate: '¿Cuántas piezas tienes?',
@@ -133,7 +133,6 @@ export const strings = {
     tooMany: (max: number) => `Solo se agregaron las primeras: el máximo es ${max} fotos por artículo.`,
   },
   bookings: {
-    new: (term: string) => `Nueva ${term.toLowerCase()}`,
     item: 'Artículo',
     customer: 'Cliente',
     phone: 'Teléfono (10 dígitos)',
@@ -151,6 +150,7 @@ export const strings = {
     sameInstant: 'El regreso debe ser después de la salida (mismo día: cambia la hora).',
     checking: 'Revisando disponibilidad…',
     noUnits: 'Esta herramienta no tiene unidades libres este mes. Si aún no registras sus piezas, agrégalas aquí.',
+    tooManyForAnyDay: (qty: number, max: number) => `Ningún día de este mes tiene lugar para ${qty} (lo más que queda libre es ${max}). Baja la cantidad o mira otro mes.`,
     availabilityError: 'No se pudo cargar la disponibilidad.',
     freeBadge: (n: number) => `${n} libre${n === 1 ? '' : 's'}`,
     closedBadge: 'cerrado',
@@ -642,6 +642,7 @@ export const strings = {
     noExpenses: 'Sin gastos en este periodo.',
     incomeHint: 'Cuenta lo cobrado en el periodo. Los depósitos de garantía no son ingreso: se devuelven.',
     incomeSources: { bookings: 'Servicios y rentas', fees: 'Recargos y daños', products: 'Venta de productos' } as Record<string, string>,
+    counterSales: (catalog: string) => `Venta rápida de ${catalog.toLowerCase()}`, // catalog items sold at the counter
     categories: {
       transport: 'Transporte y gasolina', maintenance: 'Mantenimiento', rent: 'Renta del local', utilities: 'Luz, agua e internet',
       supplies: 'Insumos', asset: 'Compra de equipo o vehículo', advertising: 'Publicidad', taxes: 'Impuestos', payroll: 'Sueldos',
@@ -700,7 +701,8 @@ export const strings = {
     category: 'Categoría',
     amount: 'Monto (pesos)',
     description: 'Descripción (opcional)',
-    descriptionPlaceholder: 'Gasolina para entregar, ceras…',
+    descriptionPlaceholder: 'Gasolina, insumos, publicidad…',
+    pickCategory: 'Elige una categoría.',
     expenseSaved: 'Gasto registrado.',
     expenseDeleted: 'Gasto borrado.',
     addPlan: 'Registrar compra a plazos',
@@ -724,6 +726,7 @@ export const strings = {
     paySaved: 'Paga guardada.',
     savePay: 'Guardar',
     noStaff: 'No hay personas en el equipo.',
+    addStaff: 'Agregar personas',
     invalidDate: 'Escribe la fecha como AAAA-MM-DD.',
   },
   platform: {

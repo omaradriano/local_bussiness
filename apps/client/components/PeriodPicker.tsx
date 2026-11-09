@@ -1,5 +1,5 @@
 import { Ionicons } from '@expo/vector-icons';
-import { firstOfMonth, periodLabel, periodOf, shiftPeriod, strings, todayISO, type PeriodKind } from '@lb/shared';
+import { firstOfMonth, periodLabel, periodOf, shiftPeriod, strings, todayISO, type PeriodKind, capFirst } from '@lb/shared';
 import { useState } from 'react';
 import { View } from 'react-native';
 import { PressableScale, Segmented, Text, useUI } from '../ui';
@@ -32,7 +32,7 @@ export function PeriodPicker({ value, onChange, monthOnly }: { value: Period; on
             onPress={() => onChange({ kind: value.kind, ...shiftPeriod(value.kind as Exclude<PeriodKind, 'range'>, value.from, -1) })}>
             <Ionicons name="chevron-back" size={22} color={ui.accent} />
           </PressableScale>
-          <Text variant="headline" style={{ textTransform: 'capitalize' }}>{periodLabel(value.kind, value.from, value.to)}</Text>
+          <Text variant="headline">{capFirst(periodLabel(value.kind, value.from, value.to))}</Text>
           <PressableScale accessibilityRole="button" accessibilityLabel="Periodo siguiente" hitSlop={10} style={{ padding: 6 }}
             onPress={() => onChange({ kind: value.kind, ...shiftPeriod(value.kind as Exclude<PeriodKind, 'range'>, value.from, 1) })}>
             <Ionicons name="chevron-forward" size={22} color={ui.accent} />

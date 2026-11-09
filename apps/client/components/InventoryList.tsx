@@ -11,7 +11,7 @@ type Row = components['schemas']['InventoryRow'];
 type State = Row['state'];
 const t = strings.inventory;
 const STATES: State[] = ['available', 'rented', 'scheduled', 'inactive'];
-const when = (iso: string) => new Date(iso).toLocaleString('es-MX', { weekday: 'short', day: 'numeric', month: 'short', hour: '2-digit', minute: '2-digit' });
+const when = (iso: string) => new Date(iso).toLocaleString('es-MX', { weekday: 'short', day: 'numeric', month: 'short', hour: '2-digit', minute: '2-digit', hourCycle: 'h23' });
 
 /** Every rental unit: free, out (with its return date), booked to go out, or inactive; sorted by date by the API. */
 export function InventoryList({ businessId }: { businessId: string }) {

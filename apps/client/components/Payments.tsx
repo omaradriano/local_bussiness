@@ -107,7 +107,7 @@ export function PaymentForm({ businessId, booking, types, suggested, onDone }: {
 export function PaymentList({ businessId, booking }: { businessId: string; booking: Booking }) {
   const ui = useUI();
   const [urls, setUrls] = useState<Record<string, string>>({});
-  const when = (iso: string) => new Date(iso).toLocaleString('es-MX', { day: 'numeric', month: 'short', hour: '2-digit', minute: '2-digit' });
+  const when = (iso: string) => new Date(iso).toLocaleString('es-MX', { day: 'numeric', month: 'short', hour: '2-digit', minute: '2-digit', hourCycle: 'h23' });
 
   useEffect(() => {
     for (const p of booking.payments) for (const key of p.evidence ?? []) {

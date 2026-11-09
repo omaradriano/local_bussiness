@@ -17,7 +17,7 @@ type Stats = components['schemas']['ProductStats'];
 type Method = Sale['method'];
 type Tab = 'sell' | 'inventory' | 'stats';
 const t = strings.products;
-const hour = (iso: string) => new Date(iso).toLocaleTimeString('es-MX', { hour: '2-digit', minute: '2-digit' });
+const hour = (iso: string) => new Date(iso).toLocaleTimeString('es-MX', { hour: '2-digit', minute: '2-digit', hourCycle: 'h23' });
 
 /** Counter sale: tap products to add them, pick how it's paid, register. Today's sales below. */
 function Sell({ businessId, isOwner, products, reload }: { businessId: string; isOwner: boolean; products: Product[]; reload: () => void }) {

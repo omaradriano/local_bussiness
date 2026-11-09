@@ -40,6 +40,7 @@ export const nails = {
       settings: 'Anticipo, margen entre citas y funciones',
     },
     newBooking: {
+      title: 'Nueva cita',
       itemHint: 'Elige el servicio.',
       customerHint: 'Busca o registra a la clienta; su teléfono queda guardado para la próxima.',
       paymentHint: 'Si pides anticipo, regístralo aquí para confirmar la cita.',

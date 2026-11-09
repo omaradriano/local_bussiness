@@ -2,6 +2,7 @@ package bookings
 
 import (
 	"context"
+	"fmt"
 	"slices"
 	"strings"
 	"time"
@@ -199,10 +200,20 @@ func (dailyCapacity) check(r *reservation) error {
 	if err != nil {
 		return err
 	}
-	if len(res.Days) != 1 || !res.Days[0].Available {
+	if len(res.Days) != 1 {
 		return ErrSlotTaken
 	}
-	return nil
+	if res.Days[0].Available {
+		return nil
+	}
+	// Say why: some spots left but not enough, none left (someone took them: 409), or no deliveries that day.
+	switch left := res.Days[0].Remaining; {
+	case left > 0 && left < r.in.Quantity:
+		return Invalid{"quantity", fmt.Sprintf("Ese día solo quedan %d lugares; pide %d o menos, o elige otro día.", left, left)}
+	case left == 0:
+		return ErrSlotTaken
+	}
+	return Invalid{"starts_at", "Ese día no hay entregas: ya pasó, el negocio cierra o no alcanza el tiempo de preparación."}
 }
 
 func (dailyCapacity) claim(*reservation, string) error { return nil }

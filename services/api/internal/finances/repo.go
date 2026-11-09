@@ -323,13 +323,19 @@ func (r Repo) Summary(ctx context.Context, businessID string, from, to Day, now 
 	}
 
 	// Product sales are income; merchandise bought for them is an expense («Mercancía»).
-	var sold, bought int64
+	// Products with stock are «products»; catalog items and free amounts sold at the counter are «counter»
+	// (a florist's arrangements sold right there aren't merchandise).
+	var sold, counter, bought int64
 	// Extras on an order's account aren't money yet: they come in as the order's payments.
-	if err := r.DB.QueryRow(ctx, `select coalesce(sum(total), 0) from public.sales where business_id = $1 and sold_at >= $2 and sold_at < $3 and method <> 'on_account'`,
-		businessID, start, end).Scan(&sold); err != nil {
+	if err := r.DB.QueryRow(ctx, `select coalesce(sum(l.quantity * l.unit_price) filter (where l.product_id is not null), 0),
+		  coalesce(sum(l.quantity * l.unit_price) filter (where l.product_id is null), 0)
+		from public.sales s join public.sale_lines l on l.sale_id = s.id
+		where s.business_id = $1 and s.sold_at >= $2 and s.sold_at < $3 and s.method <> 'on_account'`,
+		businessID, start, end).Scan(&sold, &counter); err != nil {
 		return out, err
 	}
 	income["products"] += sold
+	income["counter"] += counter
 	if err := r.DB.QueryRow(ctx, `select coalesce(sum(quantity * unit_cost), 0) from public.stock_purchases
 		where business_id = $1 and purchased_on between $2 and $3`, businessID, from, to).Scan(&bought); err != nil {
 		return out, err

@@ -257,7 +257,7 @@ export default function NewBooking() {
 
   return (
     <Screen>
-      <Stack.Screen options={{ title: t.new(bookingTerm) }} />
+      <Stack.Screen options={{ title: texts.newBooking.title }} />
       <View style={{ gap: 16 }}>
         {has('quickSale') && (
           <Group>
@@ -296,6 +296,11 @@ export default function NewBooking() {
                 onSelect={pick} dayInfo={dayInfo} />
               {isRange && (settings?.rentals.rentals_span_closed_days ?? true) && <Text variant="footnote" color="labelSecondary">{t.closedDayHint}</Text>}
               {daysState !== 'loading' && daysState !== 'ready' && <Notice tone="warning">{daysState}</Notice>}
+              {/* Daily capacity: asking for more than any day has left turns the whole month off; say why. */}
+              {e?.resource === 'dailyCapacity' && daysState === 'ready' && qty > 1 && Object.values(days).every((d) => !d.available) &&
+                Object.values(days).some((d) => d.remaining > 0) && (
+                <Notice tone="warning">{t.tooManyForAnyDay(qty, Math.max(...Object.values(days).map((d) => d.remaining)))}</Notice>
+              )}
               {e?.resource === 'units' && daysState === 'ready' && Object.values(days).every((d) => d.remaining === 0) && (
                 <View style={{ gap: 8 }}>
                   <Notice tone="warning">{t.noUnits}</Notice>
