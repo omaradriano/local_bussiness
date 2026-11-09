@@ -561,3 +561,41 @@ func TestIntegrationOrderUnavailableReasons(t *testing.T) {
 		t.Fatalf("more than left: %v", err)
 	}
 }
+
+func TestIntegrationUrgentOrder(t *testing.T) {
+	p := pool(t)
+	ctx := context.Background()
+	f := setup(t, p, "flowers", `{"daily_capacity": 1}`) // open 09–20 h (UTC−6); now = 12:00
+	if _, err := p.Exec(ctx, `update public.catalog_items set prep_hours = 24 where id = $1`, f.item); err != nil {
+		t.Fatal(err)
+	}
+	in := func(phone, start string, urgent bool) CreateInput {
+		return CreateInput{Customer: cust(phone), ItemID: f.item, StartsAt: at(start), Options: map[string]string{"Color": "Rojo"}, Source: "admin", Urgent: urgent}
+	}
+	var bad Invalid
+	// Tonight at 22:00: closed and short of the 24 h of preparation.
+	if _, _, err := Create(ctx, p, f.business, in("6141110041", "2026-11-02T04:00:00Z", false), now); !errors.As(err, &bad) || bad.Field != "starts_at" {
+		t.Fatalf("not urgent: %v", err)
+	}
+	// From the public link the flag means nothing.
+	public := in("6141110041", "2026-11-02T04:00:00Z", true)
+	public.Source = "public"
+	if _, _, err := Create(ctx, p, f.business, public, now); !errors.As(err, &bad) || bad.Field != "starts_at" {
+		t.Fatalf("urgent from the public link: %v", err)
+	}
+	// Urgent: skips the hours and the preparation time, and says so in the history.
+	b, _, err := Create(ctx, p, f.business, in("6141110041", "2026-11-02T04:00:00Z", true), now)
+	if err != nil {
+		t.Fatalf("urgent: %v", err)
+	}
+	if got, _ := Get(ctx, p, f.business, b.ID); len(got.Events) == 0 || !strings.Contains(deref(got.Events[0].Note), "urgente") {
+		t.Fatalf("urgent not noted: %+v", got.Events)
+	}
+	// But not the day's capacity, nor a time that already went by.
+	if _, _, err := Create(ctx, p, f.business, in("6141110042", "2026-11-02T05:00:00Z", true), now); !errors.Is(err, ErrSlotTaken) {
+		t.Fatalf("urgent over capacity: %v", err)
+	}
+	if _, _, err := Create(ctx, p, f.business, in("6141110043", "2026-11-01T17:00:00Z", true), now); !errors.As(err, &bad) || bad.Field != "starts_at" {
+		t.Fatalf("urgent in the past: %v", err)
+	}
+}

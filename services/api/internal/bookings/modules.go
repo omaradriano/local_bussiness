@@ -81,8 +81,11 @@ func dayTiming(r *reservation) error {
 	if err != nil {
 		return err
 	}
-	// With hours set, the delivery time (and the end of its window) falls while the shop is open.
-	if len(hours) > 0 && (!availability.OpenAt(r.loc, r.start, hours) || r.in.EndsAt != nil && !availability.OpenAt(r.loc, *r.in.EndsAt, hours)) {
+	if r.in.Urgent && r.start.Before(r.now) {
+		return Invalid{"starts_at", "Esa hora ya pasó; elige una hora de hoy en adelante."}
+	}
+	// With hours set, the delivery time (and the end of its window) falls while the shop is open; an urgent order may not.
+	if len(hours) > 0 && !r.in.Urgent && (!availability.OpenAt(r.loc, r.start, hours) || r.in.EndsAt != nil && !availability.OpenAt(r.loc, *r.in.EndsAt, hours)) {
 		return Invalid{"starts_at", "Esa hora está fuera del horario del negocio; elige una hora en que esté abierto."}
 	}
 	e := r.in.EndsAt
@@ -206,11 +209,12 @@ func (dailyCapacity) check(r *reservation) error {
 	if len(res.Days) != 1 {
 		return ErrSlotTaken
 	}
-	if res.Days[0].Available {
-		return nil
+	left := res.Days[0].Remaining
+	if res.Days[0].Available || r.in.Urgent && (left == -1 || left >= r.in.Quantity) {
+		return nil // urgent: closed or short of preparation time is fine, but not past the day's capacity
 	}
 	// Say why: some spots left but not enough, none left (someone took them: 409), or no deliveries that day.
-	switch left := res.Days[0].Remaining; {
+	switch {
 	case left > 0 && left < r.in.Quantity:
 		return Invalid{"quantity", fmt.Sprintf("Ese día solo quedan %d lugares; pide %d o menos, o elige otro día.", left, left)}
 	case left == 0:

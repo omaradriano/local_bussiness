@@ -259,6 +259,8 @@ export const strings = {
     deliveryTime: 'Hora de entrega (HH:MM)',
     windowEnd: 'Hasta (HH:MM, opcional)',
     windowHint: 'Si el cliente da un rango, por ejemplo de 10:00 a 13:00.',
+    urgent: 'Pedido urgente',
+    urgentHint: 'Fuera de horario o sin el tiempo de preparación; el cupo del día se respeta y queda anotado.',
     windowUntil: (to: string) => `a ${to}`,
     badTime: 'Escribe la hora como HH:MM.',
     gift: {

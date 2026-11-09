@@ -1970,6 +1970,8 @@ export interface components {
                 privacy_accepted?: boolean;
             };
             discount?: components["schemas"]["Discount"];
+            /** @description Solo mostrador y solo la dueña (403 owner_only): pedido fuera de horario o sin tiempo de preparación; respeta el cupo */
+            urgent?: boolean;
             /** @description Lo que el cliente paga al crearla (solo mostrador). Sin `amount` = el total. */
             initial_payment?: {
                 /** @enum {string} */

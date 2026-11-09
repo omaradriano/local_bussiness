@@ -2561,6 +2561,7 @@ components:
             email: { type: string }
             privacy_accepted: { type: boolean, description: "El cliente aceptó el aviso de privacidad del negocio" }
         discount: { $ref: "#/components/schemas/Discount" }
+        urgent: { type: boolean, description: "Solo mostrador y solo la dueña (403 owner_only): pedido fuera de horario o sin tiempo de preparación; respeta el cupo" }
         initial_payment:
           type: object
           description: "Lo que el cliente paga al crearla (solo mostrador). Sin `amount` = el total."
