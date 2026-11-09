@@ -5,6 +5,7 @@ import { useCallback, useEffect, useState } from 'react';
 import { ActivityIndicator, Linking, View } from 'react-native';
 import { BookingDocuments } from '../../../../../components/BookingDocuments';
 import { ExtendRental } from '../../../../../components/ExtendRental';
+import { RescheduleOrder } from '../../../../../components/RescheduleOrder';
 import { DiscountForm } from '../../../../../components/DiscountForm';
 import { PaymentForm, PaymentList, paymentTypesFor, type PaymentType } from '../../../../../components/Payments';
 import { StatusBadge } from '../../../../../components/StatusBadge';
@@ -85,8 +86,8 @@ export default function BookingDetail() {
   const bookingTerm = term(business.vertical, 'booking') ?? t.detail;
   const e = engineFor(b.kind);
   // Check-out/return (custody) have their own flow; the rest are plain status moves.
-  // "Iniciar" only where the business tracks the start (feature startService); otherwise it's finished directly.
-  const actions = b.next.filter((s) => !(e.custody && (s === 'checked_out' || s === 'returned')) && !(s === 'in_progress' && !has('startService')));
+  // "Iniciar" only where the business tracks the start (feature startService) and it can be skipped; an order always goes through it.
+  const actions = b.next.filter((s) => !(e.custody && (s === 'checked_out' || s === 'returned')) && !(s === 'in_progress' && !has('startService') && b.next.includes('completed')));
   const hasPhone = b.customer.phone !== WALK_IN_PHONE;
   const waText = t.whatsappText(b.customer.name, bookingTerm, when(b.starts_at), texts.bookings.status[b.status]);
   const editable = !['cancelled', 'expired', 'no_show', 'completed'].includes(b.status);
@@ -174,6 +175,9 @@ export default function BookingDetail() {
           {b.hold_expires_at ? <Cell icon="hourglass" tint={ui.warning} label={t.holdUntil} value={when(b.hold_expires_at)} /> : null}
           {b.notes ? <Cell icon="document-text" tint={ui.gray} label={b.notes} /> : null}
         </Group>
+        {e.timing === 'day' && ['pending_deposit', 'confirmed', 'in_progress', 'ready'].includes(b.status) && (
+          <RescheduleOrder businessId={businessId} booking={b} onDone={show} />
+        )}
 
         {e.custody && !closedNote ? (
           <>

@@ -51,6 +51,10 @@ func (r Repo) Extend(ctx context.Context, businessID, id string, newEnd time.Tim
 	return Extend(ctx, r.DB, businessID, id, newEnd, actor, now)
 }
 
+func (r Repo) Reschedule(ctx context.Context, businessID, id string, start time.Time, end *time.Time, actor string, now time.Time) (Booking, error) {
+	return Reschedule(ctx, r.DB, businessID, id, start, end, actor, now)
+}
+
 func (r Repo) SetDiscount(ctx context.Context, businessID, id string, d Discount, actor string) (Booking, error) {
 	return SetDiscount(ctx, r.DB, businessID, id, d, actor)
 }

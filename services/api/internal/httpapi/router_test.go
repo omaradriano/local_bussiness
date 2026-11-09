@@ -632,6 +632,10 @@ func (fakeBookings) SetDiscount(_ context.Context, _, id string, _ bookings.Disc
 	return bookings.Booking{ID: id}, nil
 }
 
+func (fakeBookings) Reschedule(_ context.Context, _, id string, start time.Time, end *time.Time, _ string, _ time.Time) (bookings.Booking, error) {
+	return bookings.Booking{ID: id, StartsAt: start, EndsAt: end}, nil
+}
+
 func (fakeBookings) Extend(_ context.Context, _, id string, newEnd time.Time, _ string, _ time.Time) (bookings.Booking, error) {
 	if newEnd.Year() == 2030 {
 		return bookings.Booking{}, bookings.ErrSlotTaken
