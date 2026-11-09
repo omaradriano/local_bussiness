@@ -35,11 +35,13 @@ describe('forwardMove', () => {
 });
 
 describe('paymentAlert', () => {
-  it('warns of the missing advance, and of the rest only when the order is about to be handed over', () => {
+  it('warns of the missing advance, and of the rest until the order is handed over', () => {
     expect(paymentAlert({ status: 'pending_deposit', due: 74000 })).toBe('advance');
     expect(paymentAlert({ status: 'ready', due: 45000 })).toBe('balance');
     expect(paymentAlert({ status: 'out_for_delivery', due: 1 })).toBe('balance');
     expect(paymentAlert({ status: 'ready', due: 0 })).toBeNull();
-    expect(paymentAlert({ status: 'confirmed', due: 69000 })).toBeNull();
+    expect(paymentAlert({ status: 'confirmed', due: 69000 })).toBe('balance');
+    expect(paymentAlert({ status: 'in_progress', due: 1 })).toBe('balance');
+    expect(paymentAlert({ status: 'completed', due: 100 })).toBeNull();
   });
 });
