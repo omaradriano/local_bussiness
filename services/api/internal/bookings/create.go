@@ -272,14 +272,14 @@ func Create(ctx context.Context, db store.DB, businessID string, in CreateInput,
 	err = tx.QueryRow(ctx, `
 		insert into public.bookings (business_id, customer_id, kind, status, starts_at, ends_at, fulfillment, delivery_address,
 		  subtotal, deposit_required, total, notes, source, hold_expires_at, idempotency_key, created_by, discount_type, discount_value, discount,
-		  recipient_name, recipient_phone, card_message, walk_in_name, walk_in_phone)
+		  recipient_name, recipient_phone, card_message, walk_in_name, walk_in_phone, delivery_zone)
 		values ($1, $2, $3, $4, $5, $6, nullif($7, ''), nullif($8, ''), $9, $10, $11, nullif($12, ''), $13, $14, nullif($15, ''), nullif($16, '')::uuid,
-		  nullif($17, ''), $18, $19, nullif($20, ''), nullif($21, ''), nullif($22, ''), nullif($23, ''), nullif($24, ''))
+		  nullif($17, ''), $18, $19, nullif($20, ''), nullif($21, ''), nullif($22, ''), nullif($23, ''), nullif($24, ''), nullif($25, ''))
 		returning id::text`,
 		businessID, customerID, it.Kind, status, start, end, in.Fulfillment, in.DeliveryAddress,
 		q.Subtotal, q.Advance, q.Total, strings.TrimSpace(in.Notes), in.Source, hold, in.IdempotencyKey, in.CreatedBy,
 		deref(in.Discount).Type, deref(in.Discount).Value, q.Discount, in.RecipientName, in.RecipientPhone, in.CardMessage,
-		walkIn(in.Customer).Name, walkIn(in.Customer).Phone).Scan(&bookingID)
+		walkIn(in.Customer).Name, walkIn(in.Customer).Phone, in.DeliveryZone).Scan(&bookingID)
 	if isUnique(err) && in.IdempotencyKey != "" {
 		tx.Rollback(ctx) // a concurrent retry with the same key won: return that one
 		id, err := idByKey(ctx, db, businessID, in.IdempotencyKey)

@@ -133,12 +133,15 @@ func pickupOrDelivery(r *reservation) error {
 		return Invalid{"fulfillment", "Elige si se recoge o se entrega."}
 	}
 	if in.Fulfillment != "delivery" {
+		in.DeliveryZone = ""
 		return nil
 	}
 	if in.DeliveryAddress = strings.TrimSpace(in.DeliveryAddress); in.DeliveryAddress == "" {
 		return Invalid{"delivery_address", "Escribe la dirección de entrega."}
 	}
-	if zones := r.set.DeliveryZones; len(zones) > 0 {
+	if zones := r.set.DeliveryZones; len(zones) == 0 {
+		in.DeliveryZone = "" // delivers anywhere: no zone to keep
+	} else {
 		i := slices.IndexFunc(zones, func(z zone) bool { return z.Name == in.DeliveryZone })
 		if i < 0 {
 			return Invalid{"delivery_zone", "Elige la zona de entrega."}
@@ -150,7 +153,7 @@ func pickupOrDelivery(r *reservation) error {
 
 // atPlace: always at the business.
 func atPlace(r *reservation) error {
-	r.in.Fulfillment, r.in.DeliveryAddress = "", ""
+	r.in.Fulfillment, r.in.DeliveryAddress, r.in.DeliveryZone = "", "", ""
 	return nil
 }
 

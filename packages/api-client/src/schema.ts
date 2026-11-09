@@ -2195,6 +2195,15 @@ export interface components {
             card_message: string | null;
             /** @description Descripción de un pedido personalizado (vacío si no hay) */
             details: string;
+            delivery_address: string | null;
+            /** @description Zona de entrega elegida (null en pedidos anteriores o sin zonas) */
+            delivery_zone: string | null;
+            recipient_phone: string | null;
+            /**
+             * Format: int64
+             * @description Saldo por cobrar, con extras a cuenta; 0 si se canceló
+             */
+            due: number;
             /** @description Movimientos de estado posibles desde el panel */
             next: components["schemas"]["BookingStatus"][];
         };

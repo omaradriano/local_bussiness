@@ -2733,7 +2733,7 @@ components:
 
     BookingSummary:
       type: object
-      required: [id, kind, status, starts_at, ends_at, customer_name, customer_phone, items, units, staff, total, deposit_required, fulfillment, recipient_name, card_message, details, next]
+      required: [id, kind, status, starts_at, ends_at, customer_name, customer_phone, items, units, staff, total, deposit_required, fulfillment, recipient_name, card_message, details, delivery_address, delivery_zone, recipient_phone, due, next]
       properties:
         id: { type: string, format: uuid }
         kind: { $ref: "#/components/schemas/ItemKind" }
@@ -2751,6 +2751,10 @@ components:
         recipient_name: { type: [string, "null"] }
         card_message: { type: [string, "null"] }
         details: { type: string, description: "Descripción de un pedido personalizado (vacío si no hay)" }
+        delivery_address: { type: [string, "null"] }
+        delivery_zone: { type: [string, "null"], description: "Zona de entrega elegida (null en pedidos anteriores o sin zonas)" }
+        recipient_phone: { type: [string, "null"] }
+        due: { type: integer, format: int64, description: "Saldo por cobrar, con extras a cuenta; 0 si se canceló" }
         next: { type: array, items: { $ref: "#/components/schemas/BookingStatus" }, description: "Movimientos de estado posibles desde el panel" }
 
     Ref:

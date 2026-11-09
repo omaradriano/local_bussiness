@@ -224,6 +224,17 @@ func TestIntegrationCreateBooking(t *testing.T) {
 		if err != nil || b.Total != 65000+5000+6000 || b.DepositRequired != 38000 || b.EndsAt != nil || *b.Fulfillment != "delivery" {
 			t.Fatalf("order: %+v %v", b, err)
 		}
+		// The route sheet reads the zone, the address and what's left to collect from the list.
+		if _, err := AddPayment(ctx, p, f.business, b.ID, Payment{Type: "advance", Method: "cash", Amount: 38000}, "", now, noFiles); err != nil {
+			t.Fatal(err)
+		}
+		got, err := List(ctx, p, f.business, ListFilter{From: *at("2026-11-02T00:00:00Z"), To: *at("2026-11-03T00:00:00Z")})
+		if err != nil || len(got) != 1 {
+			t.Fatalf("list: %+v %v", got, err)
+		}
+		if s := got[0]; deref(s.DeliveryAddress) != "Av. Juárez 100" || deref(s.DeliveryZone) != "Centro" || s.Due != 76000-38000 {
+			t.Fatalf("route data: %+v", s)
+		}
 	})
 
 	t.Run("florería: personalizado con precio libre, quién recibe, dedicatoria y horario", func(t *testing.T) {
