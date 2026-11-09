@@ -37,6 +37,22 @@ func TestIntegrationF3_3_ApartadoSinAnticipoExpiraYLibera(t *testing.T) {
 	if got, _ := Get(ctx, p, f.business, paid.ID); got.Status != "confirmed" {
 		t.Fatalf("paid hold expired: %s", got.Status)
 	}
+	// Part of the advance freezes the hold: it waits for the rest, and the business may confirm it.
+	part, _, _ := Create(ctx, p, f.business, CreateInput{Customer: cust("6149990004"), ItemID: f.item, StartsAt: at("2026-11-02T21:00:00Z"), Source: "admin"}, now)
+	if _, err := Transition(ctx, p, f.business, part.ID, "confirmed", "", ""); err == nil {
+		t.Fatal("confirmed without any payment")
+	}
+	got, err = AddPayment(ctx, p, f.business, part.ID, Payment{Type: "advance", Method: "cash", Amount: 1000}, "", now, noFiles)
+	if err != nil || got.Status != "pending_deposit" || got.HoldExpiresAt != nil {
+		t.Fatalf("partial advance: %s hold=%v %v", got.Status, got.HoldExpiresAt, err)
+	}
+	ExpireHolds(ctx, p, now.Add(48*time.Hour))
+	if got, _ := Get(ctx, p, f.business, part.ID); got.Status != "pending_deposit" {
+		t.Fatalf("partly paid hold expired: %s", got.Status)
+	}
+	if got, err := Transition(ctx, p, f.business, part.ID, "confirmed", "", ""); err != nil || got.Status != "confirmed" {
+		t.Fatalf("confirm with part of the advance: %v", err)
+	}
 }
 
 func TestIntegrationRentasVencidas(t *testing.T) {

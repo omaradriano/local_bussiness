@@ -101,8 +101,8 @@ func Transition(ctx context.Context, db store.DB, businessID, id, to, actor, not
 	}
 	bal := ComputeBalance(b.total, ps)
 	switch {
-	case to == "confirmed" && bal.Paid < b.depositRequired:
-		return Booking{}, Invalid{"status", fmt.Sprintf("Falta registrar el anticipo (%s).", mxn(b.depositRequired-bal.Paid))}
+	case to == "confirmed" && bal.Paid == 0 && b.depositRequired > 0: // with part of the advance, the business may confirm it
+		return Booking{}, Invalid{"status", fmt.Sprintf("Registra al menos un pago del anticipo (%s).", mxn(b.depositRequired))}
 	case to == "completed" && bal.Due > 0:
 		return Booking{}, Invalid{"status", fmt.Sprintf("Falta cobrar el saldo (%s).", mxn(bal.Due))}
 	case to == "out_for_delivery" && b.fulfillment != "delivery":
@@ -180,9 +180,13 @@ func AddPayment(ctx context.Context, db store.DB, businessID, id string, p Payme
 		businessID, id, p.Type, p.Method, p.Amount, now, actor, strings.TrimSpace(deref(p.Notes)), p.Evidence); err != nil {
 		return Booking{}, err
 	}
-	if b.status == "pending_deposit" && (p.Type == "advance" || p.Type == "balance") && bal.Paid+p.Amount >= b.depositRequired {
-		if err := setStatus(ctx, tx, businessID, id, b.status, "confirmed", actor, "Anticipo registrado"); err != nil {
-			return Booking{}, err
+	if b.status == "pending_deposit" && (p.Type == "advance" || p.Type == "balance") {
+		if bal.Paid+p.Amount >= b.depositRequired {
+			if err := setStatus(ctx, tx, businessID, id, b.status, "confirmed", actor, "Anticipo registrado"); err != nil {
+				return Booking{}, err
+			}
+		} else if _, err := tx.Exec(ctx, `update public.bookings set hold_expires_at = null where id = $1`, id); err != nil {
+			return Booking{}, err // part of the advance: the hold no longer expires
 		}
 	}
 	if err := tx.Commit(ctx); err != nil {

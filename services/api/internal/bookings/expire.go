@@ -13,9 +13,11 @@ import (
 const OverdueGrace = time.Hour
 
 // ExpireHolds moves holds whose advance wasn't paid in time to "expired", releasing what they held.
+// A hold with any payment is frozen: it waits for the rest instead of expiring with the money in.
 func ExpireHolds(ctx context.Context, db store.DB, now time.Time) (int, error) {
-	return sweep(ctx, db, `select id::text, business_id::text, status, kind from public.bookings
+	return sweep(ctx, db, `select id::text, business_id::text, status, kind from public.bookings bk
 		where status = 'pending_deposit' and hold_expires_at <= $1
+		  and not exists (select 1 from public.payments p where p.booking_id = bk.id and p.type in ('advance', 'balance'))
 		order by hold_expires_at limit 500 for update skip locked`, now, "expired", "Apartado vencido sin anticipo")
 }
 
