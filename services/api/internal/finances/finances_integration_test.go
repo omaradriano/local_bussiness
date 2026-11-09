@@ -85,11 +85,11 @@ func TestIntegrationSummary(t *testing.T) {
 	if s.Income.Total != 60000 || part(s.Income, "bookings") != 50000 || part(s.Income, "fees") != 10000 {
 		t.Fatalf("income: %+v", s.Income)
 	}
-	// Expenses: gasoline 400, truck down payment 1,000 + one installment 500, commission 30 % of 500.
-	if part(s.Expenses, "transport") != 40000 || part(s.Expenses, "asset") != 150000 || part(s.Expenses, "commissions") != 15000 {
+	// Expenses: gasoline 400, truck down payment 1,000 + one installment 500, commission 30 % of 500, 20 chocolates bought 1,000.
+	if part(s.Expenses, "transport") != 40000 || part(s.Expenses, "asset") != 150000 || part(s.Expenses, "commissions") != 15000 || part(s.Expenses, "merchandise") != 100000 {
 		t.Fatalf("expenses: %+v", s.Expenses)
 	}
-	if s.Profit != 60000-(40000+150000+15000) || len(s.Plans) != 1 || s.Plans[0].Remaining != 10*50000 || len(s.Payroll) != 1 {
+	if s.Profit != 60000-(40000+150000+15000+100000) || len(s.Plans) != 1 || s.Plans[0].Remaining != 10*50000 || len(s.Payroll) != 1 {
 		t.Fatalf("profit %d plans %+v payroll %+v", s.Profit, s.Plans, s.Payroll)
 	}
 	// Bookings by status: the November haircut and a cancelled one; December's doesn't count.
