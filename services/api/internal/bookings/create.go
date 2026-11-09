@@ -223,7 +223,7 @@ func Create(ctx context.Context, db store.DB, businessID string, in CreateInput,
 		return Booking{}, false, err
 	}
 
-	optsExtra, answers, err := checkOptions(ctx, tx, businessID, in.ItemID, in.Options)
+	optsExtra, answers, err := checkOptions(ctx, tx, businessID, in.ItemID, in.Options, true)
 	if err != nil {
 		return Booking{}, false, err
 	}
@@ -360,7 +360,9 @@ func claim(ctx context.Context, tx pgx.Tx, sql, businessID, bookingID string, ca
 	return got == need
 }
 
-func checkOptions(ctx context.Context, tx pgx.Tx, businessID, itemID string, answers map[string]string) (int64, map[string]string, error) {
+// checkOptions validates the answers and adds up their extras. Not strict (a quote while the form is filled):
+// missing or invalid answers are skipped instead of refused.
+func checkOptions(ctx context.Context, tx store.DB, businessID, itemID string, answers map[string]string, strict bool) (int64, map[string]string, error) {
 	rows, err := tx.Query(ctx, `select name, type, coalesce(choices, '[]'::jsonb), extra_price, required
 		from public.item_options where business_id = $1 and item_id = $2 order by sort`, businessID, itemID)
 	if err != nil {
@@ -377,17 +379,22 @@ func checkOptions(ctx context.Context, tx pgx.Tx, businessID, itemID string, ans
 		}
 		_ = json.Unmarshal(choices, &o.Choices)
 		a := strings.TrimSpace(answers[o.Name])
-		if a == "" {
-			if o.Required {
-				return 0, nil, Invalid{"options." + o.Name, fmt.Sprintf("Falta: %s.", o.Name)}
+		var bad error
+		switch {
+		case a == "" && o.Required:
+			bad = Invalid{"options." + o.Name, fmt.Sprintf("Falta: %s.", o.Name)}
+		case a == "":
+			continue
+		case o.Type == "choice" && !slices.Contains(o.Choices, a):
+			bad = Invalid{"options." + o.Name, fmt.Sprintf("Elige una opción válida de %s.", o.Name)}
+		case utf8.RuneCountInString(a) > 300:
+			bad = Invalid{"options." + o.Name, fmt.Sprintf("%s es muy largo.", o.Name)}
+		}
+		if bad != nil {
+			if strict {
+				return 0, nil, bad
 			}
 			continue
-		}
-		if o.Type == "choice" && !slices.Contains(o.Choices, a) {
-			return 0, nil, Invalid{"options." + o.Name, fmt.Sprintf("Elige una opción válida de %s.", o.Name)}
-		}
-		if utf8.RuneCountInString(a) > 300 {
-			return 0, nil, Invalid{"options." + o.Name, fmt.Sprintf("%s es muy largo.", o.Name)}
 		}
 		clean[o.Name] = a
 		extra += o.ExtraPrice

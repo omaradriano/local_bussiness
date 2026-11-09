@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/json"
 	"errors"
+	"slices"
 	"time"
 
 	"github.com/jackc/pgx/v5"
@@ -44,15 +45,21 @@ type QuoteRequest struct {
 	Discount Discount
 	// CustomPrice: the price written for an item with a free price (ignored for a fixed-price one).
 	CustomPrice *int64
+	// Options chosen so far (missing or invalid ones add nothing) and the delivery zone, priced like Create.
+	Options      map[string]string
+	Fulfillment  string
+	DeliveryZone string
 }
 
 type QuoteResult struct {
 	Quote
-	Periods int64 `json:"periods"`
+	Periods      int64 `json:"periods"`
+	OptionsExtra int64 `json:"options_extra"` // per piece
+	DeliveryFee  int64 `json:"delivery_fee"`
 }
 
-// QuoteBooking prices a booking before creating it (same rules as Create, without options or delivery),
-// so the form can show the total while the dates are picked.
+// QuoteBooking prices a booking before creating it (same rules as Create), so the form can show the
+// total while it's filled in.
 func QuoteBooking(ctx context.Context, db store.DB, businessID string, in QuoteRequest) (QuoteResult, error) {
 	var tz, kind, priceUnit string
 	var raw []byte
@@ -95,7 +102,20 @@ func QuoteBooking(ctx context.Context, db store.DB, businessID string, in QuoteR
 	if err := in.Discount.Validate(); err != nil {
 		return QuoteResult{}, err
 	}
-	q := Compute(QuoteInput{UnitPrice: price, Quantity: int64(qty), Periods: periods, DepositPercent: set.DepositPercent, SecurityDeposit: deposit,
-		Discount: in.Discount})
-	return QuoteResult{Quote: q, Periods: periods}, nil
+	if set.AdvanceOnlyOnline {
+		set.DepositPercent = 0 // the quote is for the counter, like Create with source admin
+	}
+	extra, _, err := checkOptions(ctx, db, businessID, in.ItemID, in.Options, false)
+	if err != nil {
+		return QuoteResult{}, err
+	}
+	var fee int64
+	if in.Fulfillment == "delivery" {
+		if i := slices.IndexFunc(set.DeliveryZones, func(z zone) bool { return z.Name == in.DeliveryZone }); i >= 0 {
+			fee = set.DeliveryZones[i].Fee
+		}
+	}
+	q := Compute(QuoteInput{UnitPrice: price, OptionsExtra: extra, Quantity: int64(qty), Periods: periods, DeliveryFee: fee,
+		DepositPercent: set.DepositPercent, SecurityDeposit: deposit, Discount: in.Discount})
+	return QuoteResult{Quote: q, Periods: periods, OptionsExtra: extra, DeliveryFee: fee}, nil
 }

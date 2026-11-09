@@ -224,6 +224,16 @@ func TestIntegrationCreateBooking(t *testing.T) {
 		if err != nil || b.Total != 65000+5000+6000 || b.DepositRequired != 38000 || b.EndsAt != nil || *b.Fulfillment != "delivery" {
 			t.Fatalf("order: %+v %v", b, err)
 		}
+		// The form's quote charges the same: the option's extra and the zone's delivery (Q1: it showed $650 and saved $750).
+		quote, err := QuoteBooking(ctx, p, f.business, QuoteRequest{ItemID: f.item, Quantity: 1, StartsAt: *in.StartsAt,
+			Options: in.Options, Fulfillment: "delivery", DeliveryZone: "Centro"})
+		if err != nil || quote.Total != b.Total || quote.DeliveryFee != 6000 || quote.OptionsExtra != 5000 {
+			t.Fatalf("quote %+v vs total %d: %v", quote, b.Total, err)
+		}
+		// Before the required option is chosen the quote still answers (without its extra).
+		if quote, err := QuoteBooking(ctx, p, f.business, QuoteRequest{ItemID: f.item, StartsAt: *in.StartsAt, Fulfillment: "pickup", DeliveryZone: "Centro"}); err != nil || quote.Total != 65000 {
+			t.Fatalf("partial quote: %+v %v", quote, err)
+		}
 		// The route sheet reads the zone, the address and what's left to collect from the list.
 		if _, err := AddPayment(ctx, p, f.business, b.ID, Payment{Type: "advance", Method: "cash", Amount: 38000}, "", now, noFiles); err != nil {
 			t.Fatal(err)

@@ -6,6 +6,7 @@ import (
 	"io"
 	"net/http"
 	"net/http/httptest"
+	"net/url"
 	"strings"
 	"testing"
 	"time"
@@ -669,6 +670,9 @@ func (fakeBookings) Quote(_ context.Context, _ string, in bookings.QuoteRequest)
 	if in.EndsAt != nil && in.EndsAt.Weekday() == time.Sunday {
 		return bookings.QuoteResult{}, bookings.Invalid{Field: "ends_at", Message: "cerrado"}
 	}
+	if in.Options["Color"] == "Rojo" && in.Fulfillment == "delivery" && in.DeliveryZone == "Norte" {
+		return bookings.QuoteResult{Quote: bookings.Quote{Total: 75000}, DeliveryFee: 10000}, nil
+	}
 	return bookings.QuoteResult{Quote: bookings.Quote{Total: 60000}, Periods: 2}, nil
 }
 
@@ -682,6 +686,8 @@ func TestQuoteRoute(t *testing.T) {
 		{"cotiza", "&ends_at=2026-11-04T15:00:00Z", http.StatusOK, `"total":60000`},
 		{"regreso en domingo", "&ends_at=2026-11-08T15:00:00Z", http.StatusUnprocessableEntity, `"ends_at"`},
 		{"fecha inválida", "&ends_at=mañana", http.StatusUnprocessableEntity, `"ends_at"`},
+		{"con opciones y envío", "&options=" + url.QueryEscape(`{"Color":"Rojo"}`) + "&fulfillment=delivery&delivery_zone=Norte", http.StatusOK, `"delivery_fee":10000`},
+		{"opciones ilegibles", "&options=rojo", http.StatusUnprocessableEntity, `"options"`},
 	}
 	for _, tc := range cases {
 		t.Run(tc.name, func(t *testing.T) {
