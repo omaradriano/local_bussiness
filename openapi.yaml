@@ -2636,6 +2636,7 @@ components:
           items: { $ref: "#/components/schemas/Ref" }
         fulfillment: { type: [string, "null"] }
         delivery_address: { type: [string, "null"] }
+        delivery_zone: { type: [string, "null"], description: "Zona de entrega (null en pedidos anteriores)" }
         recipient_name: { type: [string, "null"] }
         recipient_phone: { type: [string, "null"] }
         card_message: { type: [string, "null"] }

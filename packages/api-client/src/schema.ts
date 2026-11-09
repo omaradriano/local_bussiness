@@ -2059,6 +2059,8 @@ export interface components {
             units: components["schemas"]["Ref"][];
             fulfillment?: string | null;
             delivery_address?: string | null;
+            /** @description Zona de entrega (null en pedidos anteriores) */
+            delivery_zone?: string | null;
             recipient_name: string | null;
             recipient_phone: string | null;
             card_message: string | null;

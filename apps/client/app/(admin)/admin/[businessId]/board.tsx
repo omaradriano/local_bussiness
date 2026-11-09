@@ -9,7 +9,8 @@ import { errorText } from '../../../../lib/errors';
 import { useBusiness } from '../../../../lib/useMe';
 import { useTexts } from '../../../../lib/useTexts';
 import { DayNav } from '../../../../components/DayNav';
-import { Button, Chip, Chips, EmptyState, Notice, PressableScale, Screen, Text, radius, useToast, useUI } from '../../../../ui';
+import { Button, Chip, Chips, EmptyState, Notice, PressableScale, Screen, Segmented, Text, radius, useToast, useUI } from '../../../../ui';
+import { ConfirmDialog } from '../../../../components/ConfirmDialog';
 
 type Summary = components['schemas']['BookingSummary'];
 const t = strings.board;
@@ -41,7 +42,28 @@ export default function Board() {
 
   useFocusEffect(useCallback(() => { setRows(null); load(); }, [load]));
 
+  // Handing over an order that still owes: pay the rest and deliver in one go (Q7).
+  const [collect, setCollect] = useState<Summary | null>(null);
+  const [method, setMethod] = useState<'cash' | 'transfer' | 'card'>('cash');
+  async function collectAndDeliver() {
+    const b = collect!;
+    setBusyId(b.id);
+    const paid = await api.POST('/v1/b/{businessId}/bookings/{bookingId}/payments', {
+      params: { path: { businessId, bookingId: b.id } }, body: { type: 'balance', method, amount: b.due },
+    });
+    if (!paid.data) { setBusyId(null); return toast(errorText(paid.error, paid.response.status), 'error'); }
+    const { data, error, response } = await api.POST('/v1/b/{businessId}/bookings/{bookingId}/transition', {
+      params: { path: { businessId, bookingId: b.id } }, body: { to: 'completed' },
+    });
+    setBusyId(null);
+    setCollect(null);
+    if (!data) { toast(error?.message ?? errorText(error, response.status), 'error'); return load(); }
+    toast(t.collected);
+    load();
+  }
+
   async function advance(b: Summary, to: string) {
+    if (to === 'completed' && b.due > 0) { setMethod('cash'); return setCollect(b); }
     setBusyId(b.id);
     const { data, error, response } = await api.POST('/v1/b/{businessId}/bookings/{bookingId}/transition', {
       params: { path: { businessId, bookingId: b.id } }, body: { to: to as Summary['status'] },
@@ -94,6 +116,11 @@ export default function Board() {
           </View>
         </>
       )}
+      <ConfirmDialog open={!!collect} primary title={t.collectTitle} body={collect ? t.collectBody(formatMXN(collect.due)) : ''}
+        confirmLabel={collect ? t.collectAndDeliver(formatMXN(collect.due)) : ''} busy={!!collect && busyId === collect.id}
+        onConfirm={collectAndDeliver} onClose={() => setCollect(null)}>
+        <Segmented options={(['cash', 'transfer', 'card'] as const).map((m) => ({ value: m, label: strings.bookings.methods[m] }))} value={method} onChange={setMethod} />
+      </ConfirmDialog>
     </Screen>
   );
 }
@@ -131,7 +158,7 @@ function OrderCard({ businessId, b, busy, statusText, onAdvance }: {
       </PressableScale>
       {to && (
         <Button size="sm" variant={to === 'completed' ? 'primary' : undefined} busy={busy} onPress={() => onAdvance(b, to)}>
-          {t.actions[to] ?? strings.bookings.actions[to] ?? to}
+          {to === 'completed' && b.due > 0 ? t.collectAndDeliver(formatMXN(b.due)) : t.actions[to] ?? strings.bookings.actions[to] ?? to}
         </Button>
       )}
     </View>

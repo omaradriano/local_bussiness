@@ -117,10 +117,17 @@ export default function BookingDetail() {
     <StepCard key={st.id} businessId={businessId} bookingId={bookingId} step={st} onDone={show} editable={editable} canChange={canChange} />
   ));
 
+  // What makes up the total (Q6): items, the zone's delivery, the discount, and extras left on its account.
+  const deliveryFee = b.fulfillment === 'delivery' ? Math.max(b.total + b.discount - b.subtotal, 0) : 0;
+  const onAccount = b.extras.reduce((n, x) => n + (x.method === 'on_account' ? x.total : 0), 0);
   const balance = (
     <View style={{ gap: 6 }}>
+      {(deliveryFee > 0 || b.discount > 0) && <Row label={t.subtotal} value={formatMXN(b.subtotal)} />}
+      {deliveryFee > 0 && <Row label={t.deliveryFee(b.delivery_zone ?? null)} value={formatMXN(deliveryFee)} />}
       {b.discount > 0 && <Row label={t.discount.row(b.discount_type, b.discount_value)} value={`− ${formatMXN(b.discount)}`} />}
       <Row label={t.total} value={formatMXN(b.total)} />
+      {onAccount > 0 && <Row label={t.onAccount} value={`+ ${formatMXN(onAccount)}`} />}
+      {onAccount > 0 && <Row label={t.totalToPay} value={formatMXN(b.total + onAccount)} />}
       <Row label={t.paid} value={formatMXN(b.balance.paid)} />
       {b.deposit_required > 0 && <Row label={t.advance} value={formatMXN(b.deposit_required)} />}
       {(security > 0 || b.balance.deposit_held > 0) && <Row label={t.depositHeld} value={`${formatMXN(b.balance.deposit_held)} / ${formatMXN(security)}`} />}
@@ -185,7 +192,8 @@ export default function BookingDetail() {
           {b.card_message ? <Cell icon="mail" tint={ui.purple} label={t.gift.cardLabel} sublabel={b.card_message} /> : null}
           {e.timing === 'range' && b.ends_at ? <Cell icon="arrow-down-circle" tint={ui.warning} label={term(business.vertical, 'ends_at') ?? ''} value={when(b.ends_at)} /> : null}
           {b.staff.length > 0 ? <Cell icon="person-circle" tint={ui.gray} label={t.attendedBy} value={b.staff.map((x) => x.name).join(', ')} /> : null}
-          {b.fulfillment === 'delivery' ? <Cell icon={e.fulfillment === 'atPlaceOrHome' ? 'home' : 'car'} tint={ui.gray} label={e.fulfillment === 'atPlaceOrHome' ? t.homeService : t.delivery} sublabel={b.delivery_address ?? ''} /> : null}
+          {b.fulfillment === 'delivery' ? <Cell icon={e.fulfillment === 'atPlaceOrHome' ? 'home' : 'car'} tint={ui.gray} label={e.fulfillment === 'atPlaceOrHome' ? t.homeService : t.delivery}
+            sublabel={[b.delivery_zone, b.delivery_address].filter(Boolean).join(' · ')} /> : null}
           {b.hold_expires_at ? <Cell icon="hourglass" tint={ui.warning} label={t.holdUntil} value={when(b.hold_expires_at)} /> : null}
           {b.notes ? <Cell icon="document-text" tint={ui.gray} label={b.notes} /> : null}
         </Group>
@@ -283,7 +291,7 @@ export default function BookingDetail() {
               <Group label={t.actionsTitle} padded>
                 <View style={{ gap: 8 }}>
                   {actions.filter((st) => !isOther(st)).map((st) => (
-                    <Button key={st} busy={busy} onPress={() => request(st)}>{t.actions[st] ?? texts.bookings.status[st]}</Button>
+                    <Button key={st} busy={busy} onPress={() => request(st)}>{(e.timing === 'day' ? strings.board.actions[st] : undefined) ?? t.actions[st] ?? texts.bookings.status[st]}</Button>
                   ))}
                 </View>
               </Group>
