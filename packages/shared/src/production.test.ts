@@ -18,6 +18,7 @@ describe('productionSheet', () => {
     ]);
     expect(sheet.toMake.map((r) => r.id)).toEqual(['b', 'c', 'a']);
     expect(sheet.done.map((r) => r.id)).toEqual(['d']);
+    expect(sheet.doneTotals).toEqual([{ name: 'Arreglo en caja', quantity: 3 }]);
   });
 
   it('reads an item without a quantity as one', () => {

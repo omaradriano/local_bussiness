@@ -41,6 +41,7 @@ type Summary struct {
 	DeliveryZone    *string    `json:"delivery_zone"`
 	RecipientPhone  *string    `json:"recipient_phone"` // giftOrder
 	Due             int64      `json:"due"`             // left to collect, extras on account included; 0 once cancelled
+	Extras          string     `json:"extras"`          // products sold with it («1 × Chocolates»): the route takes them along
 	Next            []string   `json:"next" db:"-"`     // status moves available from the panel
 }
 
@@ -59,7 +60,10 @@ var summaryColumns = `b.id::text, b.kind, b.status, b.starts_at, b.ends_at, coal
 	case when b.status in ('` + strings.Join(releasing, "', '") + `') then 0 else greatest(0, b.total
 	  + coalesce((select sum(s.total) from public.sales s where s.booking_id = b.id and s.method = 'on_account'), 0)
 	  - coalesce((select sum(case when p.type = 'payment_refund' then -p.amount else p.amount end) from public.payments p
-	              where p.booking_id = b.id and p.type in ('advance', 'balance', 'payment_refund')), 0)) end::bigint`
+	              where p.booking_id = b.id and p.type in ('advance', 'balance', 'payment_refund')), 0)) end::bigint,
+	coalesce((select string_agg(l.quantity || ' × ' || coalesce(l.name, rp.name), ', ' order by coalesce(l.name, rp.name))
+	          from public.sales s join public.sale_lines l on l.sale_id = s.id left join public.retail_products rp on rp.id = l.product_id
+	          where s.booking_id = b.id), '')`
 
 func collectSummaries(rows pgx.Rows) ([]Summary, error) {
 	out, err := pgx.CollectRows(rows, pgx.RowToStructByPos[Summary])

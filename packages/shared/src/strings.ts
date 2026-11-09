@@ -415,7 +415,9 @@ export const strings = {
     pickups: 'Recogen en tienda',
     collect: (amount: string) => `Cobrar ${amount}`,
     paid: 'Pagado',
-    receives: (name: string, phone: string | null) => (phone ? `Recibe ${name} · ${phone}` : `Recibe ${name}`),
+    receives: (name: string, phone: string | null) => (phone ? `Recibe: ${name} · ${phone}` : `Recibe: ${name}`),
+    customer: (name: string, phone: string | null) => (phone ? `Cliente: ${name} · ${phone}` : `Cliente: ${name}`),
+    extras: (list: string) => `Llevar también: ${list}`,
   },
   board: {
     title: 'Tablero del día',

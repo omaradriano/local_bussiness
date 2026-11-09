@@ -1,5 +1,5 @@
 import type { components } from '@lb/api-client';
-import { addDays, dayStartISO, formatMXN, hhmm, productionSheet, routeSheet, strings, todayISO } from '@lb/shared';
+import { addDays, dayStartISO, displayPhone, formatMXN, hhmm, productionSheet, routeSheet, strings, todayISO } from '@lb/shared';
 import { Stack, useFocusEffect, useLocalSearchParams } from 'expo-router';
 import { useCallback, useEffect, useState } from 'react';
 import { ActivityIndicator, Platform, StyleSheet, View } from 'react-native';
@@ -89,6 +89,7 @@ export default function Production() {
                     {`${hhmm(b.starts_at)}${b.ends_at ? `–${hhmm(b.ends_at)}` : ''} · ${b.items}`}
                   </Text>
                   {!!b.details && <Text>{b.details}</Text>}
+                  {!!b.extras && <Text>{t.extras(b.extras)}</Text>}
                   <Text variant="footnote" color="labelSecondary">
                     {[b.customer_name, b.recipient_name ? t.for(b.recipient_name) : null,
                       b.fulfillment === 'delivery' ? strings.board.delivery : strings.board.pickup,
@@ -116,7 +117,7 @@ export default function Production() {
           )}
 
           {sheet.done.length > 0 && (
-            <Text variant="footnote" color="labelSecondary">{`${t.done}: ${sheet.done.map((b) => b.items).join(', ')}`}</Text>
+            <Text variant="footnote" color="labelSecondary">{`${t.done}: ${sheet.doneTotals.map((x) => `${x.quantity} × ${x.name}`).join(', ')}`}</Text>
           )}
         </View>
       )}
@@ -130,14 +131,15 @@ function Stop({ b, first }: { b: Summary; first: boolean }) {
   return (
     <View style={[{ paddingVertical: 10, gap: 2 }, first ? null : { borderTopWidth: StyleSheet.hairlineWidth, borderColor: ui.separator }]}>
       <View style={{ flexDirection: 'row', gap: 12 }}>
-        <Text variant="headline" style={{ flex: 1, fontVariant: ['tabular-nums'] }}>{`${hhmm(b.starts_at)}${b.ends_at ? `–${hhmm(b.ends_at)}` : ''} · ${b.customer_name}`}</Text>
+        <Text variant="headline" style={{ flex: 1, fontVariant: ['tabular-nums'] }}>{`${hhmm(b.starts_at)}${b.ends_at ? `–${hhmm(b.ends_at)}` : ''} · ${b.items}`}</Text>
         <Text variant="headline" style={{ fontVariant: ['tabular-nums'] }} color={b.due > 0 ? 'label' : 'labelSecondary'}>
           {b.due > 0 ? t.collect(formatMXN(b.due)) : t.paid}
         </Text>
       </View>
       {!!b.delivery_address && <Text>{b.delivery_address}</Text>}
-      {!!b.recipient_name && <Text variant="footnote" color="labelSecondary">{t.receives(b.recipient_name, b.recipient_phone)}</Text>}
-      <Text variant="footnote" color="labelSecondary">{[b.items, b.customer_phone].filter(Boolean).join(' · ')}</Text>
+      {!!b.extras && <Text style={{ fontWeight: '600' }}>{t.extras(b.extras)}</Text>}
+      {!!b.recipient_name && <Text variant="footnote" color="labelSecondary">{t.receives(b.recipient_name, displayPhone(b.recipient_phone))}</Text>}
+      <Text variant="footnote" color="labelSecondary">{t.customer(b.customer_name, displayPhone(b.customer_phone))}</Text>
     </View>
   );
 }

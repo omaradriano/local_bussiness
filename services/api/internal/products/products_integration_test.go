@@ -45,11 +45,14 @@ func TestIntegrationProductsFlow(t *testing.T) {
 	if cera, err = r.Purchase(ctx, biz, cera.ID, 10, 7000, day("2026-11-02"), ""); err != nil || cera.Stock != 10 {
 		t.Fatalf("purchase: %+v %v", cera, err)
 	}
+	var bad Invalid
+	if _, err := r.Purchase(ctx, biz, cera.ID, 5, 7000, time.Now().AddDate(0, 0, 3), ""); !errors.As(err, &bad) || bad["purchased_on"] == "" {
+		t.Fatalf("purchase dated in the future: %v", err)
+	}
 	sale, err := r.Sell(ctx, biz, SaleInput{Lines: []LineInput{{ProductID: cera.ID, Quantity: 3}}, Method: "cash", Retail: true}, "", now)
 	if err != nil || sale.Total != 45000 {
 		t.Fatalf("sell: %+v %v", sale, err)
 	}
-	var bad Invalid
 	if _, err := r.Sell(ctx, biz, SaleInput{Lines: []LineInput{{ProductID: cera.ID, Quantity: 8}}, Method: "cash", Retail: true}, "", now); !errors.As(err, &bad) {
 		t.Fatalf("selling more than left: %v", err)
 	}

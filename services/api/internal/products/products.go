@@ -320,6 +320,14 @@ func (r Repo) Purchase(ctx context.Context, businessID, productID string, quanti
 		return Product{}, err
 	}
 	defer tx.Rollback(ctx)
+	// The stock is here today: a purchase dated later would count its expense in another month (Q5).
+	var future bool
+	if err := tx.QueryRow(ctx, `select $2::date > (now() at time zone timezone)::date from public.businesses where id = $1`, businessID, on).Scan(&future); err != nil {
+		return Product{}, err
+	}
+	if future {
+		return Product{}, Invalid{"purchased_on": "La fecha de compra no puede ser futura."}
+	}
 	tag, err := tx.Exec(ctx, `update public.retail_products set stock = stock + $3, cost = $4 where business_id = $1 and id = $2`,
 		businessID, productID, quantity, unitCost)
 	if err != nil {

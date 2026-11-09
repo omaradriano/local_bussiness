@@ -9,8 +9,14 @@ type Row = { status: string; starts_at: string; items: string };
 export function productionSheet<T extends Row>(rows: T[]) {
   const sorted = [...rows].sort((a, b) => a.starts_at.localeCompare(b.starts_at));
   const toMake = sorted.filter((r) => TO_MAKE.has(r.status));
+  const done = sorted.filter((r) => DONE.has(r.status));
+  return { totals: addUp(toMake), toMake, done, doneTotals: addUp(done) };
+}
+
+/** Pieces by arrangement, most first. */
+function addUp(rows: Row[]) {
   const counts = new Map<string, number>();
-  for (const r of toMake) {
+  for (const r of rows) {
     // shortcut: reads the list's «2 × Ramo» text (one item per order today); use structured lines if an order ever has several.
     for (const part of r.items.split(', ')) {
       const m = /^(\d+) × (.+)$/.exec(part);
@@ -18,8 +24,7 @@ export function productionSheet<T extends Row>(rows: T[]) {
       counts.set(name, (counts.get(name) ?? 0) + (m ? Number(m[1]) : 1));
     }
   }
-  const totals = [...counts].map(([name, quantity]) => ({ name, quantity })).sort((a, b) => b.quantity - a.quantity || a.name.localeCompare(b.name, 'es'));
-  return { totals, toMake, done: sorted.filter((r) => DONE.has(r.status)) };
+  return [...counts].map(([name, quantity]) => ({ name, quantity })).sort((a, b) => b.quantity - a.quantity || a.name.localeCompare(b.name, 'es'));
 }
 
 // Still to hand over: everything made or being made, until it's delivered or picked up.

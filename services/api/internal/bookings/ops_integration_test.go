@@ -372,22 +372,26 @@ func TestIntegrationExtrasOnAccount(t *testing.T) {
 		return n
 	}
 
-	// listDue: what the day's list says is left to collect from an order.
-	listDue := func(id string) int64 {
+	// listed: the order as the day's list shows it.
+	listed := func(id string) Summary {
 		rows, err := List(ctx, p, f.business, ListFilter{From: *at("2026-11-02T00:00:00Z"), To: *at("2026-11-03T00:00:00Z")})
 		if err != nil {
 			t.Fatal(err)
 		}
 		for _, r := range rows {
 			if r.ID == id {
-				return r.Due
+				return r
 			}
 		}
 		t.Fatalf("%s not listed", id)
-		return 0
+		return Summary{}
 	}
+	listDue := func(id string) int64 { return listed(id).Due }
 
 	a := order("6148880021")
+	if x := listed(a.ID).Extras; x != "2 × Chocolates" {
+		t.Fatalf("extras for the route: %q", x)
+	}
 	got, err := Get(ctx, p, f.business, a.ID)
 	if err != nil || got.Balance.Due != a.Total+27000 || got.Total != a.Total || listDue(a.ID) != got.Balance.Due {
 		t.Fatalf("owed with extras: total %d due %d list %d %v", got.Total, got.Balance.Due, listDue(a.ID), err)

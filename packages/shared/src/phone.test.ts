@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { formatPhone, splitE164, toE164 } from './phone';
+import { displayPhone, formatPhone, splitE164, toE164, WALK_IN_PHONE } from './phone';
 
 describe('phone', () => {
   it('builds E.164 only with the right number of digits', () => {
@@ -16,4 +16,9 @@ describe('phone', () => {
   });
 
   it('formats for display', () => expect(formatPhone('+526141234567')).toBe('+52 614 123 4567'));
+  it('hides no phone and the walk-in placeholder', () => {
+    expect(displayPhone(WALK_IN_PHONE)).toBeNull();
+    expect(displayPhone(null)).toBeNull();
+    expect(displayPhone('+526145551001')).toBe('+52 614 555 1001');
+  });
 });
