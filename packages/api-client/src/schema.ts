@@ -1693,8 +1693,11 @@ export interface components {
             booking_id: string | null;
             /** Format: date-time */
             sold_at: string;
-            /** @enum {string} */
-            method: "cash" | "transfer" | "card";
+            /**
+             * @description on_account: extras de un pedido que se cobran con él (al entregar)
+             * @enum {string}
+             */
+            method: "cash" | "transfer" | "card" | "on_account";
             total: number;
             customer_name: string | null;
             customer_phone: string | null;
@@ -2089,13 +2092,14 @@ export interface components {
                 /** Format: date-time */
                 created_at: string;
             }[];
-            /** @description Ventas rápidas agregadas al pedido (ya pagadas; aparte del saldo del pedido) */
+            /** @description Ventas rápidas agregadas al pedido. Pagadas aparte, o a cuenta (on_account), que se suman al saldo del pedido */
             extras: {
                 /** Format: uuid */
                 id: string;
                 /** Format: date-time */
                 sold_at: string;
-                method: string;
+                /** @enum {string} */
+                method: "cash" | "transfer" | "card" | "on_account";
                 /** Format: int64 */
                 total: number;
                 items: string;
@@ -3684,8 +3688,11 @@ export interface operations {
                         price?: number;
                         quantity: number;
                     }[];
-                    /** @enum {string} */
-                    method: "cash" | "transfer" | "card";
+                    /**
+                     * @description on_account: extras de un pedido que se cobran con él (al entregar)
+                     * @enum {string}
+                     */
+                    method: "cash" | "transfer" | "card" | "on_account";
                     /** Format: uuid */
                     booking_id?: string;
                     /** @description Cliente casual (opcional, sin ficha) */

@@ -32,13 +32,15 @@ var statusLabel = map[string]string{
 type locked struct {
 	kind, status, fulfillment string
 	total, depositRequired    int64
+	onAccount                 int64 // extras on the order's account (R4): owed with it
 }
 
 func lockBooking(ctx context.Context, tx pgx.Tx, businessID, id string) (locked, error) {
 	var l locked
-	err := tx.QueryRow(ctx, `select kind, status, coalesce(fulfillment, ''), total, deposit_required
-		from public.bookings where business_id = $1 and id = $2 for update`, businessID, id).
-		Scan(&l.kind, &l.status, &l.fulfillment, &l.total, &l.depositRequired)
+	err := tx.QueryRow(ctx, `select kind, status, coalesce(fulfillment, ''), total, deposit_required,
+		  (select coalesce(sum(s.total), 0) from public.sales s where s.booking_id = b.id and s.method = 'on_account')
+		from public.bookings b where business_id = $1 and id = $2 for update of b`, businessID, id).
+		Scan(&l.kind, &l.status, &l.fulfillment, &l.total, &l.depositRequired, &l.onAccount)
 	if errors.Is(err, pgx.ErrNoRows) {
 		return l, ErrNotFound
 	}
@@ -111,7 +113,7 @@ func TransitionPaid(ctx context.Context, db store.DB, businessID, id, to, paid, 
 	if err != nil {
 		return Booking{}, err
 	}
-	bal := ComputeBalance(b.total, ps)
+	bal := ComputeBalance(b.total+b.onAccount, ps)
 	switch {
 	case to == "confirmed" && bal.Paid == 0 && b.depositRequired > 0: // with part of the advance, the business may confirm it
 		return Booking{}, Invalid{"status", fmt.Sprintf("Registra al menos un pago del anticipo (%s).", mxn(b.depositRequired))}
@@ -123,10 +125,14 @@ func TransitionPaid(ctx context.Context, db store.DB, businessID, id, to, paid, 
 	if to == "confirmed" && bal.Paid < b.depositRequired {
 		note = joinNote(note, fmt.Sprintf("Se confirmó con anticipo parcial (%s de %s)", mxn(bal.Paid), mxn(b.depositRequired)))
 	}
-	var extras int64 // linked quick sales (1.3) follow the same choice as what was paid toward the order
+	var extras int64 // linked quick sales already paid (1.3) follow the same choice as what was paid toward the order
 	if Releases(to) {
-		if err := tx.QueryRow(ctx, `select coalesce(sum(total), 0) from public.sales where business_id = $1 and booking_id = $2`,
+		if err := tx.QueryRow(ctx, `select coalesce(sum(total), 0) from public.sales where business_id = $1 and booking_id = $2 and method <> 'on_account'`,
 			businessID, id).Scan(&extras); err != nil {
+			return Booking{}, err
+		}
+		// Extras on the order's account (R4) were never delivered: they go back to stock either way.
+		if err := undoSales(ctx, tx, businessID, id, true); err != nil {
 			return Booking{}, err
 		}
 	}
@@ -140,7 +146,7 @@ func TransitionPaid(ctx context.Context, db store.DB, businessID, id, to, paid, 
 					return Booking{}, err
 				}
 			}
-			if err := undoSales(ctx, tx, businessID, id); err != nil {
+			if err := undoSales(ctx, tx, businessID, id, false); err != nil {
 				return Booking{}, err
 			}
 			note = joinNote(note, fmt.Sprintf("Se devolvieron %s", mxn(collected)))
@@ -165,16 +171,17 @@ func TransitionPaid(ctx context.Context, db store.DB, businessID, id, to, paid, 
 	return Get(ctx, db, businessID, id)
 }
 
-// undoSales deletes the quick sales linked to the booking and puts their products' stock back
-// (like products.CancelSale, for every sale of the booking).
-func undoSales(ctx context.Context, tx pgx.Tx, businessID, bookingID string) error {
+// undoSales deletes the quick sales linked to the booking (only those on its account, or all) and puts
+// their products' stock back, like products.CancelSale.
+func undoSales(ctx context.Context, tx pgx.Tx, businessID, bookingID string, onAccount bool) error {
 	if _, err := tx.Exec(ctx, `update public.retail_products p set stock = p.stock + q.quantity
 		from (select l.product_id, sum(l.quantity) as quantity from public.sale_lines l join public.sales s on s.id = l.sale_id
-		      where s.business_id = $1 and s.booking_id = $2 and l.product_id is not null group by l.product_id) q
-		where p.id = q.product_id and p.business_id = $1`, businessID, bookingID); err != nil {
+		      where s.business_id = $1 and s.booking_id = $2 and l.product_id is not null and (not $3 or s.method = 'on_account')
+		      group by l.product_id) q
+		where p.id = q.product_id and p.business_id = $1`, businessID, bookingID, onAccount); err != nil {
 		return err
 	}
-	_, err := tx.Exec(ctx, `delete from public.sales where business_id = $1 and booking_id = $2`, businessID, bookingID)
+	_, err := tx.Exec(ctx, `delete from public.sales where business_id = $1 and booking_id = $2 and (not $3 or method = 'on_account')`, businessID, bookingID, onAccount)
 	return err
 }
 
@@ -226,7 +233,7 @@ func AddPayment(ctx context.Context, db store.DB, businessID, id string, p Payme
 	if err != nil {
 		return Booking{}, err
 	}
-	bal := ComputeBalance(b.total, ps)
+	bal := ComputeBalance(b.total+b.onAccount, ps)
 	if err := ValidatePayment(p, bal); err != nil {
 		return Booking{}, err
 	}

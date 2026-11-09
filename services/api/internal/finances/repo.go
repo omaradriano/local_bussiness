@@ -324,7 +324,8 @@ func (r Repo) Summary(ctx context.Context, businessID string, from, to Day, now 
 
 	// Product sales are income; merchandise bought for them is an expense («Mercancía»).
 	var sold, bought int64
-	if err := r.DB.QueryRow(ctx, `select coalesce(sum(total), 0) from public.sales where business_id = $1 and sold_at >= $2 and sold_at < $3`,
+	// Extras on an order's account aren't money yet: they come in as the order's payments.
+	if err := r.DB.QueryRow(ctx, `select coalesce(sum(total), 0) from public.sales where business_id = $1 and sold_at >= $2 and sold_at < $3 and method <> 'on_account'`,
 		businessID, start, end).Scan(&sold); err != nil {
 		return out, err
 	}

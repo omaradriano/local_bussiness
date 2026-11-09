@@ -1,8 +1,10 @@
 package products
 
 import (
+	"context"
 	"errors"
 	"testing"
+	"time"
 )
 
 func TestPriceSale(t *testing.T) {
@@ -128,3 +130,11 @@ func TestProductInput(t *testing.T) {
 
 func ptr(s string) *string { return &s }
 func ptr64(v int64) *int64 { return &v }
+
+// Only an order's extras can stay on its account (checked before touching the database).
+func TestOnAccountNeedsAnOrder(t *testing.T) {
+	_, err := Repo{}.Sell(context.Background(), "b", SaleInput{Method: OnAccount}, "", time.Time{})
+	if bad, ok := err.(Invalid); !ok || bad["method"] == "" {
+		t.Fatalf("on account without an order: %v", err)
+	}
+}

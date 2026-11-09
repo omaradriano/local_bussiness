@@ -338,6 +338,9 @@ func (r Repo) Purchase(ctx context.Context, businessID, productID string, quanti
 	return r.Product(ctx, businessID, productID)
 }
 
+// OnAccount: extras of an order charged with it (at delivery) instead of now (R4).
+const OnAccount = "on_account"
+
 // SaleInput is a sale as asked, with which kinds of line the business may sell (its features).
 type SaleInput struct {
 	Lines         []LineInput `json:"lines"`
@@ -351,7 +354,10 @@ type SaleInput struct {
 
 // Sell records a sale and takes the stock of its products out, all or nothing.
 func (r Repo) Sell(ctx context.Context, businessID string, in SaleInput, actor string, now time.Time) (Sale, error) {
-	if !slices.Contains([]string{"cash", "transfer", "card"}, in.Method) {
+	switch {
+	case in.Method == OnAccount && in.BookingID == "":
+		return Sale{}, Invalid{"method": "Solo los extras de un pedido pueden quedar a cuenta."}
+	case in.Method != OnAccount && !slices.Contains([]string{"cash", "transfer", "card"}, in.Method):
 		return Sale{}, Invalid{"method": "Elige efectivo, transferencia o tarjeta."}
 	}
 	name, phoneNumber, err := SaleCustomer(in.CustomerName, in.CustomerPhone)
@@ -409,6 +415,13 @@ func (r Repo) Sell(ctx context.Context, businessID string, in SaleInput, actor s
 	lines, total, cost, err := PriceSale(in.Lines, prices)
 	if err != nil {
 		return Sale{}, err
+	}
+	if in.Method == OnAccount {
+		var open bool
+		if err := tx.QueryRow(ctx, `select status not in ('completed', 'cancelled', 'expired', 'no_show') from public.bookings where business_id = $1 and id::text = $2`,
+			businessID, in.BookingID).Scan(&open); err != nil || !open {
+			return Sale{}, Invalid{"method": "Ese pedido ya no está activo; cobra los productos ahora."}
+		}
 	}
 	sale := Sale{Method: in.Method, Total: total, Lines: lines, SoldAt: now}
 	if in.BookingID != "" {
