@@ -25,7 +25,7 @@ function Field({ label, value, onChange, error, keyboard, hint, onBlur }: {
   return <UIField label={label} value={value} onChangeText={onChange} keyboardType={keyboard} error={error} hint={hint} onBlur={onBlur} />;
 }
 
-type Quote = { total: number; discount: number; security_deposit: number; periods: number };
+type Quote = { total: number; discount: number; deposit_required: number; security_deposit: number; periods: number };
 
 export default function NewBooking() {
   const { businessId } = useLocalSearchParams<{ businessId: string }>();
@@ -401,7 +401,10 @@ export default function NewBooking() {
                 <DiscountFields mode={discMode} text={discText} onMode={setDiscMode} onText={setDiscText} error={errors.discount ?? errors['discount.value']} />
               </SubStep>
               <SubStep title={t.payNow} description={t.payNowHint}>
-                <Segmented options={(['none', 'total', 'partial'] as const).map((m) => ({ value: m, label: t.payModes[m] }))} value={payMode} onChange={setPayMode} />
+                <Segmented options={(['none', 'total', 'partial'] as const).map((m) => ({ value: m, label: t.payModes[m] }))} value={payMode} onChange={(m) => {
+                  setPayMode(m);
+                  if (m === 'partial' && !payAmount && quote?.deposit_required) setPayAmount(String(quote.deposit_required / 100));
+                }} />
                 {payMode !== 'none' && (
                   <Segmented options={(['cash', 'transfer', 'card'] as const).map((m) => ({ value: m, label: t.methods[m] }))} value={payMethod} onChange={setPayMethod} />
                 )}

@@ -264,6 +264,7 @@ type BookingsRepo interface {
 	Return(ctx context.Context, businessID, id, condition, actor string, now time.Time) (bookings.Booking, error)
 	Extend(ctx context.Context, businessID, id string, newEnd time.Time, actor string, now time.Time) (bookings.Booking, error)
 	SetDiscount(ctx context.Context, businessID, id string, d bookings.Discount, actor string) (bookings.Booking, error)
+	Reschedule(ctx context.Context, businessID, id string, start time.Time, end *time.Time, actor string, now time.Time) (bookings.Booking, error)
 	Inventory(ctx context.Context, businessID string) ([]bookings.InventoryRow, error)
 	Quote(ctx context.Context, businessID string, in bookings.QuoteRequest) (bookings.QuoteResult, error)
 	History(ctx context.Context, businessID string, f bookings.HistoryFilter) ([]bookings.Summary, error)
@@ -1260,6 +1261,27 @@ func NewRouter(d Deps) http.Handler {
 						return
 					}
 					b, err := d.Bookings.Extend(r.Context(), m.BusinessID, chi.URLParam(r, "bookingId"), *body.EndsAt, m.UserID, d.now())
+					writeBooking(w, r, b, err)
+				})
+
+				r.Put("/schedule", func(w http.ResponseWriter, r *http.Request) {
+					m, _ := auth.MemberFrom(r.Context())
+					var body struct {
+						StartsAt *time.Time `json:"starts_at"`
+						EndsAt   *time.Time `json:"ends_at"`
+					}
+					if !decode(w, r, &body) {
+						return
+					}
+					if body.StartsAt == nil {
+						invalid(w, "Elige la nueva fecha.", map[string]string{"starts_at": "Elige la nueva fecha."})
+						return
+					}
+					b, err := d.Bookings.Reschedule(r.Context(), m.BusinessID, chi.URLParam(r, "bookingId"), *body.StartsAt, body.EndsAt, m.UserID, d.now())
+					if errors.Is(err, bookings.ErrSlotTaken) {
+						apierr.Write(w, http.StatusConflict, "slot_taken", "Ese día ya no hay cupo; elige otro.")
+						return
+					}
 					writeBooking(w, r, b, err)
 				})
 

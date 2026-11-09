@@ -23,11 +23,12 @@ type engineRules struct {
 	resource    resource
 	pricing     pricing
 	custody     bool
+	movable     bool // its date can change after booking (Reschedule); only where nothing is claimed by time
 }
 
 var rulesByKind = map[string]engineRules{
 	engines.Service: {timing: slotTiming, fulfillment: atPlaceOrHome, resource: staffSlot{}, pricing: fixedPrice},
-	engines.Product: {timing: dayTiming, fulfillment: pickupOrDelivery, resource: dailyCapacity{}, pricing: fixedPrice},
+	engines.Product: {timing: dayTiming, fulfillment: pickupOrDelivery, resource: dailyCapacity{}, pricing: fixedPrice, movable: true},
 	engines.Rental:  {timing: rangeTiming, fulfillment: atPlace, resource: units{}, pricing: perPeriod, custody: true},
 }
 

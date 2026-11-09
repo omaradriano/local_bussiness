@@ -167,3 +167,45 @@ func TestIntegrationF3_4_FlujoCompletoPorGiro(t *testing.T) {
 		}
 	})
 }
+
+func TestIntegrationReschedule(t *testing.T) {
+	p := pool(t)
+	ctx := context.Background()
+	f := setup(t, p, "flowers", `{"daily_capacity": 1}`)
+	order := func(phone, startsAt string) Booking {
+		b, _, err := Create(ctx, p, f.business, CreateInput{Customer: cust(phone), ItemID: f.item, StartsAt: at(startsAt),
+			Options: map[string]string{"Color": "Rojo"}, Source: "admin"}, now)
+		if err != nil {
+			t.Fatal(err)
+		}
+		return b
+	}
+	a := order("6147770001", "2026-11-02T18:00:00Z")
+	order("6147770002", "2026-11-03T18:00:00Z")
+
+	// Same day, another window: the order already counts there, so a full day is fine.
+	b, err := Reschedule(ctx, p, f.business, a.ID, *at("2026-11-02T16:00:00Z"), at("2026-11-02T19:00:00Z"), "", now)
+	if err != nil || !b.StartsAt.Equal(*at("2026-11-02T16:00:00Z")) || b.EndsAt == nil || len(b.Events) != 2 {
+		t.Fatalf("same day: %+v %v", b, err)
+	}
+	// Nov 3 is full (capacity 1).
+	if _, err := Reschedule(ctx, p, f.business, a.ID, *at("2026-11-03T16:00:00Z"), nil, "", now); !errors.Is(err, ErrSlotTaken) {
+		t.Fatalf("full day: %v", err)
+	}
+	// A window ending another day is refused.
+	var inv Invalid
+	if _, err := Reschedule(ctx, p, f.business, a.ID, *at("2026-11-04T16:00:00Z"), at("2026-11-05T16:00:00Z"), "", now); !errors.As(err, &inv) || inv.Field != "ends_at" {
+		t.Fatalf("window: %v", err)
+	}
+	b, err = Reschedule(ctx, p, f.business, a.ID, *at("2026-11-04T16:00:00Z"), nil, "", now)
+	if err != nil || !b.StartsAt.Equal(*at("2026-11-04T16:00:00Z")) || b.EndsAt != nil {
+		t.Fatalf("another day: %+v %v", b, err)
+	}
+	// A cancelled order keeps its date.
+	if _, err := Transition(ctx, p, f.business, a.ID, "cancelled", "", ""); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := Reschedule(ctx, p, f.business, a.ID, *at("2026-11-05T16:00:00Z"), nil, "", now); !errors.As(err, &inv) || inv.Field != "status" {
+		t.Fatalf("cancelled: %v", err)
+	}
+}
