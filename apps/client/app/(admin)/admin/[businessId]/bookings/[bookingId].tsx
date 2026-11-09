@@ -4,6 +4,7 @@ import { router, Stack, useFocusEffect, useLocalSearchParams } from 'expo-router
 import { useCallback, useState } from 'react';
 import { ActivityIndicator, Linking, View } from 'react-native';
 import { BookingDocuments } from '../../../../../components/BookingDocuments';
+import { ConfirmDialog } from '../../../../../components/ConfirmDialog';
 import { ExtendRental } from '../../../../../components/ExtendRental';
 import { RescheduleOrder } from '../../../../../components/RescheduleOrder';
 import { DiscountForm } from '../../../../../components/DiscountForm';
@@ -42,6 +43,7 @@ export default function BookingDetail() {
   const [loadError, setLoadError] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
   const [confirmCancel, setConfirmCancel] = useState(false);
+  const [ask, setAsk] = useState<{ to: Booking['status']; paid?: 'refund' | 'keep' } | null>(null);
   const [payOpen, setPayOpen] = useState(false);
   const [condition, setCondition] = useState('');
   const path = { businessId, bookingId };
@@ -57,7 +59,14 @@ export default function BookingDetail() {
       .then(({ data, error, response }) => (data ? show(data) : setLoadError(errorText(error, response.status))));
   }, [businessId, bookingId])); // eslint-disable-line react-hooks/exhaustive-deps
 
+  // Moving money or confirming short of the advance asks first.
+  function request(to: Booking['status'], paid?: 'refund' | 'keep') {
+    if (paid || (to === 'confirmed' && b!.balance.paid < b!.deposit_required)) setAsk({ to, paid });
+    else move(to);
+  }
+
   async function move(to: Booking['status'], paid?: 'refund' | 'keep') {
+    setAsk(null);
     setBusy(true);
     const { data, error, response } = await api.POST('/v1/b/{businessId}/bookings/{bookingId}/transition', { params: { path }, body: { to, paid } });
     setBusy(false);
@@ -189,7 +198,7 @@ export default function BookingDetail() {
               {rentalStep === 0 && (
                 <>
                   <SubStep title={f.sub.payment} description={f.sub.advanceHint}>{balance}{payments}</SubStep>
-                  {actions.includes('confirmed') && <Button variant="primary" busy={busy} onPress={() => move('confirmed')}>{t.actions.confirmed ?? t.status.confirmed}</Button>}
+                  {actions.includes('confirmed') && <Button variant="primary" busy={busy} onPress={() => request('confirmed')}>{t.actions.confirmed ?? t.status.confirmed}</Button>}
                 </>
               )}
             </Step>
@@ -273,7 +282,7 @@ export default function BookingDetail() {
               <Group label={t.actionsTitle} padded>
                 <View style={{ gap: 8 }}>
                   {actions.filter((st) => !isOther(st)).map((st) => (
-                    <Button key={st} busy={busy} onPress={() => move(st)}>{t.actions[st] ?? t.status[st]}</Button>
+                    <Button key={st} busy={busy} onPress={() => request(st)}>{t.actions[st] ?? t.status[st]}</Button>
                   ))}
                 </View>
               </Group>
@@ -311,8 +320,8 @@ export default function BookingDetail() {
           <Group label={t.otherActions} footer={confirmCancel ? (paid > 0 ? t.confirmCancelPaid(formatMXN(paid)) + (extrasTotal ? t.cancelExtras(formatMXN(extrasTotal)) : '') : t.confirmCancel) : undefined}>
             {otherActions.map((st) => (st === 'cancelled' && confirmCancel && paid > 0 ? (
               <View key={st}>
-                <Cell label={t.cancelRefund(formatMXN(paid))} destructive onPress={() => move(st, 'refund')} />
-                <Cell label={t.cancelKeep(formatMXN(paid))} destructive onPress={() => move(st, 'keep')} />
+                <Cell label={t.cancelRefund(formatMXN(paid))} destructive onPress={() => request(st, 'refund')} />
+                <Cell label={t.cancelKeep(formatMXN(paid))} destructive onPress={() => request(st, 'keep')} />
               </View>
             ) : (
               // A no-show keeps what was paid (the usual rule for a missed appointment).
@@ -322,6 +331,12 @@ export default function BookingDetail() {
           </Group>
         )}
       </View>
+      {ask && (
+        <ConfirmDialog open busy={busy} primary={!ask.paid} onClose={() => setAsk(null)} onConfirm={() => move(ask.to, ask.paid)}
+          title={ask.paid === 'refund' ? t.askRefund(formatMXN(paid)) : ask.paid === 'keep' ? t.askKeep(formatMXN(paid)) : t.askConfirmShort(formatMXN(b.deposit_required - b.balance.paid))}
+          body={ask.paid === 'refund' ? t.askRefundBody : ask.paid === 'keep' ? t.askKeepBody : t.askConfirmShortBody}
+          confirmLabel={ask.paid === 'refund' ? t.cancelRefund(formatMXN(paid)) : ask.paid === 'keep' ? t.cancelKeep(formatMXN(paid)) : t.confirmAnyway} />
+      )}
     </Screen>
   );
 }

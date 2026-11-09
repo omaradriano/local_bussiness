@@ -120,6 +120,9 @@ func TransitionPaid(ctx context.Context, db store.DB, businessID, id, to, paid, 
 	case to == "out_for_delivery" && b.fulfillment != "delivery":
 		return Booking{}, Invalid{"status", "Este pedido se recoge en el local; no sale a entrega."}
 	}
+	if to == "confirmed" && bal.Paid < b.depositRequired {
+		note = joinNote(note, fmt.Sprintf("Se confirmó con anticipo parcial (%s de %s)", mxn(bal.Paid), mxn(b.depositRequired)))
+	}
 	var extras int64 // linked quick sales (1.3) follow the same choice as what was paid toward the order
 	if Releases(to) {
 		if err := tx.QueryRow(ctx, `select coalesce(sum(total), 0) from public.sales where business_id = $1 and booking_id = $2`,

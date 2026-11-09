@@ -8,10 +8,11 @@ const norm = (s: string) => s.trim().split(/\s+/).join(' ').toLowerCase();
 /**
  * Confirmation for a destructive action (in-app, not the browser's confirm). With `typeToConfirm`
  * the button stays off until that text is typed (spaces and case don't matter, like the API).
+ * `primary` is for a confirmation that isn't destructive.
  */
-export function ConfirmDialog({ open, title, body, confirmLabel, typeToConfirm, typeLabel, busy, onConfirm, onClose }: {
+export function ConfirmDialog({ open, title, body, confirmLabel, typeToConfirm, typeLabel, busy, primary, onConfirm, onClose }: {
   open: boolean; title: string; body: string; confirmLabel: string; typeToConfirm?: string; typeLabel?: string;
-  busy?: boolean; onConfirm: () => void; onClose: () => void;
+  busy?: boolean; primary?: boolean; onConfirm: () => void; onClose: () => void;
 }) {
   const ui = useUI();
   const [typed, setTyped] = useState('');
@@ -30,7 +31,7 @@ export function ConfirmDialog({ open, title, body, confirmLabel, typeToConfirm, 
             <Field label={typeLabel ?? typeToConfirm} value={typed} onChangeText={setTyped} autoCapitalize="none" autoCorrect={false} />
           )}
           <View style={{ gap: 8 }}>
-            <Button variant="destructive" busy={busy} disabled={!ready} onPress={onConfirm}>{confirmLabel}</Button>
+            <Button variant={primary ? 'primary' : 'destructive'} busy={busy} disabled={!ready} onPress={onConfirm}>{confirmLabel}</Button>
             <Button variant="plain" disabled={busy} onPress={close}>{strings.confirm.cancel}</Button>
           </View>
         </Pressable>
