@@ -302,10 +302,14 @@ func TestIntegrationCancelWithExtras(t *testing.T) {
 			returning id::text`, f.business, b.ID).Scan(&sale); err != nil {
 			t.Fatal(err)
 		}
-		if _, err := p.Exec(ctx, `insert into public.sale_lines (business_id, sale_id, product_id, quantity, unit_price, unit_cost) values ($1, $2, $3, 2, 10000, 5000);
-			insert into public.sale_lines (business_id, sale_id, name, quantity, unit_price, unit_cost) values ($1, $2, 'Globo', 1, 15000, 0);
-			update public.retail_products set stock = stock - 2 where id = $3`, f.business, sale, choc); err != nil {
-			t.Fatal(err)
+		for _, q := range []string{
+			`insert into public.sale_lines (business_id, sale_id, product_id, quantity, unit_price, unit_cost) values ($1, $2, $3, 2, 10000, 5000)`,
+			`insert into public.sale_lines (business_id, sale_id, product_id, name, quantity, unit_price, unit_cost) values ($1, $2, null::uuid, 'Globo', 1, 15000, 0)`,
+			`update public.retail_products set stock = stock - 2 where business_id = $1 and id = $3 and $2::uuid is not null`,
+		} {
+			if _, err := p.Exec(ctx, q, f.business, sale, choc); err != nil {
+				t.Fatal(err)
+			}
 		}
 		return b
 	}
