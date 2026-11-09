@@ -1,5 +1,5 @@
 import type { components } from '@lb/api-client';
-import { addDays, boardColumns, dayStartISO, forwardMove, hhmm, strings, todayISO, type BoardStatus, capFirst } from '@lb/shared';
+import { addDays, boardColumns, dayStartISO, forwardMove, hhmm, strings, todayISO, type BoardStatus } from '@lb/shared';
 import { Ionicons } from '@expo/vector-icons';
 import { router, Stack, useFocusEffect, useLocalSearchParams } from 'expo-router';
 import { useCallback, useState } from 'react';
@@ -8,6 +8,7 @@ import { api } from '../../../../lib/api';
 import { errorText } from '../../../../lib/errors';
 import { useBusiness } from '../../../../lib/useMe';
 import { useTexts } from '../../../../lib/useTexts';
+import { DayNav } from '../../../../components/DayNav';
 import { Button, Chip, Chips, EmptyState, Notice, PressableScale, Screen, Text, radius, useToast, useUI } from '../../../../ui';
 
 type Summary = components['schemas']['BookingSummary'];
@@ -16,12 +17,12 @@ const WIDE = 900; // columns side by side from here; one tab per column below
 
 /** Day board (feature dayBoard): the day's orders by status, each moved ahead with one tap. */
 export default function Board() {
-  const { businessId } = useLocalSearchParams<{ businessId: string }>();
+  const { businessId, day: dayParam } = useLocalSearchParams<{ businessId: string; day?: string }>();
   const { business } = useBusiness(businessId);
   const { texts } = useTexts();
   const toast = useToast();
   const { width } = useWindowDimensions();
-  const [day, setDay] = useState(todayISO());
+  const [day, setDay] = useState(dayParam ?? todayISO());
   const [rows, setRows] = useState<Summary[] | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [tab, setTab] = useState<BoardStatus>('confirmed');
@@ -55,7 +56,6 @@ export default function Board() {
   const wide = width >= WIDE;
   const columns = rows ? boardColumns(rows) : [];
   const shown = wide ? columns : columns.filter((c) => c.status === tab);
-  const label = day === todayISO() ? t.today : new Date(`${day}T12:00:00`).toLocaleDateString('es-MX', { weekday: 'long', day: 'numeric', month: 'long' });
 
   return (
     <Screen refreshing={false} onRefresh={load}
@@ -64,16 +64,9 @@ export default function Board() {
       <Text variant="largeTitle" accessibilityRole="header">{t.title}</Text>
       <Text variant="footnote" color="labelSecondary" style={{ marginBottom: 12 }}>{t.hint}</Text>
 
-      <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8, marginBottom: 12 }}>
-        <DayButton icon="chevron-back" label={t.prevDay} onPress={() => setDay(addDays(day, -1))} />
-        <Text variant="headline" style={{ flex: 1, textAlign: 'center' }}>{capFirst(label)}</Text>
-        <DayButton icon="chevron-forward" label={t.nextDay} onPress={() => setDay(addDays(day, 1))} />
-      </View>
-      <View style={{ flexDirection: 'row', gap: 8, marginBottom: 12 }}>
-        {day !== todayISO() && <Button size="sm" onPress={() => setDay(todayISO())} style={{ flex: 1 }}>{t.today}</Button>}
-        <Button size="sm" icon="document-text" style={{ flex: 1 }}
-          onPress={() => router.push({ pathname: '/admin/[businessId]/production', params: { businessId, day } })}>{strings.production.open}</Button>
-      </View>
+      <DayNav day={day} onChange={setDay} />
+      <Button size="sm" icon="document-text" style={{ marginBottom: 12 }}
+        onPress={() => router.push({ pathname: '/admin/[businessId]/production', params: { businessId, day } })}>{strings.production.open}</Button>
 
       {error && <Notice tone="warning">{error}</Notice>}
       {!rows && !error && <ActivityIndicator />}
@@ -102,16 +95,6 @@ export default function Board() {
         </>
       )}
     </Screen>
-  );
-}
-
-function DayButton({ icon, label, onPress }: { icon: 'chevron-back' | 'chevron-forward'; label: string; onPress: () => void }) {
-  const ui = useUI();
-  return (
-    <PressableScale accessibilityRole="button" accessibilityLabel={label} onPress={onPress} hitSlop={8}
-      style={{ width: 36, height: 36, borderRadius: radius.full, backgroundColor: ui.fill, alignItems: 'center', justifyContent: 'center' }}>
-      <Ionicons name={icon} size={20} color={ui.accent} />
-    </PressableScale>
   );
 }
 
