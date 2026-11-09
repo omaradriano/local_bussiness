@@ -34,3 +34,8 @@ export function formatPhone(e164: string): string {
 
 /** Placeholder phone of the business's «Cliente casual» (the API's); a walk-in's own phone, if left, replaces it. */
 export const WALK_IN_PHONE = '+10000000000';
+
+/** A phone to show, or null for none and for the «Cliente casual» placeholder. */
+export function displayPhone(phone: string | null | undefined): string | null {
+  return phone && phone !== WALK_IN_PHONE ? formatPhone(phone) : null;
+}

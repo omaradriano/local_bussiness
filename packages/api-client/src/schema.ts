@@ -2208,6 +2208,8 @@ export interface components {
              * @description Saldo por cobrar, con extras a cuenta; 0 si se canceló
              */
             due: number;
+            /** @description Productos vendidos con el pedido («1 × Chocolates»); vacío si no hay */
+            extras: string;
             /** @description Movimientos de estado posibles desde el panel */
             next: components["schemas"]["BookingStatus"][];
         };
