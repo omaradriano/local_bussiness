@@ -63,12 +63,22 @@ type Booking struct {
 	CreatedAt       time.Time  `json:"created_at"`
 
 	Payments  []Payment   `json:"payments"`
+	Extras    []Extra     `json:"extras"`    // quick sales added to the order (already paid, apart from its balance)
 	Documents []Document  `json:"documents"` // files attached with a free name
 	Balance   Balance     `json:"balance"`
 	Events    []Event     `json:"events"`
 	Steps     []Step      `json:"steps"`
 	Next      []string    `json:"next"` // status moves available from the panel
 	Rental    *RentalInfo `json:"rental"`
+}
+
+// Extra: a quick sale linked to the booking (chocolates, a balloon…), paid when it was sold.
+type Extra struct {
+	ID     string    `json:"id"`
+	SoldAt time.Time `json:"sold_at"`
+	Method string    `json:"method"`
+	Total  int64     `json:"total"`
+	Items  string    `json:"items"` // «2 × Chocolates, 1 × Globo»
 }
 
 // RentalInfo: when the units went out and came back, and the late fee it suggests.
@@ -145,6 +155,19 @@ func Get(ctx context.Context, db store.DB, businessID, id string) (Booking, erro
 	}
 	if b.Documents, err = documents(ctx, db, b.ID); err != nil {
 		return b, err
+	}
+	erows, err := db.Query(ctx, `select s.id::text, s.sold_at, s.method, s.total,
+		  string_agg(l.quantity || ' × ' || coalesce(l.name, p.name), ', ' order by coalesce(l.name, p.name))
+		from public.sales s join public.sale_lines l on l.sale_id = s.id left join public.retail_products p on p.id = l.product_id
+		where s.booking_id = $1 group by s.id order by s.sold_at`, b.ID)
+	if err != nil {
+		return b, err
+	}
+	if b.Extras, err = pgx.CollectRows(erows, pgx.RowToStructByPos[Extra]); err != nil {
+		return b, err
+	}
+	if b.Extras == nil {
+		b.Extras = []Extra{}
 	}
 	b.Balance = ComputeBalance(b.Total, b.Payments)
 	if Releases(b.Status) {

@@ -2593,7 +2593,7 @@ components:
 
     Booking:
       type: object
-      required: [id, kind, status, starts_at, ends_at, customer, items, staff, units, subtotal, discount_type, discount_value, discount, deposit_required, total, source, hold_expires_at, public_token, created_at, payments, balance, events, steps, next, rental, documents, recipient_name, recipient_phone, card_message]
+      required: [id, kind, status, starts_at, ends_at, customer, items, staff, units, subtotal, discount_type, discount_value, discount, deposit_required, total, source, hold_expires_at, public_token, created_at, payments, balance, events, steps, next, rental, documents, recipient_name, recipient_phone, card_message, extras]
       properties:
         id: { type: string, format: uuid }
         kind: { $ref: "#/components/schemas/ItemKind" }
@@ -2652,6 +2652,18 @@ components:
               name: { type: string }
               files: { type: array, items: { type: string } }
               created_at: { type: string, format: date-time }
+        extras:
+          type: array
+          description: Ventas rápidas agregadas al pedido (ya pagadas; aparte del saldo del pedido)
+          items:
+            type: object
+            required: [id, sold_at, method, total, items]
+            properties:
+              id: { type: string, format: uuid }
+              sold_at: { type: string, format: date-time }
+              method: { type: string }
+              total: { type: integer, format: int64 }
+              items: { type: string }
         payments:
           type: array
           items:

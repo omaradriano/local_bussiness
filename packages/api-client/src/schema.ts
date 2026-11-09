@@ -2087,6 +2087,17 @@ export interface components {
                 /** Format: date-time */
                 created_at: string;
             }[];
+            /** @description Ventas rápidas agregadas al pedido (ya pagadas; aparte del saldo del pedido) */
+            extras: {
+                /** Format: uuid */
+                id: string;
+                /** Format: date-time */
+                sold_at: string;
+                method: string;
+                /** Format: int64 */
+                total: number;
+                items: string;
+            }[];
             payments: {
                 /** Format: uuid */
                 id: string;
