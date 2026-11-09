@@ -1,5 +1,5 @@
 import type { components } from '@lb/api-client';
-import { addDays, dayStartISO, hhmm, productionSheet, strings, todayISO } from '@lb/shared';
+import { addDays, dayStartISO, hhmm, productionSheet, strings, todayISO, capFirst } from '@lb/shared';
 import { Stack, useFocusEffect, useLocalSearchParams } from 'expo-router';
 import { useCallback, useState } from 'react';
 import { ActivityIndicator, Platform, StyleSheet, View } from 'react-native';
@@ -41,7 +41,7 @@ export default function Production() {
       <Stack.Screen options={{ title: t.title }} />
       <Text variant="footnote" color="labelSecondary">{business.name}</Text>
       <Text variant="largeTitle" accessibilityRole="header">{t.title}</Text>
-      <Text variant="headline" style={{ textTransform: 'capitalize', marginBottom: 12 }}>{date}</Text>
+      <Text variant="headline" style={{ marginBottom: 12 }}>{capFirst(date)}</Text>
       {Platform.OS === 'web' && sheet && sheet.toMake.length > 0 && (
         <Button icon="print" onPress={() => window.print()} style={{ marginBottom: 16 }}>{t.print}</Button>
       )}

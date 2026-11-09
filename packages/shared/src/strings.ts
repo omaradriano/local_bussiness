@@ -133,7 +133,6 @@ export const strings = {
     tooMany: (max: number) => `Solo se agregaron las primeras: el máximo es ${max} fotos por artículo.`,
   },
   bookings: {
-    new: (term: string) => `Nueva ${term.toLowerCase()}`,
     item: 'Artículo',
     customer: 'Cliente',
     phone: 'Teléfono (10 dígitos)',

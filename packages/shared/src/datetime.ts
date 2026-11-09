@@ -80,3 +80,8 @@ export function dayStartISO(day: string, timeZone: string): string {
   const first = guess - zoneOffset(guess, timeZone) * 60000;
   return new Date(guess - zoneOffset(first, timeZone) * 60000).toISOString(); // second pass: a DST change that night
 }
+
+/** «domingo, 8 de noviembre» → «Domingo, 8 de noviembre»: only the first letter (not every word, as CSS capitalize does). */
+export function capFirst(s: string): string {
+  return s.charAt(0).toUpperCase() + s.slice(1);
+}

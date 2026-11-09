@@ -53,7 +53,7 @@ export type VerticalTexts = {
     documents?: { section: string; sectionHint: string; namePlaceholder: string };
   };
   home: { today: string; calendar: string; customers: string; history: string; catalog: string; settings: string };
-  newBooking: { itemHint: string; customerHint: string; paymentHint: string };
+  newBooking: { title: string; itemHint: string; customerHint: string; paymentHint: string }; // title: «Nuevo pedido» (gender of the word)
   catalog: { activeHint: string };
 };
 

@@ -42,6 +42,7 @@ export const barbershop = {
       settings: 'Anticipo, margen entre citas y funciones',
     },
     newBooking: {
+      title: 'Nueva cita',
       itemHint: 'Elige el servicio.',
       customerHint: 'Busca o registra al cliente; su teléfono queda guardado para la próxima.',
       paymentHint: 'Si pides anticipo, regístralo aquí para confirmar la cita.',

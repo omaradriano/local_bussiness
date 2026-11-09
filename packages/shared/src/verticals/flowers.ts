@@ -45,6 +45,7 @@ export const flowers = {
       settings: 'Anticipo, apartados y zonas de entrega',
     },
     newBooking: {
+      title: 'Nuevo pedido',
       itemHint: 'Elige el arreglo y cuántos.',
       customerHint: 'Busca o registra al cliente; su teléfono queda guardado para el próximo pedido.',
       paymentHint: 'Si pides anticipo, regístralo aquí para confirmar el pedido.',

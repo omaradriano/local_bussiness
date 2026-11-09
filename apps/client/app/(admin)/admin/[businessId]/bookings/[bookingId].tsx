@@ -23,7 +23,7 @@ const t = strings.bookings;
 const qs = strings.quickSale;
 
 const when = (iso: string) =>
-  new Date(iso).toLocaleString('es-MX', { weekday: 'short', day: 'numeric', month: 'short', hour: '2-digit', minute: '2-digit' });
+  new Date(iso).toLocaleString('es-MX', { weekday: 'short', day: 'numeric', month: 'short', hour: '2-digit', minute: '2-digit', hourCycle: 'h23' });
 
 /** The most likely payment now: missing advance, deposit before check-out, late fee after a late return, else the balance. */
 function suggestedPayment(b: Booking, security: number): { type: PaymentType; cents: number } {

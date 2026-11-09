@@ -1,4 +1,4 @@
-import { addMonths, inRange, monthGrid, monthLabel, todayISO, WEEKDAYS_SHORT } from '@lb/shared';
+import { addMonths, inRange, monthGrid, monthLabel, todayISO, WEEKDAYS_SHORT, capFirst } from '@lb/shared';
 import { Ionicons } from '@expo/vector-icons';
 import { Pressable, View } from 'react-native';
 import { PressableScale, Text, useUI } from '../ui';
@@ -29,7 +29,7 @@ export function Calendar({ month, onMonthChange, dayInfo, from, to, onSelect, la
           hitSlop={10} onPress={() => onMonthChange(addMonths(month, -1))} style={{ padding: 6, opacity: atMin ? 0.25 : 1 }}>
           <Ionicons name="chevron-back" size={22} color={ui.accent} />
         </Pressable>
-        <Text variant="headline" style={{ textTransform: 'capitalize' }}>{monthLabel(month)}</Text>
+        <Text variant="headline">{capFirst(monthLabel(month))}</Text>
         <Pressable accessibilityRole="button" accessibilityLabel="Mes siguiente" hitSlop={10} onPress={() => onMonthChange(addMonths(month, 1))} style={{ padding: 6 }}>
           <Ionicons name="chevron-forward" size={22} color={ui.accent} />
         </Pressable>

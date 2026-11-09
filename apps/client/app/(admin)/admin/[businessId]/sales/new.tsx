@@ -15,7 +15,7 @@ type Product = components['schemas']['RetailProduct'];
 type Sale = components['schemas']['Sale'];
 type Method = Sale['method'];
 const t = strings.quickSale;
-const hour = (iso: string) => new Date(iso).toLocaleTimeString('es-MX', { hour: '2-digit', minute: '2-digit' });
+const hour = (iso: string) => new Date(iso).toLocaleTimeString('es-MX', { hour: '2-digit', minute: '2-digit', hourCycle: 'h23' });
 
 /** Quick sale (feature quickSale): what the customer takes now, paid now; no date, no customer profile. */
 export default function QuickSale() {

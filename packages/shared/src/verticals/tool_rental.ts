@@ -40,6 +40,7 @@ export const tool_rental = {
       settings: 'Depósito, retrasos, revisión y documentos',
     },
     newBooking: {
+      title: 'Nueva renta',
       itemHint: 'Elige qué se va a rentar y cuántas piezas.',
       customerHint: 'Busca o registra al cliente. Su dirección, aval y documentos se guardan en su ficha.',
       paymentHint: 'Por lo general se cobra al registrar la salida. Registra un pago aquí solo si el cliente deja algo ahora.',

@@ -257,7 +257,7 @@ export default function NewBooking() {
 
   return (
     <Screen>
-      <Stack.Screen options={{ title: t.new(bookingTerm) }} />
+      <Stack.Screen options={{ title: texts.newBooking.title }} />
       <View style={{ gap: 16 }}>
         {has('quickSale') && (
           <Group>

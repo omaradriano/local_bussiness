@@ -15,7 +15,7 @@ import { Cell, Group, Notice, Screen, Segmented, Text } from '../../../../ui';
 type Summary = components['schemas']['BookingSummary'];
 const t = strings.bookings;
 
-const when = (iso: string) => new Date(iso).toLocaleString('es-MX', { day: 'numeric', month: 'short', hour: '2-digit', minute: '2-digit' });
+const when = (iso: string) => new Date(iso).toLocaleString('es-MX', { day: 'numeric', month: 'short', hour: '2-digit', minute: '2-digit', hourCycle: 'h23' });
 
 /** Month view of active bookings: count per day; tap a day to see them. */
 export default function BookingCalendar() {

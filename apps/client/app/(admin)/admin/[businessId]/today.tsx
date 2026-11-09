@@ -1,5 +1,5 @@
 import type { components } from '@lb/api-client';
-import { addDays, agendaGroups, dayStartISO, type AgendaGroup, strings, todayISO } from '@lb/shared';
+import { addDays, agendaGroups, dayStartISO, type AgendaGroup, strings, todayISO, capFirst } from '@lb/shared';
 import { Stack, useFocusEffect, useLocalSearchParams } from 'expo-router';
 import { useCallback, useState } from 'react';
 import { ActivityIndicator } from 'react-native';
@@ -12,7 +12,7 @@ import { Button, EmptyState, Group, Notice, Screen, Text } from '../../../../ui'
 type Summary = components['schemas']['BookingSummary'];
 const order: AgendaGroup[] = ['overdue', 'awaitingDeposit', 'appointments', 'deliveries', 'goingOut', 'comingBack'];
 
-const hour = (iso: string) => new Date(iso).toLocaleTimeString('es-MX', { hour: '2-digit', minute: '2-digit' });
+const hour = (iso: string) => new Date(iso).toLocaleTimeString('es-MX', { hour: '2-digit', minute: '2-digit', hourCycle: 'h23' });
 
 /** Today's to-do list: overdue rentals, holds to collect, appointments, deliveries, rentals going out and coming back. */
 export default function Today() {
@@ -43,8 +43,8 @@ export default function Today() {
   return (
     <Screen>
       <Stack.Screen options={{ title: strings.business.sections.today }} />
-      <Text variant="footnote" color="labelSecondary" style={{ textTransform: 'capitalize' }}>
-        {new Date().toLocaleDateString('es-MX', { weekday: 'long', day: 'numeric', month: 'long' })}
+      <Text variant="footnote" color="labelSecondary">
+        {capFirst(new Date().toLocaleDateString('es-MX', { weekday: 'long', day: 'numeric', month: 'long' }))}
       </Text>
       <Text variant="largeTitle" accessibilityRole="header" style={{ marginBottom: 20 }}>{strings.business.sections.today}</Text>
       {error && (<Group padded><Notice tone="warning">{error}</Notice><Button onPress={load} style={{ marginTop: 12 }}>{strings.common.retry}</Button></Group>)}
