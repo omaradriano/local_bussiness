@@ -63,6 +63,9 @@ type CreateInput struct {
 	Discount          *Discount `json:"discount"` // counter only
 	// Counter only: what the customer pays right now (type is set here: all of it = balance, part = advance).
 	InitialPayment *Payment `json:"initial_payment"`
+	// Counter only, the owner's call (the API checks the role): a same-day order outside the hours or
+	// short of the preparation time. The day's capacity still applies.
+	Urgent bool `json:"urgent"`
 
 	Source         string `json:"-"` // admin | public
 	CreatedBy      string `json:"-"` // user id for admin bookings
@@ -144,6 +147,9 @@ func (in *CreateInput) Validate() error {
 func Create(ctx context.Context, db store.DB, businessID string, in CreateInput, now time.Time) (Booking, bool, error) {
 	if in.Source != "admin" {
 		in.Discount = nil // only the business gives discounts (the public catalog can't ask for one)
+	}
+	if in.Source != "admin" {
+		in.Urgent = false
 	}
 	if err := in.Validate(); err != nil {
 		return Booking{}, false, err
@@ -305,7 +311,7 @@ func Create(ctx context.Context, db store.DB, businessID string, in CreateInput,
 	}
 
 	if _, err := tx.Exec(ctx, `insert into public.booking_events (business_id, booking_id, from_status, to_status, actor, note)
-		values ($1, $2, null, $3, nullif($4, '')::uuid, $5)`, businessID, bookingID, status, in.CreatedBy, "Alta ("+in.Source+")"); err != nil {
+		values ($1, $2, null, $3, nullif($4, '')::uuid, $5)`, businessID, bookingID, status, in.CreatedBy, createdNote(in)); err != nil {
 		return Booking{}, false, err
 	}
 	if pay != nil {
@@ -443,4 +449,11 @@ func walkIn(c CustomerInput) CustomerInput {
 		return CustomerInput{}
 	}
 	return c
+}
+
+func createdNote(in CreateInput) string {
+	if in.Urgent {
+		return "Alta (" + in.Source + "): pedido urgente fuera de horario o sin tiempo de preparación"
+	}
+	return "Alta (" + in.Source + ")"
 }

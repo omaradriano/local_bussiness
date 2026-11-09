@@ -926,6 +926,10 @@ func NewRouter(d Deps) http.Handler {
 					invalid(w, "Revisa los datos.", map[string]string{"item_id": "Elige un artículo válido."})
 					return
 				}
+				if in.Urgent && m.Role != "owner" {
+					apierr.Write(w, http.StatusForbidden, "owner_only", "Solo la dueña o el dueño puede tomar un pedido urgente fuera de horario.")
+					return
+				}
 				in.Source, in.CreatedBy = "admin", m.UserID
 				in.IdempotencyKey = r.Header.Get("Idempotency-Key")
 				if k := in.IdempotencyKey; k != "" && (len(k) < 8 || len(k) > 100) {

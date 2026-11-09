@@ -747,6 +747,8 @@ func TestBookingRoutes(t *testing.T) {
 		{"artículo inválido", http.MethodPost, base, "ok", `{"item_id":"x"}`, "", http.StatusUnprocessableEntity, `"item_id"`},
 		{"choque", http.MethodPost, base, "ok", ok + `,"notes":"ocupado"}`, "", http.StatusConflict, `"slot_taken"`},
 		{"negocio ajeno", http.MethodPost, "/v1/b/" + bizB + "/bookings", "ok", ok + `}`, "", http.StatusForbidden, `"forbidden"`},
+		{"urgente: solo la dueña", http.MethodPost, base, "staff", ok + `,"urgent":true}`, "", http.StatusForbidden, `"owner_only"`},
+		{"urgente de la dueña", http.MethodPost, base, "ok", ok + `,"urgent":true}`, "", http.StatusCreated, `"status"`},
 		{"detalle", http.MethodGet, base + "/" + bookingID + "/", "staff", "", "", http.StatusOK, bookingID},
 		{"detalle inexistente", http.MethodGet, base + "/eeeeeeee-0000-0000-0000-000000000000/", "ok", "", "", http.StatusNotFound, `"not_found"`},
 	}

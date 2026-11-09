@@ -104,10 +104,12 @@ export default function NewBooking() {
 
   // Picking a day: a start time inside that day's business hours (never past), shown right away.
   const [hours, setHours] = useState<Shift[] | null>(null);
+  // Owner only: a same-day order outside the hours or short of the preparation time (the API checks the role).
+  const [urgent, setUrgent] = useState(false);
   useEffect(() => {
     api.GET('/v1/b/{businessId}/hours', { params: { path: { businessId } } }).then(({ data }) => setHours(data?.hours ?? []));
   }, [businessId]);
-  useEffect(() => { if (from) setTime((tm) => (hours ? timeInHours(from, tm, hours) : futureTime(from, tm))); }, [from, hours]);
+  useEffect(() => { if (from) setTime((tm) => (hours && !urgent ? timeInHours(from, tm, hours) : futureTime(from, tm))); }, [from, hours, urgent]);
 
   // New item: start over.
   useEffect(() => { setFrom(null); setTo(null); setSlot(null); setStaffId(null); setMessage(null); }, [itemId]);
@@ -175,7 +177,7 @@ export default function NewBooking() {
     const d = days[date];
     if (!d) return { disabled: true }; // not loaded yet or outside the range
     if (d.closed) return { disabled: true, badge: t.closedBadge }; // no pick-up/return, but a rental can span it
-    if (!d.available) return { disabled: true };
+    if (!d.available && !(urgent && (d.remaining === -1 || d.remaining >= qty))) return { disabled: true };
     if (e?.resource === 'units') return { badge: t.freeBadge(d.remaining) };
     return d.remaining >= 0 ? { badge: t.countBadge(d.remaining) } : {};
   }
@@ -224,6 +226,7 @@ export default function NewBooking() {
         ...(e?.fulfillment === 'atPlaceOrHome' && atHome ? { fulfillment: 'delivery' as const, delivery_address: address } : {}),
         notes,
         ...(discount ? { discount } : {}),
+        ...(urgent && isDay ? { urgent: true } : {}),
         ...(payMode !== 'none' ? { initial_payment: { method: payMethod, ...(partial ? { amount: partial } : {}) } } : {}),
       },
     });
@@ -294,6 +297,15 @@ export default function NewBooking() {
               </Text>
               <Calendar month={month} onMonthChange={setMonth} minMonth={firstOfMonth(today)} from={from} to={isRange ? to : null}
                 onSelect={pick} dayInfo={dayInfo} />
+              {isDay && business.role === 'owner' && (
+                <View style={{ flexDirection: 'row', alignItems: 'center', gap: 12 }}>
+                  <View style={{ flex: 1 }}>
+                    <Text>{t.urgent}</Text>
+                    <Text variant="footnote" color="labelSecondary">{t.urgentHint}</Text>
+                  </View>
+                  <Switch accessibilityLabel={t.urgent} value={urgent} onValueChange={setUrgent} />
+                </View>
+              )}
               {isRange && (settings?.rentals.rentals_span_closed_days ?? true) && <Text variant="footnote" color="labelSecondary">{t.closedDayHint}</Text>}
               {daysState !== 'loading' && daysState !== 'ready' && <Notice tone="warning">{daysState}</Notice>}
               {/* Daily capacity: asking for more than any day has left turns the whole month off; say why. */}
