@@ -1,5 +1,5 @@
 import type { components } from '@lb/api-client';
-import { addDays, boardColumns, dayStartISO, forwardMove, hhmm, strings, todayISO, type BoardStatus } from '@lb/shared';
+import { addDays, boardColumns, dayStartISO, formatMXN, forwardMove, hhmm, paymentAlert, strings, todayISO, type BoardStatus } from '@lb/shared';
 import { Ionicons } from '@expo/vector-icons';
 import { router, Stack, useFocusEffect, useLocalSearchParams } from 'expo-router';
 import { useCallback, useState } from 'react';
@@ -104,6 +104,7 @@ function OrderCard({ businessId, b, busy, statusText, onAdvance }: {
   const ui = useUI();
   const to = forwardMove(b.next, b.fulfillment);
   const time = `${hhmm(b.starts_at)}${b.ends_at ? `–${hhmm(b.ends_at)}` : ''}`;
+  const alert = paymentAlert(b);
   return (
     <View style={{ backgroundColor: ui.surface, borderRadius: radius.lg, padding: 12, gap: 6 }}>
       <PressableScale accessibilityRole="button" accessibilityLabel={`${b.items}, ${b.customer_name}, ${statusText}`}
@@ -118,6 +119,14 @@ function OrderCard({ businessId, b, busy, statusText, onAdvance }: {
           {!!b.details && <Text variant="footnote" color="labelSecondary">{b.details}</Text>}
           <Text variant="footnote" color="labelSecondary">{b.recipient_name ? `${b.customer_name} · ${t.for(b.recipient_name)}` : b.customer_name}</Text>
           {!!b.card_message && <Text variant="footnote" numberOfLines={2} style={{ fontStyle: 'italic' }}>«{b.card_message}»</Text>}
+          {alert && (
+            <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6, alignSelf: 'flex-start', paddingVertical: 4, paddingHorizontal: 8, borderRadius: radius.full, backgroundColor: ui.warningFill }}>
+              <Ionicons name={alert === 'advance' ? 'alert-circle' : 'cash'} size={16} color={ui.warning} />
+              <Text variant="footnote" style={{ color: ui.warning, fontWeight: '600' }}>
+                {alert === 'advance' ? t.missingAdvance(formatMXN(b.due)) : t.missingBalance(formatMXN(b.due))}
+              </Text>
+            </View>
+          )}
         </View>
       </PressableScale>
       {to && (
