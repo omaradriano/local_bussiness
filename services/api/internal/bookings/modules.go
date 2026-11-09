@@ -210,7 +210,7 @@ func (dailyCapacity) check(r *reservation) error {
 		return ErrSlotTaken
 	}
 	left := res.Days[0].Remaining
-	if res.Days[0].Available || r.in.Urgent && (left == -1 || left >= r.in.Quantity) {
+	if res.Days[0].Available || r.in.Urgent && res.Days[0].Fits {
 		return nil // urgent: closed or short of preparation time is fine, but not past the day's capacity
 	}
 	// Say why: some spots left but not enough, none left (someone took them: 409), or no deliveries that day.

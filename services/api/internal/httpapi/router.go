@@ -963,7 +963,7 @@ func NewRouter(d Deps) http.Handler {
 				case errors.As(err, &bad):
 					invalid(w, bad.Message, map[string]string{bad.Field: bad.Message})
 				case errors.Is(err, bookings.ErrDayFull):
-					apierr.Write(w, http.StatusConflict, "slot_taken", "Ese día ya llegó al máximo de pedidos; elige otro día.")
+					apierr.Write(w, http.StatusConflict, "slot_taken", "Ese día ya se llenó; elige otro día.")
 				case errors.Is(err, bookings.ErrSlotTaken):
 					apierr.Write(w, http.StatusConflict, "slot_taken", "Ya no está disponible; elige otro horario, fecha o cantidad.")
 				case err != nil:

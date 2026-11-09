@@ -163,10 +163,15 @@ func TestF3_1_ProductDays(t *testing.T) {
 			q.ItemCapacity = 3
 			q.Booked = map[string]Booked{monday: {All: 4, Item: 2}}
 		}, map[string]int{monday: 1, "2026-11-03": 3, "2026-11-04": 3}},
-		{"piden más de lo que queda", func(q *ProductQuery) {
+		{"el cupo del negocio cuenta pedidos, no piezas: queda 1 pedido y piden 2 piezas", func(q *ProductQuery) {
 			q.Quantity = 2
 			q.Booked = map[string]Booked{monday: {All: 9}}
-		}, map[string]int{"2026-11-03": 10, "2026-11-04": 10}},
+		}, map[string]int{monday: 1, "2026-11-03": 10, "2026-11-04": 10}},
+		{"el cupo del artículo cuenta piezas: quedan 1 y piden 2", func(q *ProductQuery) {
+			q.Quantity = 2
+			q.ItemCapacity = 3
+			q.Booked = map[string]Booked{monday: {All: 2, Item: 2}}
+		}, map[string]int{"2026-11-03": 3, "2026-11-04": 3}},
 		{"blackout del negocio todo el día", func(q *ProductQuery) {
 			q.Blackouts = []Blackout{{Interval: Interval{local("2026-11-03", "00:00"), local("2026-11-04", "00:00")}}}
 		}, map[string]int{monday: 10, "2026-11-04": 10}},

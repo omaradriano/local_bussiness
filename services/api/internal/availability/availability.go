@@ -182,6 +182,7 @@ type Day struct {
 	Available bool   `json:"available"`
 	Remaining int    `json:"remaining"`        // -1 = no limit
 	Closed    bool   `json:"closed,omitempty"` // rentals: no pick-up/return that day, but a rental can span it
+	Fits      bool   `json:"-"`                // products: there's capacity, whatever the hours (an urgent order)
 }
 
 const maxDays = 62
@@ -198,11 +199,19 @@ func ProductDays(q ProductQuery) []Day {
 	var out []Day
 	for d, n := from, 0; !d.After(to) && n < maxDays; d, n = d.AddDate(0, 0, 1), n+1 {
 		key := d.Format("2006-01-02")
-		day := Day{Date: key, Remaining: remaining(q, q.Booked[key])}
-		day.Available = deliverable(q, d, earliest) && (day.Remaining == -1 || day.Remaining >= q.Quantity)
+		b := q.Booked[key]
+		day := Day{Date: key, Remaining: remaining(q, b)}
+		day.Fits = fits(q, b)
+		day.Available = day.Fits && deliverable(q, d, earliest)
 		out = append(out, day)
 	}
 	return out
+}
+
+// fits: the business takes one more order that day, and the item has the pieces asked for
+// (the business-wide limit counts orders; the item's counts pieces).
+func fits(q ProductQuery, b Booked) bool {
+	return (q.DailyCapacity == 0 || b.All < q.DailyCapacity) && (q.ItemCapacity == 0 || q.ItemCapacity-b.Item >= q.Quantity)
 }
 
 func remaining(q ProductQuery, b Booked) int {
