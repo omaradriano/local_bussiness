@@ -66,16 +66,23 @@ func TestReleasesResources(t *testing.T) {
 }
 
 func TestNextStepsForThePanel(t *testing.T) {
-	got := Next("rental", "confirmed")
+	got := Next("rental", "confirmed", "")
 	want := []string{"checked_out", "cancelled", "no_show"}
 	if !equalStrings(got, want) {
 		t.Fatalf("Next = %v, want %v", got, want)
 	}
-	if got := Next("rental", "overdue"); !equalStrings(got, []string{"returned"}) {
+	if got := Next("rental", "overdue", ""); !equalStrings(got, []string{"returned"}) {
 		t.Fatalf("overdue: no check-out button (extending is its own flow), got %v", got)
 	}
-	if len(Next("service", "completed")) != 0 {
+	if len(Next("service", "completed", "")) != 0 {
 		t.Fatal("completed has no next steps")
+	}
+	// An order picked up at the shop never goes out for delivery.
+	if got := Next("product", "ready", "pickup"); !equalStrings(got, []string{"completed"}) {
+		t.Fatalf("pickup: %v", got)
+	}
+	if got := Next("product", "ready", "delivery"); !equalStrings(got, []string{"out_for_delivery", "completed"}) {
+		t.Fatalf("delivery: %v", got)
 	}
 }
 

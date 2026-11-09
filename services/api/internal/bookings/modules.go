@@ -76,6 +76,14 @@ func slotTiming(r *reservation) error {
 
 // dayTiming: a delivery date, optionally with a time window that ends the same day («de 10 a 13 h»).
 func dayTiming(r *reservation) error {
+	hours, err := r.businessHours()
+	if err != nil {
+		return err
+	}
+	// With hours set, the delivery time (and the end of its window) falls while the shop is open.
+	if len(hours) > 0 && (!availability.OpenAt(r.loc, r.start, hours) || r.in.EndsAt != nil && !availability.OpenAt(r.loc, *r.in.EndsAt, hours)) {
+		return Invalid{"starts_at", "Esa hora está fuera del horario del negocio; elige una hora en que esté abierto."}
+	}
 	e := r.in.EndsAt
 	if e == nil {
 		return nil

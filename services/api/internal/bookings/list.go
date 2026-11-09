@@ -58,7 +58,7 @@ func collectSummaries(rows pgx.Rows) ([]Summary, error) {
 		out = []Summary{}
 	}
 	for i := range out {
-		if out[i].Next = Next(out[i].Kind, out[i].Status); out[i].Next == nil {
+		if out[i].Next = Next(out[i].Kind, out[i].Status, deref(out[i].Fulfillment)); out[i].Next == nil {
 			out[i].Next = []string{}
 		}
 	}

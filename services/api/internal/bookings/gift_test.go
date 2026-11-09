@@ -1,6 +1,7 @@
 package bookings
 
 import (
+	"github.com/omaradriano/local_bussiness/services/api/internal/availability"
 	"strings"
 	"testing"
 	"time"
@@ -85,11 +86,13 @@ func TestDayTimingWindow(t *testing.T) {
 		{"no window", nil, ""},
 		{"window", at(start.Add(3 * time.Hour)), ""},
 		{"ends before it starts", at(start.Add(-time.Hour)), "ends_at"},
-		{"ends the next day", at(start.Add(15 * time.Hour)), "ends_at"},
+		{"ends the next day", at(start.Add(15 * time.Hour)), "starts_at"}, // 01:00: closed by then
+		{"window ends after closing", at(start.Add(11 * time.Hour)), "starts_at"},
 	}
+	monday := []availability.Shift{{Weekday: 1, Opens: "09:00", Closes: "20:00"}}
 	for _, c := range cases {
 		t.Run(c.name, func(t *testing.T) {
-			r := &reservation{in: &CreateInput{EndsAt: c.end}, loc: loc, start: start}
+			r := &reservation{in: &CreateInput{EndsAt: c.end}, loc: loc, start: start, hours: monday}
 			err := dayTiming(r)
 			if got := invalidField(err); got != c.field || (c.field == "" && err != nil) {
 				t.Fatalf("err %v, want field %q", err, c.field)
@@ -98,6 +101,13 @@ func TestDayTimingWindow(t *testing.T) {
 				t.Fatalf("end %v, want %v", r.end, c.end)
 			}
 		})
+	}
+	// Monday 23:00 and 03:00 with the shop closing at 20:00.
+	for _, h := range []int{23, 3} {
+		r := &reservation{in: &CreateInput{}, loc: loc, start: time.Date(2026, 11, 2, h, 0, 0, 0, loc), hours: monday}
+		if invalidField(dayTiming(r)) != "starts_at" {
+			t.Fatalf("%d:00 outside the hours was accepted", h)
+		}
 	}
 }
 

@@ -45,10 +45,11 @@ func ByPeople(to string) bool { return !slices.Contains(systemOnly, to) }
 func Releases(status string) bool { return slices.Contains(releasing, status) }
 
 // Next lists the moves a person can make from the current status (for the panel's buttons).
-func Next(kind, from string) []string {
+// fulfillment (pickup | delivery | ""): only an order to deliver goes out for delivery.
+func Next(kind, from, fulfillment string) []string {
 	var out []string
 	for _, s := range transitions[kind][from] {
-		if ByPeople(s) && !backward(from, s) {
+		if ByPeople(s) && !backward(from, s) && (s != "out_for_delivery" || fulfillment == "delivery") {
 			out = append(out, s)
 		}
 	}
