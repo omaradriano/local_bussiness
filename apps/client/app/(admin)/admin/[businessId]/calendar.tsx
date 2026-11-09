@@ -1,6 +1,6 @@
 import type { components } from '@lb/api-client';
 import { bookingDays, engineFor, firstOfMonth, monthWindow, strings, todayISO } from '@lb/shared';
-import { Stack, useFocusEffect, useLocalSearchParams } from 'expo-router';
+import { router, Stack, useFocusEffect, useLocalSearchParams } from 'expo-router';
 import { useCallback, useMemo, useState } from 'react';
 import { ActivityIndicator, View } from 'react-native';
 import { Calendar } from '../../../../components/Calendar';
@@ -69,6 +69,10 @@ export default function BookingCalendar() {
           {list === null && !error && <ActivityIndicator />}
           <Group label={new Date(`${day}T12:00:00`).toLocaleDateString('es-MX', { weekday: 'long', day: 'numeric', month: 'long' })}>
             {list && selected.length === 0 ? <Cell label={texts.bookings.noneThatDay} /> : null}
+            {has('dayBoard') && selected.length > 0 ? (
+              <Cell icon="document-text" label={strings.production.open}
+                onPress={() => router.push({ pathname: '/admin/[businessId]/production', params: { businessId, day } })} />
+            ) : null}
             {selected.map((b) => (
               <BookingCell key={b.id} businessId={businessId} b={b}
                 time={engineFor(b.kind).timing === 'range' && b.ends_at ? `${when(b.starts_at)} → ${when(b.ends_at)}` : when(b.starts_at)} />

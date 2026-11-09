@@ -32,6 +32,10 @@ function useNav() {
   const groups: SectionGroup[] = [
     { label: strings.business.groups.daily, sections: [
       { path: '/today', label: s.today, icon: 'today' },
+      ...(has('dayBoard') ? [
+        { path: '/board', label: strings.board.title, icon: 'grid' },
+        { path: '/production', label: strings.production.title, icon: 'document-text' },
+      ] as Section[] : []),
       { path: '/calendar', label: s.calendar, icon: 'calendar' },
       { path: '/bookings', label: texts.bookings.plural, icon: 'list' },
       { path: '/customers', label: s.customers, icon: 'people' },

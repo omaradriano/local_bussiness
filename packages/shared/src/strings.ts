@@ -133,6 +133,7 @@ export const strings = {
     tooMany: (max: number) => `Solo se agregaron las primeras: el máximo es ${max} fotos por artículo.`,
   },
   bookings: {
+    dueShort: (amount: string) => `Debe ${amount}`,
     item: 'Artículo',
     customer: 'Cliente',
     phone: 'Teléfono (10 dígitos)',
@@ -397,7 +398,7 @@ export const strings = {
   production: {
     title: 'Hoja de producción',
     open: 'Hoja de producción',
-    hint: 'Qué hay que hacer este día y cada pedido con su dedicatoria; para imprimir o tener a la mano en el taller.',
+    hint: 'Qué hay que hacer este día, cada pedido con su dedicatoria y la ruta de entregas por zona; para imprimir o tener a la mano en el taller.',
     totals: 'Por hacer',
     orders: 'Pedidos por hacer',
     done: 'Ya listos o entregados',
@@ -406,6 +407,12 @@ export const strings = {
     pending: 'falta anticipo',
     card: 'Tarjeta',
     for: (name: string) => `Para ${name}`,
+    route: 'Ruta de entregas',
+    noZone: 'Sin zona',
+    pickups: 'Recogen en tienda',
+    collect: (amount: string) => `Cobrar ${amount}`,
+    paid: 'Pagado',
+    receives: (name: string, phone: string | null) => (phone ? `Recibe ${name} · ${phone}` : `Recibe ${name}`),
   },
   board: {
     title: 'Tablero del día',
