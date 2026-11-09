@@ -408,7 +408,8 @@ export default function NewBooking() {
                 {payMode !== 'none' && (
                   <Segmented options={(['cash', 'transfer', 'card'] as const).map((m) => ({ value: m, label: t.methods[m] }))} value={payMethod} onChange={setPayMethod} />
                 )}
-                {payMode === 'partial' && <Field label={t.amount} value={payAmount} onChange={setPayAmount} keyboard="numeric" error={errors.amount} />}
+                {payMode === 'partial' && <Field label={t.amount} value={payAmount} onChange={setPayAmount} keyboard="numeric" error={errors.amount}
+                  hint={quote?.deposit_required ? t.advanceHint(formatMXN(quote.deposit_required)) : undefined} />}
               </SubStep>
               {quote && (
                 <View style={{ gap: 6 }}>

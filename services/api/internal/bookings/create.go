@@ -259,9 +259,10 @@ func Create(ctx context.Context, db store.DB, businessID string, in CreateInput,
 		if err := ValidatePayment(*pay, Balance{Due: q.Total}); err != nil {
 			return Booking{}, false, err
 		}
-		if status == "pending_deposit" && pay.Amount >= q.Advance {
-			status, hold = "confirmed", nil
+		if pay.Amount >= q.Advance {
+			status = "confirmed"
 		}
+		hold = nil // part of the advance freezes the hold; all of it confirms
 	}
 
 	var bookingID string

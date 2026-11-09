@@ -235,6 +235,7 @@ export const strings = {
     statusChanged: (status: string) => `Ahora está: ${status}.`,
     initialPayment: 'Pago al registrar',
     payModes: { none: 'Sin pago', total: 'Total', partial: 'Parcial' },
+    advanceHint: (amount: string) => `Anticipo: ${amount}. Con menos queda apartado sin vencer hasta que se complete.`,
     payNow: 'Pago ahora',
     payNowHint: 'Si deja anticipo o paga completo, regístralo aquí.',
     discountHint: 'Opcional: una cantidad fija o un porcentaje del total.',
