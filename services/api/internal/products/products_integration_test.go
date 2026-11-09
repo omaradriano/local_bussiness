@@ -107,4 +107,36 @@ func TestIntegrationProductsFlow(t *testing.T) {
 	if p, _ := r.Product(ctx, biz, cera.ID); p.Stock != 7 {
 		t.Fatalf("stock after cancelling the quick sale: %d", p.Stock)
 	}
+
+	// Q2: the extras of an order already handed over (or cancelled) stay; deleting one would put back
+	// stock that left with the order and leave its payment without a sale.
+	var cust, order string
+	if err := tx.QueryRow(ctx, `insert into public.customers (business_id, name, phone) values ($1, 'Ana', '+526140000001') returning id::text`, biz).Scan(&cust); err != nil {
+		t.Fatal(err)
+	}
+	if err := tx.QueryRow(ctx, `insert into public.bookings (business_id, customer_id, kind, status, starts_at, source, total)
+		values ($1, $2, 'product', 'confirmed', $3, 'admin', 75000) returning id::text`, biz, cust, now).Scan(&order); err != nil {
+		t.Fatal(err)
+	}
+	extraOf := func() Sale {
+		s, err := r.Sell(ctx, biz, SaleInput{BookingID: order, Lines: []LineInput{{ProductID: cera.ID, Quantity: 1}}, Method: "cash", Retail: true}, "", now)
+		if err != nil {
+			t.Fatal(err)
+		}
+		return s
+	}
+	// While the order is open, a mistaken extra can still go.
+	if err := r.CancelSale(ctx, biz, extraOf().ID); err != nil {
+		t.Fatalf("extra of an open order: %v", err)
+	}
+	kept := extraOf()
+	if _, err := tx.Exec(ctx, `update public.bookings set status = 'completed' where id = $1`, order); err != nil {
+		t.Fatal(err)
+	}
+	if err := r.CancelSale(ctx, biz, kept.ID); !errors.As(err, &bad) || bad["sale"] == "" {
+		t.Fatalf("extra of a delivered order: %v", err)
+	}
+	if p, _ := r.Product(ctx, biz, cera.ID); p.Stock != 6 {
+		t.Fatalf("stock must not come back: %d", p.Stock)
+	}
 }

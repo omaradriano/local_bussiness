@@ -453,13 +453,34 @@ func (r Repo) Sell(ctx context.Context, businessID string, in SaleInput, actor s
 	return sale, tx.Commit(ctx)
 }
 
-// CancelSale deletes a sale (a mistake) and puts its stock back.
+// closedOrder: statuses after which an order's extras are settled (handed over, or cancelled with its own refund).
+var closedOrder = []string{"completed", "returned", "cancelled", "expired", "no_show"}
+
+// CancelSale deletes a sale (a mistake) and puts its stock back. The extras of an order that was
+// already handed over or cancelled stay: they left with it or were settled by the cancellation.
 func (r Repo) CancelSale(ctx context.Context, businessID, saleID string) error {
 	tx, err := r.DB.Begin(ctx)
 	if err != nil {
 		return err
 	}
 	defer tx.Rollback(ctx)
+	var bookingID *string
+	err = tx.QueryRow(ctx, `select booking_id::text from public.sales where business_id = $1 and id = $2 for update`, businessID, saleID).Scan(&bookingID)
+	if errors.Is(err, pgx.ErrNoRows) {
+		return ErrNotFound
+	}
+	if err != nil {
+		return err
+	}
+	if bookingID != nil {
+		var status string
+		if err := tx.QueryRow(ctx, `select status from public.bookings where business_id = $1 and id = $2 for update`, businessID, *bookingID).Scan(&status); err != nil {
+			return err
+		}
+		if slices.Contains(closedOrder, status) {
+			return Invalid{"sale": "Es un extra de un pedido ya entregado o cancelado; ya no se puede borrar."}
+		}
+	}
 	if _, err := tx.Exec(ctx, `update public.retail_products p set stock = p.stock + l.quantity
 		from public.sale_lines l where l.sale_id = $2 and l.business_id = $1 and p.id = l.product_id`, businessID, saleID); err != nil {
 		return err
