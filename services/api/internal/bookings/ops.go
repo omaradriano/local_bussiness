@@ -123,10 +123,12 @@ func TransitionPaid(ctx context.Context, db store.DB, businessID, id, to, paid, 
 	if Releases(to) && bal.Paid > 0 {
 		switch paid {
 		case PaidRefund:
-			if _, err := tx.Exec(ctx, `insert into public.payments (business_id, booking_id, type, method, amount, paid_at, recorded_by, notes)
-				values ($1, $2, 'payment_refund', $3, $4, now(), nullif($5, '')::uuid, 'Devolución al cancelar')`,
-				businessID, id, ps[len(ps)-1].Method, bal.Paid, actor); err != nil {
-				return Booking{}, err
+			for _, r := range PaidByMethod(ps) {
+				if _, err := tx.Exec(ctx, `insert into public.payments (business_id, booking_id, type, method, amount, paid_at, recorded_by, notes)
+					values ($1, $2, 'payment_refund', $3, $4, now(), nullif($5, '')::uuid, 'Devolución al cancelar')`,
+					businessID, id, r.Method, r.Amount, actor); err != nil {
+					return Booking{}, err
+				}
 			}
 			note = joinNote(note, fmt.Sprintf("Se devolvieron %s", mxn(bal.Paid)))
 		case PaidKeep:

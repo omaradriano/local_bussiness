@@ -2,6 +2,7 @@ package bookings
 
 import (
 	"context"
+	"reflect"
 	"testing"
 )
 
@@ -98,3 +99,21 @@ func TestPaymentAllowedByMoment(t *testing.T) {
 
 // noFiles: payments without evidence never look up files.
 var noFiles FileExists = func(context.Context, string, string) error { return nil }
+
+func TestPaidByMethod(t *testing.T) {
+	ps := []Payment{
+		{Type: "advance", Method: "cash", Amount: 5000},
+		{Type: "balance", Method: "transfer", Amount: 7000},
+		{Type: "security_deposit", Method: "card", Amount: 90000}, // not part of the total: never given back here
+		{Type: "balance", Method: "cash", Amount: 1000},
+		{Type: "payment_refund", Method: "transfer", Amount: 2000},
+	}
+	got := PaidByMethod(ps)
+	want := []Payment{{Method: "cash", Amount: 6000}, {Method: "transfer", Amount: 5000}}
+	if !reflect.DeepEqual(got, want) {
+		t.Fatalf("got %+v, want %+v", got, want)
+	}
+	if got := PaidByMethod([]Payment{{Type: "advance", Method: "card", Amount: 100}, {Type: "payment_refund", Method: "card", Amount: 100}}); len(got) != 0 {
+		t.Fatalf("all given back: %+v", got)
+	}
+}

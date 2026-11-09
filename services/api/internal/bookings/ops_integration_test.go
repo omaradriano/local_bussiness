@@ -239,6 +239,21 @@ func TestIntegrationCancelWithPayments(t *testing.T) {
 	if err != nil || got.Balance.Paid != 50000 || got.Balance.Due != 0 || len(got.Payments) != 1 {
 		t.Fatalf("keep: %+v %v", got.Balance, err)
 	}
+	// Paid with two methods: each is given back the way it came in.
+	c := order("6148880004")
+	if _, err := AddPayment(ctx, p, f.business, c.ID, Payment{Type: "balance", Method: "cash", Amount: 7000}, "", now, noFiles); err != nil {
+		t.Fatal(err)
+	}
+	got, err = TransitionPaid(ctx, p, f.business, c.ID, "cancelled", PaidRefund, "", "")
+	refunds := map[string]int64{}
+	for _, x := range got.Payments {
+		if x.Type == "payment_refund" {
+			refunds[x.Method] += x.Amount
+		}
+	}
+	if err != nil || got.Balance.Paid != 0 || len(refunds) != 2 || refunds["transfer"] != 50000 || refunds["cash"] != 7000 {
+		t.Fatalf("mixed refund: %+v %v %v", got.Balance, refunds, err)
+	}
 }
 
 func TestIntegrationOrderExtras(t *testing.T) {
