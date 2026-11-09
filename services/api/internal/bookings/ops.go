@@ -102,7 +102,7 @@ func TransitionPaid(ctx context.Context, db store.DB, businessID, id, to, paid, 
 		return Booking{}, err
 	}
 	if !ByPeople(to) || !CanTransition(b.kind, b.status, to) {
-		return Booking{}, Invalid{"status", fmt.Sprintf("No se puede pasar de «%s» a «%s».", statusLabel[b.status], label(to))}
+		return Booking{}, Invalid{"status", "Desde su estado actual ya no se puede hacer ese cambio."}
 	}
 	if hasCustody(b.kind) && (to == "checked_out" || to == "returned") {
 		return Booking{}, HandledElsewhere
@@ -203,7 +203,7 @@ func AddPayment(ctx context.Context, db store.DB, businessID, id string, p Payme
 		return Booking{}, err
 	}
 	if Releases(b.status) && p.Type != "refund" {
-		return Booking{}, Invalid{"type", fmt.Sprintf("La reserva está «%s»; solo se pueden registrar devoluciones.", statusLabel[b.status])}
+		return Booking{}, Invalid{"type", "En su estado actual solo se pueden registrar devoluciones."}
 	}
 	if err := PaymentAllowed(b.kind, b.status, p.Type); err != nil {
 		return Booking{}, err

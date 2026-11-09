@@ -14,7 +14,8 @@ function RootLayout() {
   return (
     <SessionProvider>
       <ToastProvider>
-        <Stack>
+        {/* Until a screen sets its title, show none instead of the route path (e.g. «(auth)/login»). */}
+        <Stack screenOptions={{ title: '' }}>
           {/* The panel has its own Stack (and header with the back arrow); avoid a second header. */}
           <Stack.Screen name="(admin)" options={{ headerShown: false }} />
         </Stack>
