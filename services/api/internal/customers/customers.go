@@ -133,6 +133,7 @@ func (c Customer) Apply(in Input, now time.Time) Customer {
 type Rules struct {
 	RequireAddress   bool // feature customerAddress
 	RequireGuarantor bool // feature guarantor
+	RequirePrivacy   bool // registering a new customer: its consent to the privacy notice (LFPDPPP)
 }
 
 // Validate returns field -> message (es-MX); the giro's rules add required fields.
@@ -152,6 +153,9 @@ func (c Customer) Validate(rules Rules) map[string]string {
 	}
 	if rules.RequireAddress && c.Address == nil {
 		errs["address"] = "Escribe la dirección del cliente."
+	}
+	if rules.RequirePrivacy && c.PrivacyAcceptedAt == nil {
+		errs["privacy_accepted"] = "Antes de guardar, el cliente debe aceptar el aviso de privacidad."
 	}
 	if rules.RequireGuarantor {
 		if c.GuarantorName == nil {

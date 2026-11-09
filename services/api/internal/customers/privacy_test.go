@@ -35,3 +35,19 @@ func TestPrivacyAcceptance(t *testing.T) {
 		t.Fatal("recorded without accepting")
 	}
 }
+
+// A customer registered from its form needs the notice accepted; editing one recorded before doesn't.
+func TestNewCustomerAcceptsPrivacy(t *testing.T) {
+	yes := true
+	base := Input{Name: s("Ana"), Phone: s("6141234567")}
+	if errs := (Customer{}).Apply(base, time.Time{}).Validate(Rules{RequirePrivacy: true}); errs["privacy_accepted"] == "" {
+		t.Fatalf("saved without accepting: %v", errs)
+	}
+	base.PrivacyAccepted = &yes
+	if errs := (Customer{}).Apply(base, time.Time{}).Validate(Rules{RequirePrivacy: true}); len(errs) != 0 {
+		t.Fatalf("accepted: %v", errs)
+	}
+	if errs := (Customer{Name: "Ana", Phone: "+526141234567"}).Validate(Rules{}); len(errs) != 0 {
+		t.Fatalf("editing an older customer: %v", errs)
+	}
+}

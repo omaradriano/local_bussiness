@@ -1002,7 +1002,7 @@ func TestCustomerRoutes(t *testing.T) {
 	base := "/v1/b/" + bizA + "/customers"
 	one := base + "/" + customerID
 	prefix := bizA + "/customers/" + customerID + "/"
-	full := `{"name":"Ana","phone":"614 123 4567","address":"Calle 1","guarantor_name":"Pedro","guarantor_phone":"6147654321"`
+	full := `{"name":"Ana","phone":"614 123 4567","address":"Calle 1","guarantor_name":"Pedro","guarantor_phone":"6147654321","privacy_accepted":true`
 	cases := []struct {
 		name, method, path, token, body string
 		wantCode                        int
@@ -1010,6 +1010,7 @@ func TestCustomerRoutes(t *testing.T) {
 	}{
 		{"buscar", http.MethodGet, base + "?q=López", "staff", "", http.StatusOK, `"name":"Ana López"`},
 		{"alta completa (teléfono normalizado)", http.MethodPost, base, "staff", full + `}`, http.StatusCreated, `"phone":"+526141234567"`},
+		{"alta sin aceptar el aviso de privacidad", http.MethodPost, base, "ok", strings.Replace(full, `,"privacy_accepted":true`, "", 1) + `}`, http.StatusUnprocessableEntity, `"privacy_accepted"`},
 		{"renta exige aval", http.MethodPost, base, "ok", `{"name":"Ana","phone":"6141234567","address":"Calle 1"}`, http.StatusUnprocessableEntity, `"guarantor_name"`},
 		{"teléfono repetido", http.MethodPost, base, "ok", strings.Replace(full, "614 123 4567", "6140000000", 1) + `}`, http.StatusConflict, `"customer_id":"` + customerID},
 		{"empleada no marca de confianza", http.MethodPatch, one + "/", "staff", `{"trusted":true}`, http.StatusOK, `"trusted":false`},
