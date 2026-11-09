@@ -28,7 +28,7 @@ func Reschedule(ctx context.Context, db store.DB, businessID, id string, start t
 	}
 	rules := rulesByKind[b.kind]
 	if !rules.movable || !slices.Contains(reschedulable, b.status) {
-		return Booking{}, Invalid{"status", fmt.Sprintf("Un pedido «%s» ya no cambia de fecha.", label(b.status))}
+		return Booking{}, Invalid{"status", "En su estado actual ya no cambia de fecha."}
 	}
 	var old time.Time
 	var tz, itemID string

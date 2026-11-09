@@ -198,7 +198,7 @@ export default function BookingDetail() {
               {rentalStep === 0 && (
                 <>
                   <SubStep title={f.sub.payment} description={f.sub.advanceHint}>{balance}{payments}</SubStep>
-                  {actions.includes('confirmed') && <Button variant="primary" busy={busy} onPress={() => request('confirmed')}>{t.actions.confirmed ?? t.status.confirmed}</Button>}
+                  {actions.includes('confirmed') && <Button variant="primary" busy={busy} onPress={() => request('confirmed')}>{t.actions.confirmed ?? texts.bookings.status.confirmed}</Button>}
                 </>
               )}
             </Step>
@@ -257,7 +257,7 @@ export default function BookingDetail() {
                     {balance}
                     {payments}
                   </SubStep>
-                  {actions.includes('completed') && <Button variant="primary" icon="checkmark-circle" busy={busy} onPress={() => move('completed')}>{t.actions.completed ?? t.status.completed}</Button>}
+                  {actions.includes('completed') && <Button variant="primary" icon="checkmark-circle" busy={busy} onPress={() => move('completed')}>{t.actions.completed ?? texts.bookings.status.completed}</Button>}
                 </>
               )}
             </Step>
@@ -282,7 +282,7 @@ export default function BookingDetail() {
               <Group label={t.actionsTitle} padded>
                 <View style={{ gap: 8 }}>
                   {actions.filter((st) => !isOther(st)).map((st) => (
-                    <Button key={st} busy={busy} onPress={() => request(st)}>{t.actions[st] ?? t.status[st]}</Button>
+                    <Button key={st} busy={busy} onPress={() => request(st)}>{t.actions[st] ?? texts.bookings.status[st]}</Button>
                   ))}
                 </View>
               </Group>
@@ -311,7 +311,7 @@ export default function BookingDetail() {
 
         <Group label={t.history}>
           {b.events.map((e, i) => (
-            <Cell key={i} label={`${e.from_status ? `${t.status[e.from_status as Booking['status']] ?? e.from_status} → ` : `${t.created}: `}${t.status[e.to_status as Booking['status']] ?? e.to_status}`}
+            <Cell key={i} label={`${e.from_status ? `${texts.bookings.status[e.from_status as Booking['status']] ?? e.from_status} → ` : `${t.created}: `}${texts.bookings.status[e.to_status as Booking['status']] ?? e.to_status}`}
               sublabel={`${when(e.at)}${e.note ? ` — ${e.note}` : ''}`} />
           ))}
         </Group>
@@ -325,7 +325,7 @@ export default function BookingDetail() {
               </View>
             ) : (
               // A no-show keeps what was paid (the usual rule for a missed appointment).
-              <Cell key={st} label={st === 'cancelled' && confirmCancel ? t.yesCancel : t.actions[st] ?? t.status[st]} destructive
+              <Cell key={st} label={st === 'cancelled' && confirmCancel ? t.yesCancel : t.actions[st] ?? texts.bookings.status[st]} destructive
                 onPress={() => (st === 'cancelled' && !confirmCancel ? setConfirmCancel(true) : move(st, paid > 0 ? 'keep' : undefined))} />
             )))}
           </Group>

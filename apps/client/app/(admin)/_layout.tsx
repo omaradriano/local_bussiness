@@ -23,6 +23,7 @@ export default function AdminLayout() {
       <AdminSidebar />
       <View style={{ flex: 1 }}>
     <Stack screenOptions={{
+      title: '', // until the screen loads and sets its own (not the route path)
       headerLeft: () => <BackButton />, headerRight: () => <AdminNav />, headerBackVisible: false,
       headerShadowVisible: false, headerStyle: { backgroundColor: ui.bg }, headerTintColor: ui.accent,
       headerTitleStyle: { color: ui.label }, contentStyle: { backgroundColor: ui.bg },

@@ -75,7 +75,7 @@ func SetDiscount(ctx context.Context, db store.DB, businessID, id string, d Disc
 		return Booking{}, err
 	}
 	if slices.Contains(closedForDiscount, b.status) {
-		return Booking{}, Invalid{"discount", fmt.Sprintf("Una reserva «%s» ya no cambia de total.", label(b.status))}
+		return Booking{}, Invalid{"discount", "En su estado actual ya no cambia de total."}
 	}
 	var current int64
 	if err := tx.QueryRow(ctx, `select discount from public.bookings where id = $1`, id).Scan(&current); err != nil {

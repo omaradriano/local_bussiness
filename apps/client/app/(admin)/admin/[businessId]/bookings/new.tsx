@@ -1,5 +1,5 @@
 import type { components } from '@lb/api-client';
-import { addDays, discountInput, engineFor, firstOfMonth, futureTime, nextHour, parsePesos, formatMXN, hhmm, lastOfMonth, localToISO, strings, term, todayISO, type DiscountMode } from '@lb/shared';
+import { addDays, discountInput, engineFor, firstOfMonth, futureTime, nextHour, parsePesos, formatMXN, hhmm, lastOfMonth, localToISO, strings, term, timeInHours, todayISO, type DiscountMode, type Shift } from '@lb/shared';
 import { router, Stack, useLocalSearchParams } from 'expo-router';
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import { ActivityIndicator, Switch, View } from 'react-native';
@@ -102,8 +102,12 @@ export default function NewBooking() {
   }, [businessId]);
   useEffect(loadCatalog, [loadCatalog]);
 
-  // Picking today with a time already past: show the corrected time right away.
-  useEffect(() => { if (from) setTime((tm) => futureTime(from, tm)); }, [from]);
+  // Picking a day: a start time inside that day's business hours (never past), shown right away.
+  const [hours, setHours] = useState<Shift[] | null>(null);
+  useEffect(() => {
+    api.GET('/v1/b/{businessId}/hours', { params: { path: { businessId } } }).then(({ data }) => setHours(data?.hours ?? []));
+  }, [businessId]);
+  useEffect(() => { if (from) setTime((tm) => (hours ? timeInHours(from, tm, hours) : futureTime(from, tm))); }, [from, hours]);
 
   // New item: start over.
   useEffect(() => { setFrom(null); setTo(null); setSlot(null); setStaffId(null); setMessage(null); }, [itemId]);
