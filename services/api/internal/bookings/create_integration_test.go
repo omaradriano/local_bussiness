@@ -562,7 +562,10 @@ func TestIntegrationWalkInWithName(t *testing.T) {
 func TestIntegrationOrderUnavailableReasons(t *testing.T) {
 	p := pool(t)
 	ctx := context.Background()
-	f := setup(t, p, "flowers", `{"daily_capacity": 3}`)
+	f := setup(t, p, "flowers", `{}`)
+	if _, err := p.Exec(ctx, `update public.catalog_items set daily_capacity = 3 where id = $1`, f.item); err != nil { // 3 pieces a day
+		t.Fatal(err)
+	}
 	in := func(start string, qty int) CreateInput {
 		return CreateInput{Customer: cust("6141110031"), ItemID: f.item, StartsAt: at(start), Quantity: qty, Options: map[string]string{"Color": "Rojo"}, Source: "admin"}
 	}
@@ -572,6 +575,36 @@ func TestIntegrationOrderUnavailableReasons(t *testing.T) {
 	}
 	if _, _, err := Create(ctx, p, f.business, in("2026-11-02T18:00:00Z", 5), now); !errors.As(err, &bad) || bad.Field != "quantity" || !strings.Contains(bad.Message, "3") {
 		t.Fatalf("more than left: %v", err)
+	}
+	// One piece left is said in singular, and a full day says so (Q9).
+	if _, _, err := Create(ctx, p, f.business, in("2026-11-02T18:00:00Z", 2), now); err != nil {
+		t.Fatal(err)
+	}
+	if _, _, err := Create(ctx, p, f.business, in("2026-11-02T18:00:00Z", 2), now); !errors.As(err, &bad) || !strings.Contains(bad.Message, "solo queda 1 lugar;") {
+		t.Fatalf("one spot left: %v", err)
+	}
+	if _, _, err := Create(ctx, p, f.business, in("2026-11-02T18:00:00Z", 1), now); err != nil {
+		t.Fatal(err)
+	}
+	if _, _, err := Create(ctx, p, f.business, in("2026-11-02T18:00:00Z", 1), now); !errors.Is(err, ErrDayFull) {
+		t.Fatalf("full day: %v", err)
+	}
+
+	// The business-wide limit counts orders: with 2 a day, two orders of 5 pieces fit and a third doesn't.
+	g := setup(t, p, "flowers", `{"daily_capacity": 2}`)
+	order := func(qty int) error {
+		_, _, err := Create(ctx, p, g.business, CreateInput{Customer: cust("6141110032"), ItemID: g.item, StartsAt: at("2026-11-02T18:00:00Z"),
+			Quantity: qty, Options: map[string]string{"Color": "Rojo"}, Source: "admin"}, now)
+		return err
+	}
+	if err := order(5); err != nil {
+		t.Fatal(err)
+	}
+	if err := order(5); err != nil {
+		t.Fatalf("second order of 5 pieces: %v", err)
+	}
+	if err := order(1); !errors.Is(err, ErrDayFull) {
+		t.Fatalf("third order: %v", err)
 	}
 }
 

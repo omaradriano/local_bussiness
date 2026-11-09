@@ -1,5 +1,5 @@
 import type { components } from '@lb/api-client';
-import { engineFor, strings } from '@lb/shared';
+import { engineFor, hhmm, strings } from '@lb/shared';
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { ActivityIndicator, View } from 'react-native';
 import { api } from '../lib/api';
@@ -60,7 +60,7 @@ export function BookingHistory({ businessId, customerId, compact }: { businessId
     <View>
       {!compact && <Field label={t.search} placeholder={texts.bookings.searchPlaceholder} value={q} onChangeText={setQ} autoCorrect={false} />}
       <View style={{ marginBottom: 16 }}>
-        <Segmented options={(['all', 'active', 'finished', 'cancelled'] as HistoryGroup[]).map((g) => ({ value: g, label: t.groups[g] }))} value={group} onChange={setGroup} />
+        <Segmented options={(['all', 'active', 'finished', 'cancelled'] as HistoryGroup[]).map((g) => ({ value: g, label: t.groups(texts.bookings.gender)[g] }))} value={group} onChange={setGroup} />
       </View>
       {error && <Notice tone="warning">{error}</Notice>}
       {rows === null && !error && <ActivityIndicator />}
@@ -69,7 +69,7 @@ export function BookingHistory({ businessId, customerId, compact }: { businessId
         <Group key={month} label={month}>
           {list.map((b) => (
             <BookingCell key={b.id} businessId={businessId} b={b}
-              time={engineFor(b.kind).timing === 'range' && b.ends_at ? `${day(b.starts_at)} → ${day(b.ends_at)}` : day(b.starts_at)} />
+              time={engineFor(b.kind).timing === 'range' && b.ends_at ? `${day(b.starts_at)} → ${day(b.ends_at)}` : `${day(b.starts_at)} · ${hhmm(b.starts_at)}`} />
           ))}
         </Group>
       ))}

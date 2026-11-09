@@ -85,7 +85,8 @@ export default function ProductForm() {
       <Group padded>
         <Field label={t.name} value={f.name} onChangeText={(name) => setF({ ...f, name })} error={errors.name} />
         <Field label={t.price} value={f.price} onChangeText={(price) => setF({ ...f, price })} keyboardType="decimal-pad" error={errors.price} />
-        <Field label={t.cost} value={f.cost} onChangeText={(cost) => setF({ ...f, cost })} keyboardType="decimal-pad" hint={t.costHint} error={errors.cost} />
+        <Field label={t.cost} value={f.cost} onChangeText={(cost) => setF({ ...f, cost })} keyboardType="decimal-pad" error={errors.cost}
+          hint={(parsePesos(f.cost) ?? 0) > (parsePesos(f.price) ?? Infinity) ? t.costAbovePrice : t.costHint} />
         {isNew
           ? <Field label={t.initialStock} value={f.stock} onChangeText={(stock) => setF({ ...f, stock })} keyboardType="numeric" hint={t.stockHint} error={errors.stock} />
           : <Text variant="subhead" color="labelSecondary" style={{ marginBottom: 12 }}>{t.stockLeft(product!.stock)} · {formatMXN(product!.price)}</Text>}

@@ -49,6 +49,10 @@ var dailyFields = fieldGroup{
 		if it.DailyCapacity != nil && (*it.DailyCapacity < 1 || *it.DailyCapacity > 1000) {
 			errs["daily_capacity"] = "El cupo diario debe ser de 1 a 1000, o dejarse vacío."
 		}
+		// An order sold at a fixed price of $0 is a slip; free-priced ones are priced in each order.
+		if it.Price == 0 && !it.CustomPrice {
+			errs["price"] = "Escribe el precio, o marca que se pone en cada pedido."
+		}
 	},
 	clear: func(it *Item) { it.PrepHours, it.DailyCapacity = nil, nil },
 }

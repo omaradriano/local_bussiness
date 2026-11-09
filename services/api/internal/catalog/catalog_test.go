@@ -31,6 +31,8 @@ func TestValidateByKind(t *testing.T) {
 		{"margen negativo", service, func(i *Item) { i.BufferMinutes = -5 }, "buffer_minutes"},
 		{"producto sin anticipación", product, func(i *Item) { i.PrepHours = nil }, "prep_hours"},
 		{"cupo en cero", product, func(i *Item) { i.DailyCapacity = ptr(0) }, "daily_capacity"},
+		{"pedido a precio fijo de $0", product, func(i *Item) { i.Price = 0 }, "price"},
+		{"pedido de precio libre en $0", product, func(i *Item) { i.Price, i.CustomPrice = 0, true }, ""},
 		{"renta sin unidad de precio", rental, func(i *Item) { i.PriceUnit = nil }, "price_unit"},
 		{"renta por hora", rental, func(i *Item) { i.PriceUnit = ptr("hour") }, "price_unit"},
 		{"renta sin depósito", rental, func(i *Item) { i.SecurityDeposit = nil }, "security_deposit"},

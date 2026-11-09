@@ -83,7 +83,7 @@ export default function Finances() {
               slices={s.expenses.parts.map((p) => ({ key: p.key, label: t.categories[p.key] ?? p.key, amount: p.amount }))} />
           </View>
 
-          <Group label={t.byStatus(texts.bookings.plural)} footer={t.byStatusHint}>
+          <Group label={t.byStatus(texts.bookings.plural)} footer={t.byStatusHint(texts.bookings.gender)}>
             {s.bookings.length === 0 ? <Cell label={t.noBookings(texts.bookings.plural)} /> : null}
             {s.bookings.map((b) => <Cell key={b.key} label={texts.bookings.status[b.key]} value={String(b.count)} />)}
           </Group>

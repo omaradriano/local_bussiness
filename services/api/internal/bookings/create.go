@@ -24,6 +24,9 @@ import (
 // ErrSlotTaken: what was asked for is no longer free (someone else got it, or it never was).
 var ErrSlotTaken = errors.New("slot taken")
 
+// ErrDayFull: the day already has as many orders as it takes (an ErrSlotTaken, said plainly).
+var ErrDayFull = fmt.Errorf("%w: day full", ErrSlotTaken)
+
 // Invalid is a field problem worth showing to the user (es-MX).
 type Invalid struct{ Field, Message string }
 
