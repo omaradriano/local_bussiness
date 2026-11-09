@@ -572,7 +572,7 @@ func (fakeBookings) List(_ context.Context, _ string, f bookings.ListFilter) ([]
 	return []bookings.Summary{{ID: bookingID, Kind: f.Kind, Status: map[bool]string{true: "active", false: "all"}[f.OnlyActive]}}, nil
 }
 
-func (fakeBookings) Transition(_ context.Context, _, id, to, actor, _ string) (bookings.Booking, error) {
+func (fakeBookings) Transition(_ context.Context, _, id, to, _, actor, _ string) (bookings.Booking, error) {
 	switch {
 	case id != bookingID:
 		return bookings.Booking{}, bookings.ErrNotFound

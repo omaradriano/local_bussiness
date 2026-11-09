@@ -305,6 +305,9 @@ export const strings = {
     actionsTitle: 'Acciones',
     confirmCancel: '¿Seguro? Se libera el horario o las unidades.',
     yesCancel: 'Sí, cancelar',
+    cancelRefund: (amount: string) => `Cancelar y devolver ${amount}`,
+    cancelKeep: (amount: string) => `Cancelar y retener ${amount}`,
+    confirmCancelPaid: (amount: string) => `Ya se cobraron ${amount}. Si se devuelven, se registra la devolución y se resta de los ingresos; si se retienen, quedan como penalización.`,
     noteOptional: 'Nota (opcional)',
     paid: 'Pagado',
     due: 'Pendiente',
@@ -314,7 +317,7 @@ export const strings = {
     addPayment: 'Registrar pago',
     amount: 'Monto (pesos)',
     paymentTypes: {
-      advance: 'Anticipo', balance: 'Saldo', security_deposit: 'Depósito de garantía', refund: 'Devolución de depósito',
+      advance: 'Anticipo', balance: 'Saldo', security_deposit: 'Depósito de garantía', refund: 'Devolución de depósito', payment_refund: 'Devolución al cancelar',
       late_fee: 'Recargo por retraso', damage_fee: 'Cargo por daño',
     } as Record<string, string>,
     methods: { cash: 'Efectivo', transfer: 'Transferencia', card: 'Tarjeta' } as Record<string, string>,

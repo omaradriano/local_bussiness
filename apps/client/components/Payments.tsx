@@ -126,8 +126,8 @@ export function PaymentList({ businessId, booking }: { businessId: string; booki
               <Text>{t.paymentTypes[p.type]} · {t.methods[p.method]}</Text>
               <Text variant="footnote" color="labelSecondary">{when(p.paid_at)}</Text>
             </View>
-            <Text style={{ fontVariant: ['tabular-nums'], color: p.type === 'refund' ? ui.danger : ui.label }}>
-              {p.type === 'refund' ? '−' : ''}{formatMXN(p.amount)}
+            <Text style={{ fontVariant: ['tabular-nums'], color: p.type === 'refund' || p.type === 'payment_refund' ? ui.danger : ui.label }}>
+              {p.type === 'refund' || p.type === 'payment_refund' ? '−' : ''}{formatMXN(p.amount)}
             </Text>
           </View>
           {(p.evidence ?? []).length > 0 && (

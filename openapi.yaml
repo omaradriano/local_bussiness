@@ -1638,6 +1638,7 @@ paths:
               required: [to]
               properties:
                 to: { $ref: "#/components/schemas/BookingStatus" }
+                paid: { type: string, enum: [refund, keep], description: "Al cancelar con pagos: devolver lo cobrado o retenerlo (obligatorio si hay pagos)" }
                 note: { type: string, maxLength: 500 }
       responses:
         "200":
@@ -2535,7 +2536,8 @@ components:
 
     PaymentType:
       type: string
-      enum: [advance, balance, security_deposit, refund, late_fee, damage_fee]
+      enum: [advance, balance, security_deposit, refund, late_fee, damage_fee, payment_refund]
+      description: "payment_refund: lo cobrado que se devolvió al cancelar (solo lo crea la cancelación)"
 
     BookingStatus:
       type: string

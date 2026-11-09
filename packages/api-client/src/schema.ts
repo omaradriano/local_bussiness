@@ -1943,8 +1943,11 @@ export interface components {
             }[];
             free_units?: string[];
         };
-        /** @enum {string} */
-        PaymentType: "advance" | "balance" | "security_deposit" | "refund" | "late_fee" | "damage_fee";
+        /**
+         * @description payment_refund: lo cobrado que se devolvió al cancelar (solo lo crea la cancelación)
+         * @enum {string}
+         */
+        PaymentType: "advance" | "balance" | "security_deposit" | "refund" | "late_fee" | "damage_fee" | "payment_refund";
         /** @enum {string} */
         BookingStatus: "pending_deposit" | "confirmed" | "in_progress" | "ready" | "out_for_delivery" | "checked_out" | "overdue" | "returned" | "completed" | "cancelled" | "expired" | "no_show";
         BookingInput: {
@@ -4627,6 +4630,11 @@ export interface operations {
             content: {
                 "application/json": {
                     to: components["schemas"]["BookingStatus"];
+                    /**
+                     * @description Al cancelar con pagos: devolver lo cobrado o retenerlo (obligatorio si hay pagos)
+                     * @enum {string}
+                     */
+                    paid?: "refund" | "keep";
                     note?: string;
                 };
             };

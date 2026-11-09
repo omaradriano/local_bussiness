@@ -147,6 +147,9 @@ func Get(ctx context.Context, db store.DB, businessID, id string) (Booking, erro
 		return b, err
 	}
 	b.Balance = ComputeBalance(b.Total, b.Payments)
+	if Releases(b.Status) {
+		b.Balance.Due = 0 // cancelled: nothing more to collect (what was paid was given back or kept)
+	}
 	b.Next = Next(b.Kind, b.Status)
 	if b.Next == nil {
 		b.Next = []string{}

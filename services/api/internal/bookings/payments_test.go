@@ -22,6 +22,8 @@ func TestF3_5_SaldoCuadraConTotalMenosPagos(t *testing.T) {
 		{"devolución del depósito", 90000,
 			[]Payment{{Type: "security_deposit", Amount: 100000}, {Type: "balance", Amount: 90000}, {Type: "refund", Amount: 70000}},
 			Balance{Paid: 90000, DepositHeld: 30000}},
+		{"devolución de lo cobrado al cancelar", 65000,
+			[]Payment{{Type: "advance", Amount: 32500}, {Type: "payment_refund", Amount: 32500}}, Balance{Paid: 0, Due: 65000}},
 		{"recargos por retraso y daño se suman como cobros extra", 90000,
 			[]Payment{{Type: "balance", Amount: 90000}, {Type: "late_fee", Amount: 30000}, {Type: "damage_fee", Amount: 15000}},
 			Balance{Paid: 90000, Extra: 45000}},
