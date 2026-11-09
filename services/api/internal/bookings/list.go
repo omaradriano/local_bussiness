@@ -21,27 +21,31 @@ type ListFilter struct {
 
 // Summary is one row of a calendar or agenda.
 type Summary struct {
-	ID            string     `json:"id"`
-	Kind          string     `json:"kind"`
-	Status        string     `json:"status"`
-	StartsAt      time.Time  `json:"starts_at"`
-	EndsAt        *time.Time `json:"ends_at"`
-	CustomerName  string     `json:"customer_name"`
-	CustomerPhone string     `json:"customer_phone"`
-	Items         string     `json:"items"` // "2 × Rotomartillo"
-	Units         []string   `json:"units"` // codes
-	Staff         []string   `json:"staff"` // names
-	Total         int64      `json:"total"`
-	Deposit       int64      `json:"deposit_required"`
-	Fulfillment   *string    `json:"fulfillment"`    // pickup | delivery | null
-	RecipientName *string    `json:"recipient_name"` // giftOrder
-	CardMessage   *string    `json:"card_message"`   // giftOrder
-	Details       string     `json:"details"`        // what a custom order is («24 rosas rojas»)
-	Next          []string   `json:"next" db:"-"`    // status moves available from the panel
+	ID              string     `json:"id"`
+	Kind            string     `json:"kind"`
+	Status          string     `json:"status"`
+	StartsAt        time.Time  `json:"starts_at"`
+	EndsAt          *time.Time `json:"ends_at"`
+	CustomerName    string     `json:"customer_name"`
+	CustomerPhone   string     `json:"customer_phone"`
+	Items           string     `json:"items"` // "2 × Rotomartillo"
+	Units           []string   `json:"units"` // codes
+	Staff           []string   `json:"staff"` // names
+	Total           int64      `json:"total"`
+	Deposit         int64      `json:"deposit_required"`
+	Fulfillment     *string    `json:"fulfillment"`    // pickup | delivery | null
+	RecipientName   *string    `json:"recipient_name"` // giftOrder
+	CardMessage     *string    `json:"card_message"`   // giftOrder
+	Details         string     `json:"details"`        // what a custom order is («24 rosas rojas»)
+	DeliveryAddress *string    `json:"delivery_address"`
+	DeliveryZone    *string    `json:"delivery_zone"`
+	RecipientPhone  *string    `json:"recipient_phone"` // giftOrder
+	Due             int64      `json:"due"`             // left to collect, extras on account included; 0 once cancelled
+	Next            []string   `json:"next" db:"-"`     // status moves available from the panel
 }
 
 // summaryColumns: one Summary per row, in field order (Next is filled after).
-const summaryColumns = `b.id::text, b.kind, b.status, b.starts_at, b.ends_at, coalesce(b.walk_in_name, c.name), coalesce(b.walk_in_phone, c.phone),
+var summaryColumns = `b.id::text, b.kind, b.status, b.starts_at, b.ends_at, coalesce(b.walk_in_name, c.name), coalesce(b.walk_in_phone, c.phone),
 	coalesce((select string_agg(bi.quantity || ' × ' || i.name, ', ' order by i.name)
 	          from public.booking_items bi join public.catalog_items i on i.id = bi.item_id where bi.booking_id = b.id), ''),
 	coalesce((select array_agg(u.code order by u.code) from public.booking_resources r
@@ -50,7 +54,12 @@ const summaryColumns = `b.id::text, b.kind, b.status, b.starts_at, b.ends_at, co
 	          join public.staff s on s.id = r.staff_id where r.booking_id = b.id), '{}'),
 	b.total, b.deposit_required, b.fulfillment, b.recipient_name, b.card_message,
 	coalesce((select string_agg(bi.options->>'description', ' · ') from public.booking_items bi
-	          where bi.booking_id = b.id and coalesce(bi.options->>'description', '') <> ''), '')`
+	          where bi.booking_id = b.id and coalesce(bi.options->>'description', '') <> ''), ''),
+	b.delivery_address, b.delivery_zone, b.recipient_phone,
+	case when b.status in ('` + strings.Join(releasing, "', '") + `') then 0 else greatest(0, b.total
+	  + coalesce((select sum(s.total) from public.sales s where s.booking_id = b.id and s.method = 'on_account'), 0)
+	  - coalesce((select sum(case when p.type = 'payment_refund' then -p.amount else p.amount end) from public.payments p
+	              where p.booking_id = b.id and p.type in ('advance', 'balance', 'payment_refund')), 0)) end::bigint`
 
 func collectSummaries(rows pgx.Rows) ([]Summary, error) {
 	out, err := pgx.CollectRows(rows, pgx.RowToStructByPos[Summary])

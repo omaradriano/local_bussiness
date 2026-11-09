@@ -631,6 +631,16 @@ Catálogo público `/<slug>` con un diseño llamativo por giro, reservas y pedid
 * [ ] Lighthouse móvil del catálogo con 90 o más en rendimiento y accesibilidad.
 * [ ] Playwright cubre reservar, pedir y rentar desde el catálogo de cada giro.
 
+**Florería: operación del día (QA de florería, Bloque 4, tanda A, 2026-11-09)**
+
+Lo que pidió la florería para trabajar sin Excel en temporada alta. Siguen las tandas B (corte de caja, venta rápida con descuento y cambio, crédito), C (mermas, compras, costo promedio, insumos y recetas) y D (ficha de cliente).
+
+- [ ] Hoja de producción y ruta: entregas agrupadas por zona y ordenadas por hora, con domicilio, quién recibe y su teléfono, y cuánto cobrar; recolecciones aparte; imprimible. El pedido guarda su zona (`bookings.delivery_zone`).
+- [ ] Hoy y la lista de pedidos muestran hora, entrega o recoger con domicilio, y saldo por cobrar (con extras a cuenta).
+- [ ] Tablero del día y hoja de producción en el menú, con selector de fecha; cada día del calendario enlaza a su hoja.
+- [ ] Capacidad total por día en Ajustes → Entregas, además del cupo por arreglo.
+- [ ] Pedido urgente fuera de horario: solo la dueña, desde el panel; se salta el horario y el tiempo de preparación (no el cupo) y queda anotado.
+
 **Fase 7 (posterior)** — WhatsApp Cloud API, pagos en línea del cliente, cobro de la suscripción, nuevos giros (lavado de autos, lavado de salas, tiendas, limosinas, salones, casas por noche) sobre el mapa por giro y editor para que cada dueño configure sus propios pasos.
 
 ## Mapa por giro y superadministrador

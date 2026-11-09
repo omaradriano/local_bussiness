@@ -372,10 +372,25 @@ func TestIntegrationExtrasOnAccount(t *testing.T) {
 		return n
 	}
 
+	// listDue: what the day's list says is left to collect from an order.
+	listDue := func(id string) int64 {
+		rows, err := List(ctx, p, f.business, ListFilter{From: *at("2026-11-02T00:00:00Z"), To: *at("2026-11-03T00:00:00Z")})
+		if err != nil {
+			t.Fatal(err)
+		}
+		for _, r := range rows {
+			if r.ID == id {
+				return r.Due
+			}
+		}
+		t.Fatalf("%s not listed", id)
+		return 0
+	}
+
 	a := order("6148880021")
 	got, err := Get(ctx, p, f.business, a.ID)
-	if err != nil || got.Balance.Due != a.Total+27000 || got.Total != a.Total {
-		t.Fatalf("owed with extras: total %d due %d %v", got.Total, got.Balance.Due, err)
+	if err != nil || got.Balance.Due != a.Total+27000 || got.Total != a.Total || listDue(a.ID) != got.Balance.Due {
+		t.Fatalf("owed with extras: total %d due %d list %d %v", got.Total, got.Balance.Due, listDue(a.ID), err)
 	}
 	// Paying it all (order + extras) leaves nothing owed.
 	got, err = AddPayment(ctx, p, f.business, a.ID, Payment{Type: "balance", Method: "cash", Amount: a.Total + 27000}, "", now, noFiles)
@@ -387,5 +402,8 @@ func TestIntegrationExtrasOnAccount(t *testing.T) {
 	b := order("6148880022")
 	if got, err := TransitionPaid(ctx, p, f.business, b.ID, "cancelled", "", "", ""); err != nil || len(got.Extras) != 0 || stock() != 6 {
 		t.Fatalf("cancel on account: extras=%d stock=%d %v", len(got.Extras), stock(), err)
+	}
+	if d := listDue(b.ID); d != 0 {
+		t.Fatalf("a cancelled order owes nothing in the list: %d", d)
 	}
 }
