@@ -21,13 +21,14 @@ const t = strings.finances;
 const ISO = /^\d{4}-\d{2}-\d{2}$/;
 const day = (iso: string) => new Date(`${iso.slice(0, 10)}T12:00:00Z`).toLocaleDateString('es-MX', { timeZone: 'UTC', day: 'numeric', month: 'short', year: 'numeric' });
 
-function CategoryChips({ value, onChange }: { value: Category; onChange: (c: Category) => void }) {
+function CategoryChips({ value, onChange, error }: { value: Category | ''; onChange: (c: Category) => void; error?: string }) {
   return (
     <View style={{ gap: 6, marginBottom: 16 }}>
       <Text variant="footnote" color="labelSecondary" style={{ fontWeight: '600', paddingHorizontal: 4 }}>{t.category}</Text>
       <Chips>
         {(t.expenseCategories as readonly Category[]).map((c) => <Chip key={c} selected={value === c} onPress={() => onChange(c)}>{t.categories[c]}</Chip>)}
       </Chips>
+      {error ? <Text variant="footnote" color="danger" style={{ paddingHorizontal: 4 }}>{error}</Text> : null}
     </View>
   );
 }
@@ -40,7 +41,8 @@ export default function Expenses() {
   const [period, setPeriod] = useState<Period>(currentMonth);
   const [list, setList] = useState<Expense[] | null>(null);
   const [plans, setPlans] = useState<Plan[] | null>(null);
-  const [form, setForm] = useState({ spentOn: todayISO(), category: 'transport' as Category, amount: '', description: '' });
+  // No category chosen ahead: a preselected one gets saved by mistake.
+  const [form, setForm] = useState({ spentOn: todayISO(), category: '' as Category | '', amount: '', description: '' });
   const [plan, setPlan] = useState({ description: '', category: 'asset' as Category, purchasedOn: todayISO(), down: '', amount: '', count: '12', firstDue: todayISO() });
   const [errors, setErrors] = useState<Record<string, string>>({});
   const [planErrors, setPlanErrors] = useState<Record<string, string>>({});
@@ -62,15 +64,16 @@ export default function Expenses() {
     const local: Record<string, string> = {};
     if (!ISO.test(form.spentOn)) local.spent_on = t.invalidDate;
     if (!amount) local.amount = strings.catalog.invalidMoney;
+    if (!form.category) local.category = t.pickCategory;
     if (Object.keys(local).length) return setErrors(local);
     setBusy('expense');
     const { data, error, response } = await api.POST('/v1/b/{businessId}/finances/expenses', {
-      params: { path }, body: { spent_on: form.spentOn, category: form.category, amount: amount!, description: form.description },
+      params: { path }, body: { spent_on: form.spentOn, category: form.category as Category, amount: amount!, description: form.description },
     });
     setBusy(null);
     if (!data) { setErrors(fieldErrors(error)); return toast(errorText(error, response.status), 'error'); }
     setErrors({});
-    setForm({ ...form, amount: '', description: '' });
+    setForm({ ...form, category: '', amount: '', description: '' });
     toast(t.expenseSaved);
     load();
   }
@@ -126,7 +129,7 @@ export default function Expenses() {
       {tab === 'once' && <>
       <Group label={t.addExpense} padded>
         <Field label={t.date} value={form.spentOn} onChangeText={(spentOn) => setForm({ ...form, spentOn })} error={errors.spent_on} />
-        <CategoryChips value={form.category} onChange={(category) => setForm({ ...form, category })} />
+        <CategoryChips value={form.category} onChange={(category) => setForm({ ...form, category })} error={errors.category} />
         <Field label={t.amount} value={form.amount} onChangeText={(amount) => setForm({ ...form, amount })} keyboardType="decimal-pad" error={errors.amount} />
         <Field label={t.description} placeholder={t.descriptionPlaceholder} value={form.description} onChangeText={(description) => setForm({ ...form, description })} />
         <Button variant="primary" icon="add" busy={busy === 'expense'} onPress={addExpense}>{t.addExpense}</Button>
