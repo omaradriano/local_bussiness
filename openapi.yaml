@@ -1318,6 +1318,7 @@ paths:
                   type: object
                   properties:
                     delivery_zones: { type: array, maxItems: 30, items: { $ref: "#/components/schemas/DeliveryZone" } }
+                    daily_capacity: { type: integer, minimum: 0, maximum: 1000, description: "Pedidos por día de todo el negocio; 0 = sin límite" }
                 privacy:
                   type: object
                   properties:
@@ -2486,9 +2487,10 @@ components:
             buffer_minutes: { type: integer, description: "Margen después de cada cita, para todo el negocio" }
         delivery:
           type: object
-          required: [delivery_zones]
+          required: [delivery_zones, daily_capacity]
           properties:
             delivery_zones: { type: array, items: { $ref: "#/components/schemas/DeliveryZone" } }
+            daily_capacity: { type: integer, description: "Pedidos por día de todo el negocio; 0 = sin límite" }
         privacy:
           type: object
           description: "Responsable de los datos en el aviso de privacidad del negocio; vacío = nombre del negocio y su WhatsApp"

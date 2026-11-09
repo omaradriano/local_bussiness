@@ -135,13 +135,16 @@ type Zone struct {
 	Fee  int64  `json:"fee"`
 }
 
-// Delivery: zones a flower shop delivers to; an empty list = delivery anywhere without a fee.
+// Delivery: zones a flower shop delivers to (an empty list = delivery anywhere without a fee) and how
+// many orders it takes per day, on top of each arrangement's own limit (0 = no limit).
 type Delivery struct {
-	Zones []Zone `json:"delivery_zones"`
+	Zones         []Zone `json:"delivery_zones"`
+	DailyCapacity int    `json:"daily_capacity"`
 }
 
 type DeliveryPatch struct {
-	Zones *[]Zone `json:"delivery_zones"` // replaces the whole list
+	Zones         *[]Zone `json:"delivery_zones"` // replaces the whole list
+	DailyCapacity *int    `json:"daily_capacity"`
 }
 
 func (d Delivery) Apply(p DeliveryPatch) Delivery {
@@ -151,10 +154,16 @@ func (d Delivery) Apply(p DeliveryPatch) Delivery {
 			d.Zones[i] = Zone{Name: strings.Join(strings.Fields(z.Name), " "), Fee: z.Fee}
 		}
 	}
+	if p.DailyCapacity != nil {
+		d.DailyCapacity = *p.DailyCapacity
+	}
 	return d
 }
 
 func (d Delivery) Validate() map[string]string {
+	if d.DailyCapacity < 0 || d.DailyCapacity > 1000 {
+		return map[string]string{"daily_capacity": "Los pedidos por día deben ser de 1 a 1000, o dejarse vacío."}
+	}
 	if len(d.Zones) > 30 {
 		return map[string]string{"delivery_zones": "Máximo 30 zonas."}
 	}
