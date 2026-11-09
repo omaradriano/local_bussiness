@@ -240,6 +240,26 @@ paths:
   /v1/b/{businessId}/:
     parameters:
       - $ref: "#/components/parameters/BusinessId"
+    patch:
+      operationId: renameBusiness
+      summary: "Cambia el nombre visible del negocio (el slug no cambia). Solo el dueño"
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [name]
+              properties:
+                name: { type: string, maxLength: 80 }
+      responses:
+        "200":
+          description: OK
+          content:
+            application/json:
+              schema: { type: object, required: [name], properties: { name: { type: string } } }
+        "403": { $ref: "#/components/responses/Error" }
+        "422": { $ref: "#/components/responses/Error" }
     delete:
       operationId: deleteBusiness
       summary: "Borra el negocio con todo: datos (en cascada) y archivos (un job del worker). Solo el dueño; también con la cuenta vencida"

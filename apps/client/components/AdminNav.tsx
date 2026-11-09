@@ -1,4 +1,4 @@
-import { strings, term } from '@lb/shared';
+import { engineFor, kindFor, strings, term } from '@lb/shared';
 import { Ionicons } from '@expo/vector-icons';
 import { router, type Href } from 'expo-router';
 import { useState } from 'react';
@@ -47,7 +47,7 @@ function useNav() {
       ...(can('payroll') ? [{ path: '/finances/pay', label: strings.nav.pay, icon: 'cash' } as Section] : []),
     ] } as SectionGroup] : []),
     { label: strings.business.groups.business, sections: [
-      { path: '/catalog', label: term(business.vertical, 'catalog') ?? s.catalog, icon: 'construct' },
+      { path: '/catalog', label: term(business.vertical, 'catalog') ?? s.catalog, icon: engineFor(kindFor(business.vertical)).custody ? 'construct' : 'albums' },
       ...(has('staff') ? [{ path: '/staff', label: s.staff, icon: 'people-circle' } as Section] : []),
       { path: '/hours', label: s.hours, icon: 'time' },
       ...(owner ? [{ path: '/settings', label: s.settings, icon: 'settings' } as Section] : []),

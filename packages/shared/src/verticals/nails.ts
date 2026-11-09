@@ -11,6 +11,7 @@ export const nails = {
   texts: {
     bookings: {
       plural: 'Citas',
+      gender: 'f',
       searchPlaceholder: 'Cliente, teléfono o servicio',
       empty: 'No hay citas con estos filtros.',
       ofCustomer: 'Citas de esta clienta',

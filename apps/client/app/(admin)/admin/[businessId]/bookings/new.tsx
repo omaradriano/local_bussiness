@@ -310,6 +310,7 @@ export default function NewBooking() {
                 </View>
               )}
               {isRange && (settings?.rentals.rentals_span_closed_days ?? true) && <Text variant="footnote" color="labelSecondary">{t.closedDayHint}</Text>}
+              {isDay && e?.resource === 'dailyCapacity' && <Text variant="footnote" color="labelSecondary">{t.dayLegend(item.prep_hours ?? 0)}</Text>}
               {daysState !== 'loading' && daysState !== 'ready' && <Notice tone="warning">{daysState}</Notice>}
               {/* Daily capacity: asking for more than any day has left turns the whole month off; say why. */}
               {e?.resource === 'dailyCapacity' && daysState === 'ready' && qty > 1 && Object.values(days).every((d) => !d.available) &&
@@ -414,7 +415,7 @@ export default function NewBooking() {
               <Text variant="footnote" color="labelSecondary">{t.gift.hint}</Text>
               <Field label={t.gift.name} value={recipientName} onChange={setRecipientName} error={errors.recipient_name} />
               <Field label={t.gift.phone} value={recipientPhone} onChange={setRecipientPhone} keyboard="phone-pad" error={errors.recipient_phone} />
-              <UIField label={t.gift.card} value={cardMessage} onChangeText={setCardMessage} multiline error={errors.card_message} />
+              <UIField label={t.gift.card} value={cardMessage} onChangeText={setCardMessage} multiline maxLength={500} hint={t.cardCount(cardMessage.length)} error={errors.card_message} />
             </View>
           )}
         </Step>

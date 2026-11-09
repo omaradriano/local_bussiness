@@ -42,6 +42,7 @@ export type Terms = {
 export type VerticalTexts = {
   bookings: {
     plural: string; // "Rentas"
+    gender: 'f' | 'm'; // of the plural word, for shared texts («Activas» / «Activos»)
     searchPlaceholder: string;
     empty: string; // history with no results
     ofCustomer: string; // section in the customer's profile

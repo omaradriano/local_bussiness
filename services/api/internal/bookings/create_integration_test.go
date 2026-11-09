@@ -573,6 +573,19 @@ func TestIntegrationOrderUnavailableReasons(t *testing.T) {
 	if _, _, err := Create(ctx, p, f.business, in("2026-11-02T18:00:00Z", 5), now); !errors.As(err, &bad) || bad.Field != "quantity" || !strings.Contains(bad.Message, "3") {
 		t.Fatalf("more than left: %v", err)
 	}
+	// One spot left is said in singular, and a full day says so (Q9).
+	if _, _, err := Create(ctx, p, f.business, in("2026-11-02T18:00:00Z", 2), now); err != nil {
+		t.Fatal(err)
+	}
+	if _, _, err := Create(ctx, p, f.business, in("2026-11-02T18:00:00Z", 2), now); !errors.As(err, &bad) || !strings.Contains(bad.Message, "solo queda 1 lugar;") {
+		t.Fatalf("one spot left: %v", err)
+	}
+	if _, _, err := Create(ctx, p, f.business, in("2026-11-02T18:00:00Z", 1), now); err != nil {
+		t.Fatal(err)
+	}
+	if _, _, err := Create(ctx, p, f.business, in("2026-11-02T18:00:00Z", 1), now); !errors.Is(err, ErrDayFull) {
+		t.Fatalf("full day: %v", err)
+	}
 }
 
 func TestIntegrationUrgentOrder(t *testing.T) {

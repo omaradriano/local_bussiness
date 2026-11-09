@@ -11,6 +11,7 @@ export const tool_rental = {
   texts: {
     bookings: {
       plural: 'Rentas',
+      gender: 'f',
       searchPlaceholder: 'Cliente, teléfono o herramienta',
       empty: 'No hay rentas con estos filtros.',
       ofCustomer: 'Rentas de este cliente',

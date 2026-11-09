@@ -44,6 +44,7 @@ type Store interface {
 	auth.Members
 	Memberships(ctx context.Context, userID string) ([]store.Membership, error)
 	IsPlatformAdmin(ctx context.Context, userID string) (bool, error)
+	Rename(ctx context.Context, businessID, name string) error
 }
 
 type Deps struct {
@@ -643,6 +644,26 @@ func NewRouter(d Deps) http.Handler {
 				m, _ := auth.MemberFrom(r.Context())
 				d.deleteBusiness(w, r, m.BusinessID)
 			})
+			// The visible name (the slug stays: it's the public link).
+			r.With(auth.RequireRole("owner")).Patch("/", func(w http.ResponseWriter, r *http.Request) {
+				m, _ := auth.MemberFrom(r.Context())
+				var body struct {
+					Name string `json:"name"`
+				}
+				if !decode(w, r, &body) {
+					return
+				}
+				name, msg := businesses.ValidName(body.Name)
+				if msg != "" {
+					invalid(w, msg, map[string]string{"name": msg})
+					return
+				}
+				if err := d.Store.Rename(r.Context(), m.BusinessID, name); err != nil {
+					internalError(w, r, "rename business", err)
+					return
+				}
+				apierr.JSON(w, http.StatusOK, map[string]string{"name": name})
+			})
 
 			// Everything of one kind, unpaginated, for the owner's CSV (also when the account expired:
 			// their data is theirs). ?from=&to= (YYYY-MM-DD) narrows dated kinds; none = all.
@@ -941,6 +962,8 @@ func NewRouter(d Deps) http.Handler {
 				switch {
 				case errors.As(err, &bad):
 					invalid(w, bad.Message, map[string]string{bad.Field: bad.Message})
+				case errors.Is(err, bookings.ErrDayFull):
+					apierr.Write(w, http.StatusConflict, "slot_taken", "Ese día ya llegó al máximo de pedidos; elige otro día.")
 				case errors.Is(err, bookings.ErrSlotTaken):
 					apierr.Write(w, http.StatusConflict, "slot_taken", "Ya no está disponible; elige otro horario, fecha o cantidad.")
 				case err != nil:

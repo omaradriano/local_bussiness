@@ -49,6 +49,8 @@ const (
 
 type fakeStore struct{}
 
+func (fakeStore) Rename(context.Context, string, string) error { return nil }
+
 func (fakeStore) Role(_ context.Context, businessID, userID string) (string, error) {
 	if businessID == bizA && userID == user {
 		return "owner", nil
@@ -563,6 +565,8 @@ func (fakeBookings) Create(_ context.Context, _ string, in bookings.CreateInput,
 	switch {
 	case in.Notes == "ocupado":
 		return bookings.Booking{}, false, bookings.ErrSlotTaken
+	case in.Notes == "lleno":
+		return bookings.Booking{}, false, bookings.ErrDayFull
 	case in.Source != "admin" || (in.CreatedBy != user && in.CreatedBy != staffUser) || !now.Equal(fixedNow):
 		return bookings.Booking{}, false, errors.New("source, actor or clock not set by the handler")
 	}
@@ -752,6 +756,7 @@ func TestBookingRoutes(t *testing.T) {
 		{"sin fecha", http.MethodPost, base, "ok", `{"customer":{"name":"Ana","phone":"6141234567"},"item_id":"` + itemID + `"}`, "", http.StatusUnprocessableEntity, `"starts_at"`},
 		{"artículo inválido", http.MethodPost, base, "ok", `{"item_id":"x"}`, "", http.StatusUnprocessableEntity, `"item_id"`},
 		{"choque", http.MethodPost, base, "ok", ok + `,"notes":"ocupado"}`, "", http.StatusConflict, `"slot_taken"`},
+		{"día lleno", http.MethodPost, base, "ok", ok + `,"notes":"lleno"}`, "", http.StatusConflict, "máximo de pedidos"},
 		{"negocio ajeno", http.MethodPost, "/v1/b/" + bizB + "/bookings", "ok", ok + `}`, "", http.StatusForbidden, `"forbidden"`},
 		{"urgente: solo la dueña", http.MethodPost, base, "staff", ok + `,"urgent":true}`, "", http.StatusForbidden, `"owner_only"`},
 		{"urgente de la dueña", http.MethodPost, base, "ok", ok + `,"urgent":true}`, "", http.StatusCreated, `"status"`},
@@ -1575,6 +1580,26 @@ func TestImports(t *testing.T) {
 		t.Run(tc.name, func(t *testing.T) {
 			rec := doBody(http.MethodPost, tc.path, tc.token, strings.NewReader(tc.body))
 			if rec.Code != tc.code || !strings.Contains(rec.Body.String(), tc.want) {
+				t.Fatalf("got %d %s", rec.Code, rec.Body)
+			}
+		})
+	}
+}
+
+func TestRenameBusinessRoute(t *testing.T) {
+	path := "/v1/b/" + bizA + "/"
+	cases := []struct {
+		name, token, body string
+		code              int
+		want              string
+	}{
+		{"la dueña lo cambia", "ok", `{"name":"  Florería Latidos "}`, http.StatusOK, `"name":"Florería Latidos"`},
+		{"vacío", "ok", `{"name":" "}`, http.StatusUnprocessableEntity, `"name"`},
+		{"empleada", "staff", `{"name":"Otra"}`, http.StatusForbidden, ""},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			if rec := doBody(http.MethodPatch, path, tc.token, strings.NewReader(tc.body)); rec.Code != tc.code || !strings.Contains(rec.Body.String(), tc.want) {
 				t.Fatalf("got %d %s", rec.Code, rec.Body)
 			}
 		})

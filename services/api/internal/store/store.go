@@ -95,6 +95,12 @@ func (s *Store) Memberships(ctx context.Context, userID string) ([]Membership, e
 	return pgx.CollectRows(rows, pgx.RowToStructByPos[Membership])
 }
 
+// Rename changes the business's visible name (the slug, its public link, stays).
+func (s *Store) Rename(ctx context.Context, businessID, name string) error {
+	_, err := s.db.Exec(ctx, `update public.businesses set name = $2 where id = $1`, businessID, name)
+	return err
+}
+
 // IsPlatformAdmin reports whether the user administers the platform (not a business).
 func (s *Store) IsPlatformAdmin(ctx context.Context, userID string) (bool, error) {
 	var ok bool

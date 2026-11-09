@@ -22,8 +22,9 @@ type ZoneRow = { name: string; fee: string }; // fee as typed (pesos)
 /** Ajustes: the shared section plus the ones of this type of business (see settingsSectionsFor). */
 export default function SettingsScreen() {
   const { businessId } = useLocalSearchParams<{ businessId: string }>();
-  const { business } = useBusiness(businessId);
+  const { business, reload: reloadBusiness } = useBusiness(businessId);
   const { settings, setSettings } = useSettings(businessId);
+  const [name, setName] = useState<string | null>(null); // null = as saved
   const toast = useToast();
   const ui = useUI();
   const [r, setR] = useState<Rentals | null>(null);
@@ -70,6 +71,15 @@ export default function SettingsScreen() {
     if (fees.some((f) => f === null)) local.delivery_zones = strings.catalog.invalidMoney;
     if (perDay.trim() && !/^\d+$/.test(perDay.trim())) local.daily_capacity = strings.catalog.invalidNumber;
     if (Object.keys(local).length) return setErrors(local);
+    // The visible name lives on the business, not in its settings (the slug, its link, stays).
+    if (name !== null && name.trim() !== business!.name) {
+      setBusy(true);
+      const renamed = await api.PATCH('/v1/b/{businessId}/', { params: { path: { businessId } }, body: { name } });
+      setBusy(false);
+      if (!renamed.data) { setErrors(fieldErrors(renamed.error)); return toast(errorText(renamed.error, renamed.response.status), 'error'); }
+      setName(null);
+      reloadBusiness();
+    }
     setBusy(true);
     setErrors({});
     // Only the sections this business has are sent (the API validates just those).
@@ -184,6 +194,9 @@ export default function SettingsScreen() {
       <Stack.Screen options={{ title: t.title }} />
       <Text variant="largeTitle" accessibilityRole="header" style={{ marginBottom: 20 }}>{t.title}</Text>
       {!isOwner && <View style={{ marginBottom: 16 }}><Notice>{t.onlyOwner}</Notice></View>}
+      <Group label={t.business.title} padded footer={t.business.hint(business.slug)}>
+        <Field label={t.business.name} value={name ?? business.name} onChangeText={setName} editable={isOwner} error={errors.name} />
+      </Group>
       {sections.map((s) => render[s]())}
       {/* Every business: the responsible in the privacy notice its customers read. */}
       <Group label={pv.title} padded footer={pv.hint}>

@@ -216,7 +216,8 @@ export interface paths {
         delete: operations["deleteBusiness"];
         options?: never;
         head?: never;
-        patch?: never;
+        /** Cambia el nombre visible del negocio (el slug no cambia). Solo el dueño */
+        patch: operations["renameBusiness"];
         trace?: never;
     };
     "/v1/b/{businessId}/catalog": {
@@ -2662,6 +2663,38 @@ export interface operations {
             };
             403: components["responses"]["Error"];
             404: components["responses"]["Error"];
+            422: components["responses"]["Error"];
+        };
+    };
+    renameBusiness: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                businessId: components["parameters"]["BusinessId"];
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": {
+                    name: string;
+                };
+            };
+        };
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        name: string;
+                    };
+                };
+            };
+            403: components["responses"]["Error"];
             422: components["responses"]["Error"];
         };
     };

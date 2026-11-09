@@ -86,11 +86,20 @@ func (in Input) Normalize() Input {
 	return in
 }
 
+// ValidName: the name as saved (trimmed), or an error message for the "name" field.
+func ValidName(name string) (string, string) {
+	name = strings.TrimSpace(name)
+	if n := utf8.RuneCountInString(name); n == 0 || n > 80 {
+		return "", "Escribe el nombre del negocio (máximo 80 caracteres)."
+	}
+	return name, ""
+}
+
 // Validate returns field -> message (es-MX); empty when valid. Mirrors the DB checks.
 func (in Input) Validate() map[string]string {
 	errs := map[string]string{}
-	if n := utf8.RuneCountInString(strings.TrimSpace(in.Name)); n == 0 || n > 80 {
-		errs["name"] = "Escribe el nombre del negocio (máximo 80 caracteres)."
+	if _, msg := ValidName(in.Name); msg != "" {
+		errs["name"] = msg
 	}
 	switch {
 	case len(in.Slug) < 3 || len(in.Slug) > 60 || !slugRe.MatchString(in.Slug):

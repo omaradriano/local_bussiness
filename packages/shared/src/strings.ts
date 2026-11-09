@@ -260,6 +260,8 @@ export const strings = {
     windowEnd: 'Hasta (HH:MM, opcional)',
     windowHint: 'Si el cliente da un rango, por ejemplo de 10:00 a 13:00.',
     deliveryFee: (zone: string | null) => (zone ? `Envío ${zone}` : 'Envío'),
+    dayLegend: (prepHours: number) => `El número es cuántos pedidos caben ese día. En gris: el negocio cierra o ya no alcanza el tiempo de preparación (${prepHours} h).`,
+    cardCount: (n: number) => `${n} de 500 caracteres`,
     urgent: 'Pedido urgente',
     urgentHint: 'Fuera de horario o sin el tiempo de preparación; el cupo del día se respeta y queda anotado.',
     windowUntil: (to: string) => `a ${to}`,
@@ -625,6 +627,7 @@ export const strings = {
     price: 'Precio de venta (pesos)',
     cost: 'Costo de compra (pesos)',
     costHint: 'Lo que te cuesta cada pieza; sirve para calcular la ganancia. Solo tú lo ves.',
+    costAbovePrice: 'Ojo: cuesta más de lo que lo vendes; cada venta deja pérdida.',
     initialStock: 'Existencias iniciales',
     stockHint: 'Después cambian solas con las ventas y las compras de mercancía.',
     active: 'Disponible para vender',
@@ -706,7 +709,7 @@ export const strings = {
     planLine: (paid: number, total: number) => `${paid} de ${total} mensualidades`,
     byStatus: (plural: string) => `${plural} del periodo`,
     noBookings: (plural: string) => `Sin ${plural.toLowerCase()} en este periodo.`,
-    byStatusHint: 'Cuenta las que empiezan en el periodo.',
+    byStatusHint: (gender: 'f' | 'm') => `Cuenta ${gender === 'm' ? 'los' : 'las'} que empiezan en el periodo.`,
     overdue: 'Rentas vencidas ahora',
     noOverdue: 'Ninguna renta vencida.',
     dueOn: (date: string) => `Debía regresar el ${date}`,
@@ -776,7 +779,9 @@ export const strings = {
   },
   history: {
     search: 'Buscar',
-    groups: { all: 'Todas', active: 'Activas', finished: 'Terminadas', cancelled: 'Canceladas' } as Record<string, string>,
+    groups: (gender: 'f' | 'm'): Record<string, string> => (gender === 'm'
+      ? { all: 'Todos', active: 'Activos', finished: 'Terminados', cancelled: 'Cancelados' }
+      : { all: 'Todas', active: 'Activas', finished: 'Terminadas', cancelled: 'Canceladas' }),
     loadMore: 'Ver más',
   },
   inventory: {
@@ -839,6 +844,11 @@ export const strings = {
   },
   settings: {
     title: 'Ajustes',
+    business: {
+      title: 'Negocio',
+      name: 'Nombre del negocio',
+      hint: (slug: string) => `Así aparece en la app y para tus clientes. Tu enlace público sigue siendo /${slug}.`,
+    },
     features: {
       title: 'Funciones',
       hint: 'Partes de la app que tu negocio puede usar. Apágalas si no las necesitas; puedes volver a encenderlas cuando quieras.',
@@ -940,7 +950,7 @@ export const strings = {
     removeBody: 'Sale de la lista, de la agenda y de Sueldos. Sus citas y comisiones pasadas conservan su nombre.',
     removed: 'Persona eliminada.',
     title: 'Equipo',
-    hint: 'Las personas que atienden, cada una con su disponibilidad. Una persona nueva atiende todos los servicios en el horario del negocio; entra a su ficha para ajustarlo. Si trabajas solo, ya estás aquí como "Yo".',
+    hint: 'Las personas que trabajan contigo. Una persona nueva trabaja en el horario del negocio; entra a su ficha para ajustarlo.',
     add: 'Agregar persona',
     name: 'Nombre',
     you: 'Tú',

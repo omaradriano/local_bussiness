@@ -9,6 +9,7 @@ import { currentMonth, PeriodPicker, type Period } from '../../../../../componen
 import { api } from '../../../../../lib/api';
 import { errorText } from '../../../../../lib/errors';
 import { useBusiness } from '../../../../../lib/useMe';
+import { useTexts } from '../../../../../lib/useTexts';
 import { Button, Cell, EmptyState, Group, Notice, Row, Screen, Segmented, Text, radius, useToast, useUI } from '../../../../../ui';
 
 type Product = components['schemas']['RetailProduct'];
@@ -186,7 +187,10 @@ function StatsView({ businessId }: { businessId: string }) {
 export default function Products() {
   const { businessId } = useLocalSearchParams<{ businessId: string }>();
   const { business } = useBusiness(businessId);
-  const [tab, setTab] = useState<Tab>('sell');
+  const { has } = useTexts();
+  // With «Venta rápida» products are sold there: one place to sell (Q8).
+  const quick = has('quickSale');
+  const [tab, setTab] = useState<Tab>(quick ? 'inventory' : 'sell');
   const [products, setProducts] = useState<Product[] | null>(null);
   const [error, setError] = useState<string | null>(null);
 
@@ -197,11 +201,15 @@ export default function Products() {
   useFocusEffect(load);
 
   const isOwner = business?.role === 'owner';
-  const tabs: Tab[] = isOwner ? ['sell', 'inventory', 'stats'] : ['sell', 'inventory'];
+  const tabs = (isOwner ? ['sell', 'inventory', 'stats'] : ['sell', 'inventory']).filter((k) => !(quick && k === 'sell')) as Tab[];
   return (
     <Screen>
       <Stack.Screen options={{ title: t.title }} />
       <Text variant="largeTitle" accessibilityRole="header" style={{ marginBottom: 16 }}>{t.title}</Text>
+      {quick && (
+        <Button variant="primary" icon="cart" style={{ marginBottom: 16 }}
+          onPress={() => router.push({ pathname: '/admin/[businessId]/sales/new', params: { businessId } })}>{strings.quickSale.open}</Button>
+      )}
       <View style={{ marginBottom: 20 }}>
         <Segmented options={tabs.map((k) => ({ value: k, label: t.tabs[k] }))} value={tab} onChange={setTab} />
       </View>
