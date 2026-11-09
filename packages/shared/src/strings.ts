@@ -579,6 +579,7 @@ export const strings = {
     },
   },
   products: {
+    loadError: 'No se pudieron cargar los productos.',
     title: 'Productos',
     hint: 'Vender, inventario y estadísticas',
     tabs: { sell: 'Vender', inventory: 'Inventario', stats: 'Estadísticas' },
