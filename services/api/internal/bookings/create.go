@@ -246,6 +246,9 @@ func Create(ctx context.Context, db store.DB, businessID string, in CreateInput,
 	}
 	q := Compute(QuoteInput{UnitPrice: it.Price, OptionsExtra: optsExtra, Quantity: int64(in.Quantity), Periods: periods,
 		DeliveryFee: deliveryFee, DepositPercent: set.DepositPercent, SecurityDeposit: securityDeposit, Discount: deref(in.Discount)})
+	if err := deref(in.Discount).Exceeds(q.Total + q.Discount); err != nil {
+		return Booking{}, false, err
+	}
 	status, hold := InitialStatus(q.Advance, set.HoldHours, now)
 	pay := in.InitialPayment
 	if pay != nil {
