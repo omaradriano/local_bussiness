@@ -335,3 +335,57 @@ func TestIntegrationCancelWithExtras(t *testing.T) {
 		t.Fatalf("keep: %+v extras=%d stock=%d %v", got.Balance, len(got.Extras), stock(), err)
 	}
 }
+
+// R4: extras left on the order's account are owed with it and undone if it's cancelled.
+func TestIntegrationExtrasOnAccount(t *testing.T) {
+	p := pool(t)
+	ctx := context.Background()
+	f := setup(t, p, "flowers", `{}`)
+	var choc string
+	if err := p.QueryRow(ctx, `insert into public.retail_products (business_id, name, price, cost, stock) values ($1, 'Chocolates', 13500, 5000, 8)
+		returning id::text`, f.business).Scan(&choc); err != nil {
+		t.Fatal(err)
+	}
+	order := func(phone string) Booking {
+		b, _, err := Create(ctx, p, f.business, CreateInput{Customer: cust(phone), ItemID: f.item, StartsAt: at("2026-11-02T18:00:00Z"),
+			Options: map[string]string{"Color": "Rojo"}, Source: "admin"}, now)
+		if err != nil {
+			t.Fatal(err)
+		}
+		var sale string
+		if err := p.QueryRow(ctx, `insert into public.sales (business_id, booking_id, sold_at, method, total, cost_total) values ($1, $2, now(), 'on_account', 27000, 10000)
+			returning id::text`, f.business, b.ID).Scan(&sale); err != nil {
+			t.Fatal(err)
+		}
+		for _, q := range [][]any{
+			{`insert into public.sale_lines (business_id, sale_id, product_id, quantity, unit_price, unit_cost) values ($1, $2, $3, 2, 13500, 5000)`, f.business, sale, choc},
+			{`update public.retail_products set stock = stock - 2 where business_id = $1 and id = $2`, f.business, choc},
+		} {
+			if _, err := p.Exec(ctx, q[0].(string), q[1:]...); err != nil {
+				t.Fatal(err)
+			}
+		}
+		return b
+	}
+	stock := func() (n int) {
+		p.QueryRow(ctx, `select stock from public.retail_products where id = $1`, choc).Scan(&n)
+		return n
+	}
+
+	a := order("6148880021")
+	got, err := Get(ctx, p, f.business, a.ID)
+	if err != nil || got.Balance.Due != a.Total+27000 || got.Total != a.Total {
+		t.Fatalf("owed with extras: total %d due %d %v", got.Total, got.Balance.Due, err)
+	}
+	// Paying it all (order + extras) leaves nothing owed.
+	got, err = AddPayment(ctx, p, f.business, a.ID, Payment{Type: "balance", Method: "cash", Amount: a.Total + 27000}, "", now, noFiles)
+	if err != nil || got.Balance.Due != 0 {
+		t.Fatalf("pay with extras: %+v %v", got.Balance, err)
+	}
+
+	// Cancelled with nothing paid: no choice to make, the extras on account are undone and the stock is back.
+	b := order("6148880022")
+	if got, err := TransitionPaid(ctx, p, f.business, b.ID, "cancelled", "", "", ""); err != nil || len(got.Extras) != 0 || stock() != 6 {
+		t.Fatalf("cancel on account: extras=%d stock=%d %v", len(got.Extras), stock(), err)
+	}
+}

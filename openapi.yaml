@@ -975,7 +975,7 @@ paths:
                       name: { type: string, maxLength: 120 }
                       price: { type: integer, format: int64, minimum: 1, description: centavos }
                       quantity: { type: integer, minimum: 1 }
-                method: { type: string, enum: [cash, transfer, card] }
+                method: { type: string, enum: [cash, transfer, card, on_account], description: "on_account: extras de un pedido que se cobran con él (al entregar)" }
                 booking_id: { type: string, format: uuid }
                 customer_name: { type: string, maxLength: 80, description: "Cliente casual (opcional, sin ficha)" }
                 customer_phone: { type: string }
@@ -2248,7 +2248,7 @@ components:
         id: { type: string, format: uuid }
         booking_id: { type: [string, "null"] }
         sold_at: { type: string, format: date-time }
-        method: { type: string, enum: [cash, transfer, card] }
+        method: { type: string, enum: [cash, transfer, card, on_account], description: "on_account: extras de un pedido que se cobran con él (al entregar)" }
         total: { type: integer }
         customer_name: { type: [string, "null"] }
         customer_phone: { type: [string, "null"] }
@@ -2655,14 +2655,14 @@ components:
               created_at: { type: string, format: date-time }
         extras:
           type: array
-          description: Ventas rápidas agregadas al pedido (ya pagadas; aparte del saldo del pedido)
+          description: Ventas rápidas agregadas al pedido. Pagadas aparte, o a cuenta (on_account), que se suman al saldo del pedido
           items:
             type: object
             required: [id, sold_at, method, total, items]
             properties:
               id: { type: string, format: uuid }
               sold_at: { type: string, format: date-time }
-              method: { type: string }
+              method: { type: string, enum: [cash, transfer, card, on_account] }
               total: { type: integer, format: int64 }
               items: { type: string }
         payments:

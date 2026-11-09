@@ -146,7 +146,8 @@ export default function BookingDetail() {
   const isOther = (st: Booking['status']) => st === 'cancelled' || st === 'no_show';
   const otherActions = actions.filter(isOther);
   const extrasTotal = b.extras.reduce((n, x) => n + x.total, 0);
-  const paid = b.balance.paid + extrasTotal; // cancelling gives back (or keeps) the extras too
+  const extrasPaid = b.extras.reduce((n, x) => n + (x.method === 'on_account' ? 0 : x.total), 0); // on account: owed, not paid
+  const paid = b.balance.paid + extrasPaid; // cancelling gives back (or keeps) the extras too
 
   return (
     <Screen>
@@ -317,7 +318,7 @@ export default function BookingDetail() {
         </Group>
 
         {otherActions.length > 0 && (
-          <Group label={t.otherActions} footer={confirmCancel ? (paid > 0 ? t.confirmCancelPaid(formatMXN(paid)) + (extrasTotal ? t.cancelExtras(formatMXN(extrasTotal)) : '') : t.confirmCancel) : undefined}>
+          <Group label={t.otherActions} footer={confirmCancel ? (paid > 0 ? t.confirmCancelPaid(formatMXN(paid)) + (extrasPaid ? t.cancelExtras(formatMXN(extrasPaid)) : '') : t.confirmCancel) : undefined}>
             {otherActions.map((st) => (st === 'cancelled' && confirmCancel && paid > 0 ? (
               <View key={st}>
                 <Cell label={t.cancelRefund(formatMXN(paid))} destructive onPress={() => request(st, 'refund')} />

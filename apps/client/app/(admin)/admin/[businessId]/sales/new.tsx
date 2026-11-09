@@ -169,9 +169,10 @@ export default function QuickSale() {
         )}
 
         <Step inline n={booking ? 2 : 3} title={t.pay.title} description={t.pay.description} state={state(2)}>
-          <Segmented options={(['cash', 'transfer', 'card'] as Method[]).map((m) => ({ value: m, label: strings.bookings.methods[m] }))} value={method} onChange={setMethod} />
+          {/* An order's extras can also go on its balance, charged at delivery. */}
+          <Segmented options={(['cash', 'transfer', 'card', ...(booking ? ['on_account'] : [])] as Method[]).map((m) => ({ value: m, label: m === 'on_account' ? t.onAccount : strings.bookings.methods[m] }))} value={method} onChange={setMethod} />
           <Row label={strings.products.total} value={formatMXN(total)} strong />
-          <Button variant="primary" icon="checkmark-circle" busy={busy} disabled={!cart.length} onPress={charge}>{t.charge(formatMXN(total))}</Button>
+          <Button variant="primary" icon="checkmark-circle" busy={busy} disabled={!cart.length} onPress={charge}>{method === 'on_account' ? t.addOnAccount(formatMXN(total)) : t.charge(formatMXN(total))}</Button>
         </Step>
 
         <Group label={t.today}>

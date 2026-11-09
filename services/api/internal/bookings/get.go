@@ -169,7 +169,13 @@ func Get(ctx context.Context, db store.DB, businessID, id string) (Booking, erro
 	if b.Extras == nil {
 		b.Extras = []Extra{}
 	}
-	b.Balance = ComputeBalance(b.Total, b.Payments)
+	var onAccount int64 // extras on the order's account (R4) are owed with it
+	for _, x := range b.Extras {
+		if x.Method == "on_account" {
+			onAccount += x.Total
+		}
+	}
+	b.Balance = ComputeBalance(b.Total+onAccount, b.Payments)
 	if Releases(b.Status) {
 		b.Balance.Due = 0 // cancelled: nothing more to collect (what was paid was given back or kept)
 	}

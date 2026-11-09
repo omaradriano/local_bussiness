@@ -147,7 +147,8 @@ func (r Repo) bookings(ctx context.Context, businessID string, start, end time.T
 		       coalesce((select string_agg(i.name || case when bi.quantity > 1 then ' × ' || bi.quantity else '' end, ', ' order by i.name)
 		                 from public.booking_items bi join public.catalog_items i on i.id = bi.item_id where bi.booking_id = b.id), ''),
 		       b.total, b.created_at,
-		       coalesce((select jsonb_agg(jsonb_build_object('type', p.type, 'amount', p.amount)) from public.payments p where p.booking_id = b.id), '[]')
+		       coalesce((select jsonb_agg(jsonb_build_object('type', p.type, 'amount', p.amount)) from public.payments p where p.booking_id = b.id), '[]'),
+		       (select coalesce(sum(s.total), 0) from public.sales s where s.booking_id = b.id and s.method = 'on_account')
 		from public.bookings b join public.customers c on c.id = b.customer_id
 		where b.business_id = $1 and coalesce(b.starts_at, b.created_at) >= $2 and coalesce(b.starts_at, b.created_at) < $3
 		order by coalesce(b.starts_at, b.created_at) limit $4`, businessID, start, end, maxRows)
@@ -159,10 +160,11 @@ func (r Repo) bookings(ctx context.Context, businessID string, start, end time.T
 	for rows.Next() {
 		var b Booking
 		var pays []bookings.Payment
-		if err := rows.Scan(&b.ID, &b.Kind, &b.Status, &b.Source, &b.StartsAt, &b.EndsAt, &b.Customer, &b.Phone, &b.Items, &b.Total, &b.CreatedAt, &pays); err != nil {
+		var onAccount int64 // extras on the order's account: owed with it
+		if err := rows.Scan(&b.ID, &b.Kind, &b.Status, &b.Source, &b.StartsAt, &b.EndsAt, &b.Customer, &b.Phone, &b.Items, &b.Total, &b.CreatedAt, &pays, &onAccount); err != nil {
 			return nil, err
 		}
-		bal := bookings.ComputeBalance(b.Total, pays)
+		bal := bookings.ComputeBalance(b.Total+onAccount, pays)
 		b.Paid, b.Due, b.Extra = bal.Paid, bal.Due, bal.Extra
 		if bookings.Releases(b.Status) {
 			b.Due = 0 // same as the booking's detail: a cancelled one owes nothing
