@@ -411,3 +411,47 @@ func TestIntegrationExtrasOnAccount(t *testing.T) {
 		t.Fatalf("a cancelled order owes nothing in the list: %d", d)
 	}
 }
+
+func TestIntegrationPartialRefund(t *testing.T) {
+	p := pool(t)
+	ctx := context.Background()
+	f := setup(t, p, "flowers", `{"deposit_percent": 50}`)
+	b, _, err := Create(ctx, p, f.business, CreateInput{Customer: cust("6148880005"), ItemID: f.item, StartsAt: at("2026-11-02T18:00:00Z"),
+		Options: map[string]string{"Color": "Rojo"}, Source: "admin", InitialPayment: &Payment{Method: "cash"}}, now)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, err := Transition(ctx, p, f.business, b.ID, "in_progress", "", ""); err != nil {
+		t.Fatal(err)
+	}
+	// Damaged flowers: part goes back, the total goes down the same, nothing is owed.
+	got, err := PartialRefund(ctx, p, f.business, b.ID, PartialRefundInput{Amount: 10000, Method: "cash", Reason: "Rosas maltratadas"}, "")
+	last := got.Payments[len(got.Payments)-1]
+	if err != nil || got.Total != b.Total-10000 || got.Balance.Due != 0 || got.Balance.Paid != b.Total-10000 ||
+		last.Type != "payment_refund" || last.Amount != 10000 || last.Notes == nil || *last.Notes != "Rosas maltratadas" {
+		t.Fatalf("refund: total %d %+v %+v %v", got.Total, got.Balance, last, err)
+	}
+	var inv Invalid
+	if _, err := PartialRefund(ctx, p, f.business, b.ID, PartialRefundInput{Amount: got.Total + 1, Method: "cash", Reason: "x"}, ""); !errors.As(err, &inv) || inv.Field != "amount" {
+		t.Fatalf("more than paid: %v", err)
+	}
+	// It's still a normal order: it can be handed over.
+	if _, err := Transition(ctx, p, f.business, b.ID, "ready", "", ""); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := Transition(ctx, p, f.business, b.ID, "completed", "", ""); err != nil {
+		t.Fatalf("complete after refund: %v", err)
+	}
+	// And a cancelled one can't: that's the cancel flow.
+	c, _, err := Create(ctx, p, f.business, CreateInput{Customer: cust("6148880006"), ItemID: f.item, StartsAt: at("2026-11-02T18:00:00Z"),
+		Options: map[string]string{"Color": "Rojo"}, Source: "admin", InitialPayment: &Payment{Method: "cash"}}, now)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, err := TransitionPaid(ctx, p, f.business, c.ID, "cancelled", PaidKeep, "", ""); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := PartialRefund(ctx, p, f.business, c.ID, PartialRefundInput{Amount: 100, Method: "cash", Reason: "x"}, ""); !errors.As(err, &inv) {
+		t.Fatalf("refund of a cancelled order: %v", err)
+	}
+}

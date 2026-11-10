@@ -265,6 +265,7 @@ type BookingsRepo interface {
 	Return(ctx context.Context, businessID, id, condition, actor string, now time.Time) (bookings.Booking, error)
 	Extend(ctx context.Context, businessID, id string, newEnd time.Time, actor string, now time.Time) (bookings.Booking, error)
 	SetDiscount(ctx context.Context, businessID, id string, d bookings.Discount, actor string) (bookings.Booking, error)
+	PartialRefund(ctx context.Context, businessID, id string, in bookings.PartialRefundInput, actor string) (bookings.Booking, error)
 	Reschedule(ctx context.Context, businessID, id string, start time.Time, end *time.Time, actor string, now time.Time) (bookings.Booking, error)
 	Inventory(ctx context.Context, businessID string) ([]bookings.InventoryRow, error)
 	Quote(ctx context.Context, businessID string, in bookings.QuoteRequest) (bookings.QuoteResult, error)
@@ -1114,6 +1115,17 @@ func NewRouter(d Deps) http.Handler {
 						invalid(w, "La nota es muy larga.", map[string]string{"note": "Máximo 500 caracteres."})
 						return
 					}
+					if m.Role != "owner" {
+						cur, err := d.Bookings.Get(r.Context(), m.BusinessID, chi.URLParam(r, "bookingId"))
+						if err != nil {
+							writeBooking(w, r, cur, err)
+							return
+						}
+						if bookings.OwnerOnly(cur.Kind, cur.Status, body.To) {
+							apierr.Write(w, http.StatusForbidden, "owner_only", "Solo la dueña o el dueño puede cancelar un pedido ya hecho.")
+							return
+						}
+					}
 					b, err := d.Bookings.Transition(r.Context(), m.BusinessID, chi.URLParam(r, "bookingId"), body.To, body.Paid, m.UserID, body.Note)
 					writeBooking(w, r, b, err)
 				})
@@ -1335,6 +1347,21 @@ func NewRouter(d Deps) http.Handler {
 						return
 					}
 					b, err := d.Bookings.SetDiscount(r.Context(), m.BusinessID, chi.URLParam(r, "bookingId"), body, m.UserID)
+					writeBooking(w, r, b, err)
+				})
+
+				// Part of the payment goes back (damaged flowers) without cancelling: owner only, it's money out.
+				r.Post("/refund", func(w http.ResponseWriter, r *http.Request) {
+					m, _ := auth.MemberFrom(r.Context())
+					if m.Role != "owner" {
+						apierr.Write(w, http.StatusForbidden, "owner_only", "Solo la dueña o el dueño puede devolver dinero.")
+						return
+					}
+					var body bookings.PartialRefundInput
+					if !decode(w, r, &body) {
+						return
+					}
+					b, err := d.Bookings.PartialRefund(r.Context(), m.BusinessID, chi.URLParam(r, "bookingId"), body, m.UserID)
 					writeBooking(w, r, b, err)
 				})
 

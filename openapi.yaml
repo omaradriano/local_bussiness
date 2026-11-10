@@ -1888,6 +1888,34 @@ paths:
         "404": { $ref: "#/components/responses/Error" }
         "422": { $ref: "#/components/responses/Error" }
 
+  /v1/b/{businessId}/bookings/{bookingId}/refund:
+    parameters:
+      - $ref: "#/components/parameters/BusinessId"
+      - { name: bookingId, in: path, required: true, schema: { type: string, format: uuid } }
+    post:
+      operationId: partialRefund
+      summary: Devuelve parte de lo cobrado sin cancelar (solo la dueña); el total baja lo mismo y sale de los ingresos
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [amount, method, reason]
+              properties:
+                amount: { type: integer, description: centavos }
+                method: { type: string, enum: [cash, transfer, card] }
+                reason: { type: string, maxLength: 200 }
+      responses:
+        "200":
+          description: OK
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Booking" }
+        "403": { $ref: "#/components/responses/Error" }
+        "404": { $ref: "#/components/responses/Error" }
+        "422": { $ref: "#/components/responses/Error" }
+
   /v1/b/{businessId}/bookings/{bookingId}/schedule:
     parameters:
       - $ref: "#/components/parameters/BusinessId"

@@ -23,6 +23,9 @@ func TestF3_6_MachineAllowsOnlyItsTransitions(t *testing.T) {
 		{"product", "ready", "completed", true},
 		{"product", "out_for_delivery", "completed", true},
 		{"product", "confirmed", "no_show", false},
+		{"product", "ready", "cancelled", true},            // the customer no longer wants it (owner only)
+		{"product", "out_for_delivery", "cancelled", true}, // refused at the door (owner only)
+		{"product", "completed", "cancelled", false},
 		// rentals
 		{"rental", "confirmed", "checked_out", true},
 		{"rental", "checked_out", "returned", true},
@@ -78,11 +81,22 @@ func TestNextStepsForThePanel(t *testing.T) {
 		t.Fatal("completed has no next steps")
 	}
 	// An order picked up at the shop never goes out for delivery.
-	if got := Next("product", "ready", "pickup"); !equalStrings(got, []string{"completed"}) {
+	if got := Next("product", "ready", "pickup"); !equalStrings(got, []string{"completed", "cancelled"}) {
 		t.Fatalf("pickup: %v", got)
 	}
-	if got := Next("product", "ready", "delivery"); !equalStrings(got, []string{"out_for_delivery", "completed"}) {
+	if got := Next("product", "ready", "delivery"); !equalStrings(got, []string{"out_for_delivery", "completed", "cancelled"}) {
 		t.Fatalf("delivery: %v", got)
+	}
+}
+
+func TestOwnerOnlyCancelsOrdersAlreadyMade(t *testing.T) {
+	for _, from := range []string{"ready", "out_for_delivery"} {
+		if !OwnerOnly("product", from, "cancelled") {
+			t.Errorf("cancelling a %s order is for the owner", from)
+		}
+	}
+	if OwnerOnly("product", "confirmed", "cancelled") || OwnerOnly("product", "ready", "completed") || OwnerOnly("service", "confirmed", "cancelled") {
+		t.Error("the other moves are for anyone")
 	}
 }
 

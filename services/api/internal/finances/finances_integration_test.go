@@ -165,4 +165,23 @@ func TestIntegrationSummary(t *testing.T) {
 	if err := r.DeleteExpense(ctx, other, "00000000-0000-0000-0000-000000000000"); err != ErrNotFound {
 		t.Fatalf("delete missing: %v", err)
 	}
+	// An order handed over 25 Nov with extras on its account (a chocolate 90, a balloon 30), all
+	// collected with its balance: the extras count as product and counter sales, not as the order.
+	var order, extra string
+	if err := tx.QueryRow(ctx, `insert into public.bookings (business_id, customer_id, kind, status, starts_at, total, source)
+		values ($1, $2, 'product', 'completed', '2026-11-25T17:00:00Z', 20000, 'admin') returning id::text`, biz, cust).Scan(&order); err != nil {
+		t.Fatal(err)
+	}
+	exec(`insert into public.booking_events (business_id, booking_id, from_status, to_status, at) values ($1, $2, 'ready', 'completed', '2026-11-25T18:00:00Z')`, biz, order)
+	exec(`insert into public.payments (business_id, booking_id, type, method, amount, paid_at) values ($1, $2, 'balance', 'cash', 32000, '2026-11-25T18:00:00Z')`, biz, order)
+	if err := tx.QueryRow(ctx, `insert into public.sales (business_id, booking_id, sold_at, method, total, cost_total) values ($1, $2, '2026-11-24T18:00:00Z', 'on_account', 12000, 5000)
+		returning id::text`, biz, order).Scan(&extra); err != nil {
+		t.Fatal(err)
+	}
+	exec(`insert into public.sale_lines (business_id, sale_id, product_id, quantity, unit_price, unit_cost) values ($1, $2, '00000000-0000-0000-0000-0000000000e6', 1, 9000, 5000)`, biz, extra)
+	exec(`insert into public.sale_lines (business_id, sale_id, name, quantity, unit_price, unit_cost) values ($1, $2, 'Globo', 1, 3000, 0)`, biz, extra)
+	s, err = r.Summary(ctx, biz, d("2026-11-01"), d("2026-11-30"), now)
+	if err != nil || part(s.Income, "bookings") != 70000 || part(s.Income, "products") != 18000 || part(s.Income, "counter") != 17000 {
+		t.Fatalf("extras on account: %+v %v", s.Income, err)
+	}
 }

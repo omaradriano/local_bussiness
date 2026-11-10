@@ -734,11 +734,21 @@ func TestInventoryRoute(t *testing.T) {
 	}
 }
 
+func (fakeBookings) PartialRefund(_ context.Context, _, id string, in bookings.PartialRefundInput, _ string) (bookings.Booking, error) {
+	if id != bookingID {
+		return bookings.Booking{}, bookings.ErrNotFound
+	}
+	if err := in.Validate(75000, 75000); err != nil {
+		return bookings.Booking{}, err
+	}
+	return bookings.Booking{ID: id, Total: 75000 - in.Amount}, nil
+}
+
 func (fakeBookings) Get(_ context.Context, _, id string) (bookings.Booking, error) {
 	if id != bookingID {
 		return bookings.Booking{}, bookings.ErrNotFound
 	}
-	return bookings.Booking{ID: bookingID}, nil
+	return bookings.Booking{ID: bookingID, Kind: "product", Status: "ready"}, nil
 }
 
 func TestBookingRoutes(t *testing.T) {
@@ -826,6 +836,11 @@ func TestBookingOperationRoutes(t *testing.T) {
 		wantIn                  string
 	}{
 		{"empleada cambia estado", one + "/transition", "staff", `{"to":"in_progress"}`, http.StatusOK, `"status":"in_progress"`},
+		{"cancelar un pedido listo: solo la dueña", one + "/transition", "staff", `{"to":"cancelled"}`, http.StatusForbidden, `"owner_only"`},
+		{"la dueña cancela un pedido listo", one + "/transition", "ok", `{"to":"cancelled"}`, http.StatusOK, `"status":"cancelled"`},
+		{"devolución parcial: solo la dueña", one + "/refund", "staff", `{"amount":10000,"method":"cash","reason":"Rosas maltratadas"}`, http.StatusForbidden, `"owner_only"`},
+		{"devolución parcial", one + "/refund", "ok", `{"amount":10000,"method":"cash","reason":"Rosas maltratadas"}`, http.StatusOK, `"total":65000`},
+		{"devolución sin motivo", one + "/refund", "ok", `{"amount":10000,"method":"cash","reason":""}`, http.StatusUnprocessableEntity, `"reason"`},
 		{"transición inválida", one + "/transition", "ok", `{"to":"ready"}`, http.StatusUnprocessableEntity, `"status"`},
 		{"pasos pendientes", one + "/transition", "ok", `{"to":"completed"}`, http.StatusUnprocessableEntity, `"steps_pending"`},
 		{"reserva inexistente", "/v1/b/" + bizA + "/bookings/eeeeeeee-0000-0000-0000-000000000000/transition", "ok", `{"to":"cancelled"}`, http.StatusNotFound, `"not_found"`},

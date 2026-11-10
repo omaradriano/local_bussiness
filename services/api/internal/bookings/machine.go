@@ -18,8 +18,8 @@ var transitions = map[string]map[string][]string{
 		"pending_deposit":  {"confirmed", "cancelled", "expired"},
 		"confirmed":        {"in_progress", "cancelled"},
 		"in_progress":      {"ready", "cancelled"},
-		"ready":            {"out_for_delivery", "completed"},
-		"out_for_delivery": {"completed"},
+		"ready":            {"out_for_delivery", "completed", "cancelled"}, // cancelling an order already made: owner only
+		"out_for_delivery": {"completed", "cancelled"},
 	},
 	"rental": {
 		"pending_deposit": {"confirmed", "cancelled", "expired"},
@@ -29,6 +29,14 @@ var transitions = map[string]map[string][]string{
 		"returned":        {"completed"},
 	},
 }
+
+// ownerOnly moves: cancelling an order already made (the customer no longer wants it) loses its
+// flowers, so only the owner decides it.
+var ownerOnly = map[string]map[string][]string{
+	"product": {"ready": {"cancelled"}, "out_for_delivery": {"cancelled"}},
+}
+
+func OwnerOnly(kind, from, to string) bool { return slices.Contains(ownerOnly[kind][from], to) }
 
 // systemOnly statuses are set by the worker (time-based), never from the panel.
 var systemOnly = []string{"expired", "overdue"}
