@@ -6,6 +6,7 @@ import { ActivityIndicator, Linking, View } from 'react-native';
 import { BookingDocuments } from '../../../../../components/BookingDocuments';
 import { ConfirmDialog } from '../../../../../components/ConfirmDialog';
 import { ExtendRental } from '../../../../../components/ExtendRental';
+import { PartialRefund } from '../../../../../components/PartialRefund';
 import { RescheduleOrder } from '../../../../../components/RescheduleOrder';
 import { DiscountForm } from '../../../../../components/DiscountForm';
 import { PaymentForm, PaymentList, paymentTypesFor, type PaymentType } from '../../../../../components/Payments';
@@ -118,13 +119,16 @@ export default function BookingDetail() {
   ));
 
   // What makes up the total (Q6): items, the zone's delivery, the discount, and extras left on its account.
-  const deliveryFee = b.fulfillment === 'delivery' ? Math.max(b.total + b.discount - b.subtotal, 0) : 0;
+  // Partial refunds (damaged flowers) lowered the total; a cancelled booking's refunds are the cancellation.
+  const refunded = closedNote ? 0 : b.payments.reduce((n, p) => n + (p.type === 'payment_refund' ? p.amount : 0), 0);
+  const deliveryFee = b.fulfillment === 'delivery' ? Math.max(b.total + b.discount + refunded - b.subtotal, 0) : 0;
   const onAccount = b.extras.reduce((n, x) => n + (x.method === 'on_account' ? x.total : 0), 0);
   const balance = (
     <View style={{ gap: 6 }}>
-      {(deliveryFee > 0 || b.discount > 0) && <Row label={t.subtotal} value={formatMXN(b.subtotal)} />}
+      {(deliveryFee > 0 || b.discount > 0 || refunded > 0) && <Row label={t.subtotal} value={formatMXN(b.subtotal)} />}
       {deliveryFee > 0 && <Row label={t.deliveryFee(b.delivery_zone ?? null)} value={formatMXN(deliveryFee)} />}
       {b.discount > 0 && <Row label={t.discount.row(b.discount_type, b.discount_value)} value={`− ${formatMXN(b.discount)}`} />}
+      {refunded > 0 && <Row label={t.refunded} value={`− ${formatMXN(refunded)}`} />}
       <Row label={t.total} value={formatMXN(b.total)} />
       {onAccount > 0 && <Row label={t.onAccount} value={`+ ${formatMXN(onAccount)}`} />}
       {onAccount > 0 && <Row label={t.totalToPay} value={formatMXN(b.total + onAccount)} />}
@@ -151,7 +155,9 @@ export default function BookingDetail() {
   const rentalStep = { pending_deposit: 0, confirmed: 1, checked_out: 2, overdue: 2, returned: 3, completed: 4 }[b.status as string] ?? -1;
   const stepState = (i: number): StepState => (rentalStep > i ? 'done' : rentalStep === i ? 'current' : 'upcoming');
   const isOther = (st: Booking['status']) => st === 'cancelled' || st === 'no_show';
-  const otherActions = actions.filter(isOther);
+  // Cancelling an order already made is for the owner (bookings.OwnerOnly in Go answers 403 otherwise).
+  const ownerOnly = (st: Booking['status']) => st === 'cancelled' && (b.status === 'ready' || b.status === 'out_for_delivery') && business?.role !== 'owner';
+  const otherActions = actions.filter((st) => isOther(st) && !ownerOnly(st));
   const extrasTotal = b.extras.reduce((n, x) => n + x.total, 0);
   const extrasPaid = b.extras.reduce((n, x) => n + (x.method === 'on_account' ? 0 : x.total), 0); // on account: owed, not paid
   const paid = b.balance.paid + extrasPaid; // cancelling gives back (or keeps) the extras too
@@ -273,7 +279,9 @@ export default function BookingDetail() {
           </>
         ) : (
           <>
-            <Group label={t.total} padded><View style={{ gap: 12 }}>{balance}{payments}</View></Group>
+            <Group label={t.total} padded><View style={{ gap: 12 }}>{balance}{payments}
+              {business?.role === 'owner' && !closedNote && b.balance.paid > 0 && <PartialRefund businessId={businessId} booking={b} onDone={show} />}
+            </View></Group>
             {(b.extras.length > 0 || (has('quickSale') && editable)) && (
               <Group label={qs.extras} footer={b.extras.length ? undefined : qs.addToOrderHint} padded>
                 <View style={{ gap: 8 }}>

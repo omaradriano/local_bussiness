@@ -336,6 +336,22 @@ func (r Repo) Summary(ctx context.Context, businessID string, from, to Day, now 
 	}
 	income["products"] += sold
 	income["counter"] += counter
+	// Extras on an order's account are product and counter sales once the order is handed over (its
+	// payments brought them in): moved out of «bookings» in the period it was completed.
+	// shortcut: dated by the handover, not by when the balance was paid; split by payment if periods drift.
+	var soldOnAccount, counterOnAccount int64
+	if err := r.DB.QueryRow(ctx, `select coalesce(sum(l.quantity * l.unit_price) filter (where l.product_id is not null), 0),
+		  coalesce(sum(l.quantity * l.unit_price) filter (where l.product_id is null), 0)
+		from public.sales s join public.sale_lines l on l.sale_id = s.id join public.bookings b on b.id = s.booking_id
+		where s.business_id = $1 and s.method = 'on_account' and b.status = 'completed'
+		  and (select max(e.at) from public.booking_events e where e.booking_id = b.id and e.to_status = 'completed') >= $2
+		  and (select max(e.at) from public.booking_events e where e.booking_id = b.id and e.to_status = 'completed') < $3`,
+		businessID, start, end).Scan(&soldOnAccount, &counterOnAccount); err != nil {
+		return out, err
+	}
+	income["products"] += soldOnAccount
+	income["counter"] += counterOnAccount
+	income["bookings"] -= soldOnAccount + counterOnAccount
 	if err := r.DB.QueryRow(ctx, `select coalesce(sum(quantity * unit_cost), 0) from public.stock_purchases
 		where business_id = $1 and purchased_on between $2 and $3`, businessID, from, to).Scan(&bought); err != nil {
 		return out, err

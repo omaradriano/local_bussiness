@@ -82,3 +82,7 @@ func (r Repo) AddDocument(ctx context.Context, businessID, bookingID, name strin
 func (r Repo) RemoveDocument(ctx context.Context, businessID, bookingID, docID string) (Booking, []string, error) {
 	return RemoveDocument(ctx, r.DB, businessID, bookingID, docID)
 }
+
+func (r Repo) PartialRefund(ctx context.Context, businessID, id string, in PartialRefundInput, actor string) (Booking, error) {
+	return PartialRefund(ctx, r.DB, businessID, id, in, actor)
+}

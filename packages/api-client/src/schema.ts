@@ -1384,6 +1384,26 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/v1/b/{businessId}/bookings/{bookingId}/refund": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                businessId: components["parameters"]["BusinessId"];
+                bookingId: string;
+            };
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Devuelve parte de lo cobrado sin cancelar (solo la dueña); el total baja lo mismo y sale de los ingresos */
+        post: operations["partialRefund"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/v1/b/{businessId}/bookings/{bookingId}/schedule": {
         parameters: {
             query?: never;
@@ -5025,6 +5045,42 @@ export interface operations {
                     "application/json": components["schemas"]["Booking"];
                 };
             };
+            404: components["responses"]["Error"];
+            422: components["responses"]["Error"];
+        };
+    };
+    partialRefund: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                businessId: components["parameters"]["BusinessId"];
+                bookingId: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": {
+                    /** @description centavos */
+                    amount: number;
+                    /** @enum {string} */
+                    method: "cash" | "transfer" | "card";
+                    reason: string;
+                };
+            };
+        };
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Booking"];
+                };
+            };
+            403: components["responses"]["Error"];
             404: components["responses"]["Error"];
             422: components["responses"]["Error"];
         };
