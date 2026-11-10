@@ -46,6 +46,7 @@ type Customer struct {
 	GuarantorName  *string `json:"guarantor_name"`
 	GuarantorPhone *string `json:"guarantor_phone"`
 	Trusted        bool    `json:"trusted"`
+	Credit         bool    `json:"credit"` // may take an order with a balance and pay later (owner decides)
 	Notes          *string `json:"notes"`
 	// When the customer accepted the business's privacy notice, and which version (nil = not recorded).
 	PrivacyAcceptedAt *time.Time `json:"privacy_accepted_at"`
@@ -73,6 +74,7 @@ type Input struct {
 	GuarantorName  *string `json:"guarantor_name"`
 	GuarantorPhone *string `json:"guarantor_phone"`
 	Trusted        *bool   `json:"trusted"`
+	Credit         *bool   `json:"credit"`
 	Notes          *string `json:"notes"`
 	// true records the acceptance of the current notice; false or nil leave the record as it is
 	// (withdrawing consent is an ARCO request, not an unticked box).
@@ -117,6 +119,9 @@ func (c Customer) Apply(in Input, now time.Time) Customer {
 	}
 	if in.Trusted != nil {
 		c.Trusted = *in.Trusted
+	}
+	if in.Credit != nil {
+		c.Credit = *in.Credit
 	}
 	if in.Notes != nil {
 		c.Notes = trimmed(in.Notes)
@@ -183,11 +188,11 @@ func NewFileKey(businessID, customerID, ext string) string {
 
 type Repo struct{ DB store.DB }
 
-const cols = `id::text, name, phone, email, address, guarantor_name, guarantor_phone, trusted, notes, privacy_accepted_at, privacy_version, created_at`
+const cols = `id::text, name, phone, email, address, guarantor_name, guarantor_phone, trusted, notes, privacy_accepted_at, privacy_version, created_at, credit`
 
 func scan(row pgx.Row) (Customer, error) {
 	var c Customer
-	err := row.Scan(&c.ID, &c.Name, &c.Phone, &c.Email, &c.Address, &c.GuarantorName, &c.GuarantorPhone, &c.Trusted, &c.Notes, &c.PrivacyAcceptedAt, &c.PrivacyVersion, &c.CreatedAt)
+	err := row.Scan(&c.ID, &c.Name, &c.Phone, &c.Email, &c.Address, &c.GuarantorName, &c.GuarantorPhone, &c.Trusted, &c.Notes, &c.PrivacyAcceptedAt, &c.PrivacyVersion, &c.CreatedAt, &c.Credit)
 	if errors.Is(err, pgx.ErrNoRows) {
 		return c, ErrNotFound
 	}
@@ -270,9 +275,9 @@ func (r Repo) Get(ctx context.Context, businessID, id string) (Customer, error) 
 
 func (r Repo) Create(ctx context.Context, businessID string, c Customer) (Customer, error) {
 	created, err := scan(r.DB.QueryRow(ctx, `insert into public.customers
-		(business_id, name, phone, email, address, guarantor_name, guarantor_phone, trusted, notes, privacy_accepted_at, privacy_version)
-		values ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11) returning `+cols,
-		businessID, c.Name, c.Phone, c.Email, c.Address, c.GuarantorName, c.GuarantorPhone, c.Trusted, c.Notes, c.PrivacyAcceptedAt, c.PrivacyVersion))
+		(business_id, name, phone, email, address, guarantor_name, guarantor_phone, trusted, notes, privacy_accepted_at, privacy_version, credit)
+		values ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12) returning `+cols,
+		businessID, c.Name, c.Phone, c.Email, c.Address, c.GuarantorName, c.GuarantorPhone, c.Trusted, c.Notes, c.PrivacyAcceptedAt, c.PrivacyVersion, c.Credit))
 	created.Documents = []Document{}
 	return created, err
 }
@@ -286,9 +291,9 @@ func (r Repo) IDByPhone(ctx context.Context, businessID, phone string) (string, 
 
 func (r Repo) Update(ctx context.Context, businessID string, c Customer) (Customer, error) {
 	if _, err := scan(r.DB.QueryRow(ctx, `update public.customers set name = $3, phone = $4, email = $5, address = $6,
-		guarantor_name = $7, guarantor_phone = $8, trusted = $9, notes = $10, privacy_accepted_at = $11, privacy_version = $12, updated_at = now()
+		guarantor_name = $7, guarantor_phone = $8, trusted = $9, notes = $10, privacy_accepted_at = $11, privacy_version = $12, credit = $13, updated_at = now()
 		where business_id = $1 and id = $2 returning `+cols,
-		businessID, c.ID, c.Name, c.Phone, c.Email, c.Address, c.GuarantorName, c.GuarantorPhone, c.Trusted, c.Notes, c.PrivacyAcceptedAt, c.PrivacyVersion)); err != nil {
+		businessID, c.ID, c.Name, c.Phone, c.Email, c.Address, c.GuarantorName, c.GuarantorPhone, c.Trusted, c.Notes, c.PrivacyAcceptedAt, c.PrivacyVersion, c.Credit)); err != nil {
 		return Customer{}, err
 	}
 	return r.Get(ctx, businessID, c.ID)

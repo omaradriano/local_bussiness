@@ -66,7 +66,7 @@ export default function BookingDetail() {
     else move(to);
   }
 
-  async function move(to: Booking['status'], paid?: 'refund' | 'keep') {
+  async function move(to: Booking['status'], paid?: 'refund' | 'keep' | 'credit') {
     setAsk(null);
     setBusy(true);
     const { data, error, response } = await api.POST('/v1/b/{businessId}/bookings/{bookingId}/transition', { params: { path }, body: { to, paid } });
@@ -299,6 +299,10 @@ export default function BookingDetail() {
                   {actions.filter((st) => !isOther(st)).map((st) => (
                     <Button key={st} busy={busy} onPress={() => request(st)}>{(e.timing === 'day' ? strings.board.actions[st] : undefined) ?? t.actions[st] ?? texts.bookings.status[st]}</Button>
                   ))}
+                  {/* A customer with credit takes it owing the rest (B3); it's collected later with a normal payment. */}
+                  {actions.includes('completed') && b.balance.due > 0 && b.customer.credit && (
+                    <Button busy={busy} icon="time" onPress={() => move('completed', 'credit')}>{strings.board.onCredit(formatMXN(b.balance.due))}</Button>
+                  )}
                 </View>
               </Group>
             )}

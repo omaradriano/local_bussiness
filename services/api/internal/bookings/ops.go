@@ -85,6 +85,7 @@ func setStatus(ctx context.Context, tx pgx.Tx, businessID, id, from, to, actor, 
 const (
 	PaidRefund = "refund" // given back: a payment_refund, it comes off the income
 	PaidKeep   = "keep"   // kept as a penalty: stays as income
+	PaidCredit = "credit" // handed over owing the rest: only to a customer the owner gave credit (customers.credit)
 )
 
 func Transition(ctx context.Context, db store.DB, businessID, id, to, actor, note string) (Booking, error) {
@@ -117,6 +118,15 @@ func TransitionPaid(ctx context.Context, db store.DB, businessID, id, to, paid, 
 	switch {
 	case to == "confirmed" && bal.Paid == 0 && b.depositRequired > 0: // with part of the advance, the business may confirm it
 		return Booking{}, Invalid{"status", fmt.Sprintf("Registra al menos un pago del anticipo (%s).", mxn(b.depositRequired))}
+	case to == "completed" && bal.Due > 0 && paid == PaidCredit:
+		var credit bool
+		if err := tx.QueryRow(ctx, `select c.credit from public.bookings b join public.customers c on c.id = b.customer_id where b.id = $1`, id).Scan(&credit); err != nil {
+			return Booking{}, err
+		}
+		if !credit {
+			return Booking{}, Invalid{"status", fmt.Sprintf("Este cliente no tiene crédito; falta cobrar el saldo (%s).", mxn(bal.Due))}
+		}
+		note = joinNote(note, fmt.Sprintf("Entregado a crédito: debe %s", mxn(bal.Due)))
 	case to == "completed" && bal.Due > 0:
 		return Booking{}, Invalid{"status", fmt.Sprintf("Falta cobrar el saldo (%s).", mxn(bal.Due))}
 	case to == "out_for_delivery" && b.fulfillment != "delivery":

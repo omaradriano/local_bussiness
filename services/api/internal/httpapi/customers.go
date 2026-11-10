@@ -62,8 +62,8 @@ func mountCustomers(r chi.Router, d Deps) {
 		if !decode(w, r, &in) {
 			return
 		}
-		if in.Trusted != nil && m.Role != "owner" {
-			in.Trusted = nil // only the owner decides who is trusted
+		if m.Role != "owner" {
+			in.Trusted, in.Credit = nil, nil // only the owner decides who is trusted or buys on credit
 		}
 		c := current.Apply(in, d.now())
 		rules, err := d.Customers.Rules(r.Context(), m.BusinessID)
