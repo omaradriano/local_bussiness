@@ -466,7 +466,11 @@ func TestIntegrationDeliverOnCredit(t *testing.T) {
 		if err != nil {
 			t.Fatal(err)
 		}
-		for _, to := range []string{"in_progress", "ready"} {
+		steps := []string{"in_progress", "ready"}
+		if b.Status == "pending_deposit" { // only part of the advance: the business confirms it
+			steps = append([]string{"confirmed"}, steps...)
+		}
+		for _, to := range steps {
 			if b, err = Transition(ctx, p, f.business, b.ID, to, "", ""); err != nil {
 				t.Fatal(err)
 			}
