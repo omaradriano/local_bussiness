@@ -1042,6 +1042,45 @@ paths:
         "403": { $ref: "#/components/responses/Error" }
         "422": { $ref: "#/components/responses/Error" }
 
+  /v1/b/{businessId}/finances/cash:
+    parameters:
+      - $ref: "#/components/parameters/BusinessId"
+    get:
+      operationId: cashReport
+      summary: Corte de caja de un día por método de pago y el conteo del efectivo, si se hizo (solo dueño)
+      parameters:
+        - { name: day, in: query, schema: { type: string, format: date }, description: "Por defecto, hoy en la zona del negocio" }
+      responses:
+        "200":
+          description: OK
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/CashReport" }
+        "403": { $ref: "#/components/responses/Error" }
+        "422": { $ref: "#/components/responses/Error" }
+    post:
+      operationId: closeCash
+      summary: Registra el efectivo contado de un día contra lo esperado; contar otra vez lo reemplaza
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [counted]
+              properties:
+                day: { type: string, format: date, description: "Por defecto, hoy" }
+                counted: { type: integer, minimum: 0, description: centavos }
+                note: { type: string, maxLength: 200 }
+      responses:
+        "200":
+          description: OK
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/CashReport" }
+        "403": { $ref: "#/components/responses/Error" }
+        "422": { $ref: "#/components/responses/Error" }
+
   /v1/b/{businessId}/finances/expenses:
     parameters:
       - $ref: "#/components/parameters/BusinessId"
@@ -2419,6 +2458,38 @@ components:
       properties:
         total: { type: integer }
         parts: { type: array, items: { $ref: "#/components/schemas/FinancePart" } }
+
+    CashReport:
+      type: object
+      required: [day, lines, total, expected_cash, closing]
+      properties:
+        day: { type: string, format: date-time }
+        lines:
+          type: array
+          items:
+            type: object
+            required: [method, orders, sales, deposits, refunds, net]
+            properties:
+              method: { type: string, enum: [cash, transfer, card] }
+              orders: { type: integer, description: "Anticipos, saldos y recargos de reservas" }
+              sales: { type: integer, description: "Ventas (sin las que quedaron a cuenta de un pedido)" }
+              deposits: { type: integer, description: "Depósitos de garantía recibidos" }
+              refunds: { type: integer, description: "Devoluciones" }
+              net: { type: integer }
+        total: { type: integer }
+        expected_cash: { type: integer, description: "Lo que debe haber en caja del día (efectivo neto)" }
+        closing:
+          oneOf:
+            - type: "null"
+            - type: object
+              required: [counted, expected, difference, note, closed_by, closed_at]
+              properties:
+                counted: { type: integer }
+                expected: { type: integer }
+                difference: { type: integer, description: "contado − esperado; negativo = falta" }
+                note: { type: [string, "null"] }
+                closed_by: { type: [string, "null"] }
+                closed_at: { type: string, format: date-time }
 
     FinanceSummary:
       type: object

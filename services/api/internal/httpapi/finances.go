@@ -31,6 +31,8 @@ type FinancesRepo interface {
 	DeleteRecurring(ctx context.Context, businessID, id string) error
 	PayCharge(ctx context.Context, businessID string, r finances.Recurring, due, spentOn finances.Day, amount int64, actor string) (finances.Expense, error)
 	SkipCharge(ctx context.Context, businessID string, r finances.Recurring, due finances.Day) error
+	Cash(ctx context.Context, businessID string, day finances.Day) (finances.CashReport, error)
+	CloseCash(ctx context.Context, businessID string, day finances.Day, counted int64, note, actor string, now time.Time) (finances.CashReport, error)
 }
 
 func writeFinance(w http.ResponseWriter, r *http.Request, status int, v any, err error) {
@@ -73,6 +75,24 @@ func (d Deps) period(w http.ResponseWriter, r *http.Request) (finances.Day, fina
 	return from, to, true
 }
 
+// cashDay reads a business date; empty = today.
+func (d Deps) cashDay(w http.ResponseWriter, r *http.Request, s string) (finances.Day, bool) {
+	if s == "" {
+		m, _ := auth.MemberFrom(r.Context())
+		today, err := d.Finances.Today(r.Context(), m.BusinessID, d.now())
+		if err != nil {
+			internalError(w, r, "today", err)
+			return today, false
+		}
+		return today, true
+	}
+	day, ok := finances.ParseDay(s)
+	if !ok {
+		invalid(w, "Indica un día válido.", map[string]string{"day": "Día inválido."})
+	}
+	return day, ok
+}
+
 // mountFinances: the owner's money (expenses, purchases in installments, the team's pay, summary).
 func mountFinances(r chi.Router, d Deps) {
 	r.Route("/finances", func(r chi.Router) {
@@ -92,6 +112,30 @@ func mountFinances(r chi.Router, d Deps) {
 				}
 				s, err := d.Finances.Summary(r.Context(), m.BusinessID, from, to, d.now())
 				writeFinance(w, r, http.StatusOK, s, err)
+			}
+		})
+
+		// Corte de caja: ?day=YYYY-MM-DD (today by default) by payment method, and the cash counted.
+		r.Get("/cash", func(w http.ResponseWriter, r *http.Request) {
+			m, _ := auth.MemberFrom(r.Context())
+			if day, ok := d.cashDay(w, r, r.URL.Query().Get("day")); ok {
+				rep, err := d.Finances.Cash(r.Context(), m.BusinessID, day)
+				writeFinance(w, r, http.StatusOK, rep, err)
+			}
+		})
+		r.Post("/cash", func(w http.ResponseWriter, r *http.Request) {
+			m, _ := auth.MemberFrom(r.Context())
+			var body struct {
+				Day     string `json:"day"`
+				Counted int64  `json:"counted"`
+				Note    string `json:"note"`
+			}
+			if !decode(w, r, &body) {
+				return
+			}
+			if day, ok := d.cashDay(w, r, body.Day); ok {
+				rep, err := d.Finances.CloseCash(r.Context(), m.BusinessID, day, body.Counted, body.Note, m.UserID, d.now())
+				writeFinance(w, r, http.StatusOK, rep, err)
 			}
 		})
 
