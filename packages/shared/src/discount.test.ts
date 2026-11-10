@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { discountInput } from './discount';
+import { discountInput, discountOff } from './discount';
 
 describe('discountInput', () => {
   it('no discount', () => {
@@ -21,5 +21,15 @@ describe('discountInput', () => {
     expect(discountInput('percent', '101')).toBeUndefined();
     expect(discountInput('percent', '12.5')).toBeUndefined();
     expect(discountInput('percent', '')).toBeUndefined();
+  });
+});
+
+describe('discountOff', () => {
+  it('mirrors the API: an amount up to the total, a percent rounded to centavos', () => {
+    expect(discountOff(null, 40000)).toBe(0);
+    expect(discountOff({ type: 'amount', value: 5000 }, 40000)).toBe(5000);
+    expect(discountOff({ type: 'amount', value: 50000 }, 40000)).toBe(40000);
+    expect(discountOff({ type: 'percent', value: 25 }, 40000)).toBe(10000);
+    expect(discountOff({ type: 'percent', value: 15 }, 333)).toBe(50); // 49.95 → 50
   });
 });
