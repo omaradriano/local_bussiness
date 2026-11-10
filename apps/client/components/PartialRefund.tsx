@@ -4,7 +4,7 @@ import { useState } from 'react';
 import { ConfirmDialog } from './ConfirmDialog';
 import { api } from '../lib/api';
 import { errorText, fieldErrors } from '../lib/errors';
-import { Button, Field, Segmented, useToast } from '../ui';
+import { Button, Field, Segmented, Text, useToast } from '../ui';
 
 type Booking = components['schemas']['Booking'];
 type Method = 'cash' | 'transfer' | 'card';
@@ -17,6 +17,7 @@ export function PartialRefund({ businessId, booking, onDone }: { businessId: str
   const [amount, setAmount] = useState('');
   // Money goes back the way it came in (the API checks each method): start on the method that took the most.
   const paidIn = (m: Method) => booking.payments.reduce((n, p) => n + (p.method !== m ? 0 : p.type === 'payment_refund' ? -p.amount : p.type === 'advance' || p.type === 'balance' ? p.amount : 0), 0);
+  const methods = (['cash', 'transfer', 'card'] as const).filter((m) => paidIn(m) > 0); // only those that took money
   const [method, setMethod] = useState<Method>(() => (['cash', 'transfer', 'card'] as const).reduce((a, m) => (paidIn(m) > paidIn(a) ? m : a)));
   const max = Math.min(booking.total, booking.balance.paid); // the arrangement only: extras go back by cancelling their sale
   const [reason, setReason] = useState('');
@@ -46,7 +47,9 @@ export function PartialRefund({ businessId, booking, onDone }: { businessId: str
       <ConfirmDialog open={open} primary busy={busy} title={t.title} body={t.body(formatMXN(max))}
         confirmLabel={cents ? t.confirm(formatMXN(cents)) : t.action} onConfirm={save} onClose={close}>
         <Field label={t.amount} value={amount} onChangeText={(v) => { setAmount(v); setErrors({}); }} keyboardType="decimal-pad" error={errors.amount} />
-        <Segmented options={(['cash', 'transfer', 'card'] as const).map((m) => ({ value: m, label: strings.bookings.methods[m] }))} value={method} onChange={setMethod} />
+        {methods.length > 1
+          ? <Segmented options={methods.map((m) => ({ value: m, label: strings.bookings.methods[m] }))} value={method} onChange={setMethod} />
+          : <Text variant="footnote" color="labelSecondary">{t.via(strings.bookings.methods[method])}</Text>}
         <Field label={t.reason} placeholder={t.reasonPlaceholder} value={reason} onChangeText={(v) => { setReason(v); setErrors({}); }} maxLength={200} error={errors.reason} />
       </ConfirmDialog>
     </>

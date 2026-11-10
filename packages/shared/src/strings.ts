@@ -273,6 +273,7 @@ export const strings = {
       amountMissing: 'Escribe un monto mayor a $0.',
       confirm: (amount: string) => `Devolver ${amount}`,
       done: 'Devolución registrada.',
+      via: (method: string) => `Se devuelve en ${method.toLowerCase()}, como se cobró.`,
     },
     dayLegend: (prepHours: number) => `El número es cuántos pedidos caben ese día. En gris: el negocio cierra o ya no alcanza el tiempo de preparación (${prepHours} h).`,
     cardCount: (n: number) => `${n} de 500 caracteres`,
