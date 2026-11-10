@@ -1,10 +1,11 @@
 import type { components } from '@lb/api-client';
-import { addToCart, cartTotal, changeQuantity, formatMXN, parsePesos, saleLines, strings, todayISO, type CartLine } from '@lb/shared';
+import { addToCart, cartTotal, changeQuantity, discountInput, discountOff, formatMXN, parsePesos, saleLines, strings, todayISO, type CartLine, type DiscountMode } from '@lb/shared';
 import { Ionicons } from '@expo/vector-icons';
 import { router, Stack, useFocusEffect, useLocalSearchParams } from 'expo-router';
 import { useCallback, useState } from 'react';
 import { ActivityIndicator, Pressable, StyleSheet, View } from 'react-native';
 import { ConfirmDialog } from '../../../../../components/ConfirmDialog';
+import { DiscountFields } from '../../../../../components/DiscountForm';
 import { api } from '../../../../../lib/api';
 import { errorText, fieldErrors } from '../../../../../lib/errors';
 import { useBusiness } from '../../../../../lib/useMe';
@@ -35,6 +36,9 @@ export default function QuickSale() {
   const [name, setName] = useState('');
   const [phone, setPhone] = useState('');
   const [method, setMethod] = useState<Method>('cash');
+  const [discMode, setDiscMode] = useState<DiscountMode>('none');
+  const [discText, setDiscText] = useState('');
+  const [received, setReceived] = useState(''); // cash handed over, only to show the change (not saved)
   const [errors, setErrors] = useState<Record<string, string>>({});
   const [busy, setBusy] = useState(false);
   const [sales, setSales] = useState<Sale[] | null>(null);
@@ -74,16 +78,18 @@ export default function QuickSale() {
   }
 
   async function charge() {
+    const discount = discountInput(discMode, discText);
+    if (discount === undefined) return setErrors({ discount: strings.bookings.discount.invalid });
     setBusy(true);
     setErrors({});
     const { data, error, response } = await api.POST('/v1/b/{businessId}/sales', {
-      params: { path: { businessId } }, body: { lines: saleLines(cart), method, customer_name: name, customer_phone: phone, ...(booking ? { booking_id: booking } : {}) },
+      params: { path: { businessId } }, body: { lines: saleLines(cart), method, customer_name: name, customer_phone: phone, ...(booking ? { booking_id: booking } : {}), ...(discount ? { discount } : {}) },
     });
     setBusy(false);
     if (!data) { setErrors(fieldErrors(error)); return toast(errorText(error, response.status), 'error'); }
     toast(t.sold);
     if (booking) return router.back();
-    setCart([]); setName(''); setPhone('');
+    setCart([]); setName(''); setPhone(''); setDiscMode('none'); setDiscText(''); setReceived('');
     load();
   }
 
@@ -104,7 +110,10 @@ export default function QuickSale() {
     );
   }
   if (!business || !items) return <ActivityIndicator style={{ marginTop: 24 }} />;
-  const total = cartTotal(cart);
+  const subtotal = cartTotal(cart);
+  const off = discountOff(discountInput(discMode, discText), subtotal); // shown before charging; the API applies it
+  const total = subtotal - off;
+  const cash = method === 'cash' ? parsePesos(received) : null;
   const state = (i: number): StepState => (i === 0 ? (cart.length ? 'done' : 'current') : cart.length ? 'current' : 'upcoming');
 
   return (
@@ -175,7 +184,17 @@ export default function QuickSale() {
         <Step inline n={booking ? 2 : 3} title={t.pay.title} description={t.pay.description} state={state(2)}>
           {/* An order's extras can also go on its balance, charged at delivery. */}
           <Segmented options={(['cash', 'transfer', 'card', ...(booking ? ['on_account'] : [])] as Method[]).map((m) => ({ value: m, label: m === 'on_account' ? t.onAccount : strings.bookings.methods[m] }))} value={method} onChange={setMethod} />
+          <DiscountFields mode={discMode} text={discText} onMode={setDiscMode} onText={setDiscText}
+            error={errors.discount ?? (discountInput(discMode, discText) === undefined && discText.trim() ? strings.bookings.discount.invalid : undefined)} />
+          {off > 0 && <Row label={strings.bookings.subtotal} value={formatMXN(subtotal)} />}
+          {off > 0 && <Row label={t.discountRow} value={`− ${formatMXN(off)}`} />}
           <Row label={strings.products.total} value={formatMXN(total)} strong />
+          {method === 'cash' && cart.length > 0 && (
+            <>
+              <Field label={t.received} value={received} onChangeText={setReceived} keyboardType="decimal-pad" />
+              {cash !== null && cash > 0 && <Row label={cash >= total ? t.change : t.missingCash} value={formatMXN(Math.abs(cash - total))} strong />}
+            </>
+          )}
           <Button variant="primary" icon="checkmark-circle" busy={busy} disabled={!cart.length} onPress={charge}>{method === 'on_account' ? t.addOnAccount(formatMXN(total)) : t.charge(formatMXN(total))}</Button>
         </Step>
 

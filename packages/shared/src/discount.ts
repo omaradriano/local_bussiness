@@ -17,3 +17,11 @@ export function discountInput(mode: DiscountMode, text: string): DiscountInput |
   if (!/^\d{1,3}$/.test(s) || Number(s) > 100) return undefined;
   return Number(s) === 0 ? null : { type: 'percent', value: Number(s) };
 }
+
+/** What a discount takes off a total, for showing it before charging (same rule as the API's Discount.Of). */
+export function discountOff(d: DiscountInput | null | undefined, total: number): number {
+  if (!d) return 0;
+  const off = d.type === 'amount' ? d.value : Math.floor((total * d.value + 50) / 100);
+  return Math.min(Math.max(off, 0), Math.max(total, 0));
+}
+

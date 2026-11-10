@@ -1004,6 +1004,7 @@ paths:
                 booking_id: { type: string, format: uuid }
                 customer_name: { type: string, maxLength: 80, description: "Cliente casual (opcional, sin ficha)" }
                 customer_phone: { type: string }
+                discount: { $ref: "#/components/schemas/Discount" }
       responses:
         "201":
           description: Creada
@@ -2297,13 +2298,14 @@ components:
 
     Sale:
       type: object
-      required: [id, booking_id, sold_at, method, total, customer_name, customer_phone, lines, locked]
+      required: [id, booking_id, sold_at, method, total, discount, customer_name, customer_phone, lines, locked]
       properties:
         id: { type: string, format: uuid }
         booking_id: { type: [string, "null"] }
         sold_at: { type: string, format: date-time }
         method: { type: string, enum: [cash, transfer, card, on_account], description: "on_account: extras de un pedido que se cobran con él (al entregar)" }
-        total: { type: integer }
+        total: { type: integer, description: "Lo cobrado, ya con el descuento" }
+        discount: { type: integer, description: "Lo que se quitó del subtotal (centavos)" }
         customer_name: { type: [string, "null"] }
         customer_phone: { type: [string, "null"] }
         locked: { type: boolean, description: "Extra de un pedido ya entregado o cancelado: no se puede borrar" }

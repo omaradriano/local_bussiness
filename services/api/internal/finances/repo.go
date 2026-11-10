@@ -282,6 +282,18 @@ func side(m map[string]int64) Side {
 	return s
 }
 
+// saleParts: what the business's sales matching `where` brought in, split into products (lines with
+// stock) and counter (the rest). A sale's discount comes off its lines in proportion; the counter part
+// takes the rounding, so both always add up to what was charged.
+func saleParts(where string) string {
+	return `select coalesce(round(sum(prod * total::numeric / nullif(sub, 0))), 0)::bigint,
+		  coalesce(sum(total), 0) - coalesce(round(sum(prod * total::numeric / nullif(sub, 0))), 0)::bigint
+		from (select s.total, sum(l.quantity * l.unit_price) as sub,
+		        coalesce(sum(l.quantity * l.unit_price) filter (where l.product_id is not null), 0) as prod
+		      from public.sales s join public.sale_lines l on l.sale_id = s.id
+		      where s.business_id = $1 and ` + where + ` group by s.id) x`
+}
+
 // Summary of [from, to] (business dates, both included). Fixed pay counts only up to today (the
 // business's local date at now): no future salary.
 func (r Repo) Summary(ctx context.Context, businessID string, from, to Day, now time.Time) (Summary, error) {
@@ -327,10 +339,7 @@ func (r Repo) Summary(ctx context.Context, businessID string, from, to Day, now 
 	// (a florist's arrangements sold right there aren't merchandise).
 	var sold, counter, bought int64
 	// Extras on an order's account aren't money yet: they come in as the order's payments.
-	if err := r.DB.QueryRow(ctx, `select coalesce(sum(l.quantity * l.unit_price) filter (where l.product_id is not null), 0),
-		  coalesce(sum(l.quantity * l.unit_price) filter (where l.product_id is null), 0)
-		from public.sales s join public.sale_lines l on l.sale_id = s.id
-		where s.business_id = $1 and s.sold_at >= $2 and s.sold_at < $3 and s.method <> 'on_account'`,
+	if err := r.DB.QueryRow(ctx, saleParts(`s.sold_at >= $2 and s.sold_at < $3 and s.method <> 'on_account'`),
 		businessID, start, end).Scan(&sold, &counter); err != nil {
 		return out, err
 	}
@@ -340,12 +349,9 @@ func (r Repo) Summary(ctx context.Context, businessID string, from, to Day, now 
 	// payments brought them in): moved out of «bookings» in the period it was completed.
 	// shortcut: dated by the handover, not by when the balance was paid; split by payment if periods drift.
 	var soldOnAccount, counterOnAccount int64
-	if err := r.DB.QueryRow(ctx, `select coalesce(sum(l.quantity * l.unit_price) filter (where l.product_id is not null), 0),
-		  coalesce(sum(l.quantity * l.unit_price) filter (where l.product_id is null), 0)
-		from public.sales s join public.sale_lines l on l.sale_id = s.id join public.bookings b on b.id = s.booking_id
-		where s.business_id = $1 and s.method = 'on_account' and b.status = 'completed'
+	if err := r.DB.QueryRow(ctx, saleParts(`s.method = 'on_account' and exists (select 1 from public.bookings b where b.id = s.booking_id and b.status = 'completed'
 		  and (select max(e.at) from public.booking_events e where e.booking_id = b.id and e.to_status = 'completed') >= $2
-		  and (select max(e.at) from public.booking_events e where e.booking_id = b.id and e.to_status = 'completed') < $3`,
+		  and (select max(e.at) from public.booking_events e where e.booking_id = b.id and e.to_status = 'completed') < $3)`),
 		businessID, start, end).Scan(&soldOnAccount, &counterOnAccount); err != nil {
 		return out, err
 	}

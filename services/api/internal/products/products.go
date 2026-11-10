@@ -14,6 +14,7 @@ import (
 
 	"github.com/jackc/pgx/v5"
 
+	"github.com/omaradriano/local_bussiness/services/api/internal/bookings"
 	"github.com/omaradriano/local_bussiness/services/api/internal/phone"
 	"github.com/omaradriano/local_bussiness/services/api/internal/store"
 )
@@ -231,7 +232,8 @@ type Sale struct {
 	BookingID     *string   `json:"booking_id"`
 	SoldAt        time.Time `json:"sold_at"`
 	Method        string    `json:"method"`
-	Total         int64     `json:"total"`
+	Total         int64     `json:"total"`    // charged, after the discount
+	Discount      int64     `json:"discount"` // taken off the lines' subtotal
 	CustomerName  *string   `json:"customer_name"`
 	CustomerPhone *string   `json:"customer_phone"`
 	Lines         []Line    `json:"lines"`
@@ -357,9 +359,13 @@ type SaleInput struct {
 	BookingID     string      `json:"booking_id"`
 	CustomerName  string      `json:"customer_name"`  // optional: a walk-in nobody registers
 	CustomerPhone string      `json:"customer_phone"` // optional
+	Discount      Discount    `json:"discount"`       // off the whole sale (amount or percent)
 	Retail        bool        `json:"-"`              // productSales
 	Quick         bool        `json:"-"`              // quickSale
 }
+
+// Discount works like an order's: a fixed amount or a whole percent of the subtotal.
+type Discount = bookings.Discount
 
 // Sell records a sale and takes the stock of its products out, all or nothing.
 func (r Repo) Sell(ctx context.Context, businessID string, in SaleInput, actor string, now time.Time) (Sale, error) {
@@ -425,6 +431,14 @@ func (r Repo) Sell(ctx context.Context, businessID string, in SaleInput, actor s
 	if err != nil {
 		return Sale{}, err
 	}
+	if err := in.Discount.Validate(); err != nil {
+		return Sale{}, discountInvalid(err)
+	}
+	if err := in.Discount.Exceeds(total); err != nil {
+		return Sale{}, discountInvalid(err)
+	}
+	off := in.Discount.Of(total)
+	total -= off
 	if in.Method == OnAccount {
 		var open bool
 		if err := tx.QueryRow(ctx, `select status not in ('completed', 'cancelled', 'expired', 'no_show') from public.bookings where business_id = $1 and id::text = $2`,
@@ -432,7 +446,7 @@ func (r Repo) Sell(ctx context.Context, businessID string, in SaleInput, actor s
 			return Sale{}, Invalid{"method": "Ese pedido ya no está activo; cobra los productos ahora."}
 		}
 	}
-	sale := Sale{Method: in.Method, Total: total, Lines: lines, SoldAt: now}
+	sale := Sale{Method: in.Method, Total: total, Discount: off, Lines: lines, SoldAt: now}
 	if in.BookingID != "" {
 		sale.BookingID = &in.BookingID
 	}
@@ -442,9 +456,9 @@ func (r Repo) Sell(ctx context.Context, businessID string, in SaleInput, actor s
 	if phoneNumber != "" {
 		sale.CustomerPhone = &phoneNumber
 	}
-	if err := tx.QueryRow(ctx, `insert into public.sales (business_id, booking_id, sold_at, method, total, cost_total, created_by, customer_name, customer_phone)
-		values ($1, nullif($2, '')::uuid, $3, $4, $5, $6, nullif($7, '')::uuid, nullif($8, ''), nullif($9, '')) returning id::text`,
-		businessID, in.BookingID, now, in.Method, total, cost, actor, name, phoneNumber).Scan(&sale.ID); err != nil {
+	if err := tx.QueryRow(ctx, `insert into public.sales (business_id, booking_id, sold_at, method, total, cost_total, created_by, customer_name, customer_phone, discount)
+		values ($1, nullif($2, '')::uuid, $3, $4, $5, $6, nullif($7, '')::uuid, nullif($8, ''), nullif($9, ''), $10) returning id::text`,
+		businessID, in.BookingID, now, in.Method, total, cost, actor, name, phoneNumber, off).Scan(&sale.ID); err != nil {
 		return Sale{}, err
 	}
 	for _, l := range lines {
@@ -460,6 +474,14 @@ func (r Repo) Sell(ctx context.Context, businessID string, in SaleInput, actor s
 		}
 	}
 	return sale, tx.Commit(ctx)
+}
+
+func discountInvalid(err error) error {
+	var bad bookings.Invalid
+	if errors.As(err, &bad) {
+		return Invalid{"discount": bad.Message}
+	}
+	return err
 }
 
 // closedOrder: statuses after which an order's extras are settled (handed over, or cancelled with its own refund).
@@ -506,7 +528,7 @@ func (r Repo) CancelSale(ctx context.Context, businessID, saleID string) error {
 
 // Sales of [start, end), newest first, with their lines.
 func (r Repo) Sales(ctx context.Context, businessID string, start, end time.Time) ([]Sale, error) {
-	rows, err := r.DB.Query(ctx, `select s.id::text, s.booking_id::text, s.sold_at, s.method, s.total, s.customer_name, s.customer_phone,
+	rows, err := r.DB.Query(ctx, `select s.id::text, s.booking_id::text, s.sold_at, s.method, s.total, s.discount, s.customer_name, s.customer_phone,
 		coalesce(jsonb_agg(jsonb_build_object('product_id', l.product_id, 'item_id', l.item_id, 'name', coalesce(l.name, p.name),
 		         'quantity', l.quantity, 'unit_price', l.unit_price) order by coalesce(l.name, p.name)) filter (where l.id is not null), '[]'),
 		exists (select 1 from public.bookings b where b.id = s.booking_id and b.status = any($4))
@@ -520,7 +542,7 @@ func (r Repo) Sales(ctx context.Context, businessID string, start, end time.Time
 	out := []Sale{}
 	for rows.Next() {
 		var s Sale
-		if err := rows.Scan(&s.ID, &s.BookingID, &s.SoldAt, &s.Method, &s.Total, &s.CustomerName, &s.CustomerPhone, &s.Lines, &s.Locked); err != nil {
+		if err := rows.Scan(&s.ID, &s.BookingID, &s.SoldAt, &s.Method, &s.Total, &s.Discount, &s.CustomerName, &s.CustomerPhone, &s.Lines, &s.Locked); err != nil {
 			return nil, err
 		}
 		out = append(out, s)
@@ -553,7 +575,9 @@ type Stats struct {
 // StatsFor [start, end) (instants) and the purchases between the local dates [from, to].
 func (r Repo) StatsFor(ctx context.Context, businessID string, start, end, from, to time.Time) (Stats, error) {
 	st := Stats{ByProduct: []ProductStat{}, LowStock: []Product{}}
-	rows, err := r.DB.Query(ctx, `select p.id::text, p.name, sum(l.quantity)::int, sum(l.quantity * l.unit_price), sum(l.quantity * l.unit_cost)
+	// A sale's discount comes off each line in proportion (total / subtotal).
+	rows, err := r.DB.Query(ctx, `select p.id::text, p.name, sum(l.quantity)::int,
+		coalesce(round(sum(l.quantity * l.unit_price * s.total::numeric / nullif(s.total + s.discount, 0))), 0)::bigint, sum(l.quantity * l.unit_cost)
 		from public.sale_lines l join public.sales s on s.id = l.sale_id join public.retail_products p on p.id = l.product_id
 		where s.business_id = $1 and s.sold_at >= $2 and s.sold_at < $3
 		group by p.id, p.name order by 4 desc, 2`, businessID, start, end)

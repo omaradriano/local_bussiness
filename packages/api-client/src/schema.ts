@@ -1719,7 +1719,10 @@ export interface components {
              * @enum {string}
              */
             method: "cash" | "transfer" | "card" | "on_account";
+            /** @description Lo cobrado, ya con el descuento */
             total: number;
+            /** @description Lo que se quitó del subtotal (centavos) */
+            discount: number;
             customer_name: string | null;
             customer_phone: string | null;
             /** @description Extra de un pedido ya entregado o cancelado: no se puede borrar */
@@ -3778,6 +3781,7 @@ export interface operations {
                     /** @description Cliente casual (opcional, sin ficha) */
                     customer_name?: string;
                     customer_phone?: string;
+                    discount?: components["schemas"]["Discount"];
                 };
             };
         };

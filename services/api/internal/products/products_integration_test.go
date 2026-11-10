@@ -153,3 +153,59 @@ func TestIntegrationProductsFlow(t *testing.T) {
 		}
 	}
 }
+
+func TestIntegrationSaleDiscount(t *testing.T) {
+	url := os.Getenv("TEST_DATABASE_URL")
+	if url == "" {
+		t.Skip("TEST_DATABASE_URL not set")
+	}
+	ctx := context.Background()
+	conn, err := pgx.Connect(ctx, url)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer conn.Close(ctx)
+	tx, err := conn.Begin(ctx)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer tx.Rollback(ctx)
+	const biz = "00000000-0000-0000-0000-0000000000d3"
+	if _, err := tx.Exec(ctx, `insert into public.businesses (id, slug, name, vertical) values ($1, 'prod-disc', 'A', 'flowers')`, biz); err != nil {
+		t.Fatal(err)
+	}
+	r := Repo{DB: tx}
+	day := func(s string) time.Time { d, _ := time.Parse(time.DateOnly, s); return d }
+	now := time.Date(2026, 11, 10, 18, 0, 0, 0, time.UTC)
+	cost := int64(5000)
+	choco, err := r.Create(ctx, biz, Product{Name: "Chocolates", Price: 15000, Cost: &cost, Stock: 5})
+	if err != nil {
+		t.Fatal(err)
+	}
+	free := int64(10000)
+	lines := []LineInput{{ProductID: choco.ID, Quantity: 2}, {Name: "Ramo", Price: &free, Quantity: 1}}
+	var bad Invalid
+	if _, err := r.Sell(ctx, biz, SaleInput{Lines: lines, Method: "cash", Retail: true, Quick: true,
+		Discount: Discount{Type: "amount", Value: 40001}}, "", now); !errors.As(err, &bad) || bad["discount"] == "" {
+		t.Fatalf("discount over the total: %v", err)
+	}
+	// 2 × 150 + 100 = 400, 25 % off: 300 charged, 100 off.
+	sale, err := r.Sell(ctx, biz, SaleInput{Lines: lines, Method: "cash", Retail: true, Quick: true, Discount: Discount{Type: "percent", Value: 25}}, "", now)
+	if err != nil || sale.Total != 30000 || sale.Discount != 10000 {
+		t.Fatalf("sale with discount: %+v %v", sale, err)
+	}
+	// The discount comes off each part in proportion: products 300 → 225, counter 100 → 75.
+	start, end, _ := r.Bounds(ctx, biz, day("2026-11-01"), day("2026-11-30"))
+	if st, err := r.StatsFor(ctx, biz, start, end, day("2026-11-01"), day("2026-11-30")); err != nil || st.Revenue != 22500 {
+		t.Fatalf("stats with discount: %+v %v", st, err)
+	}
+	s, err := finances.Repo{DB: tx}.Summary(ctx, biz, day("2026-11-01"), day("2026-11-30"), now)
+	if err != nil || s.Income.Total != 30000 {
+		t.Fatalf("income with discount: %+v %v", s.Income, err)
+	}
+	for _, p := range s.Income.Parts {
+		if (p.Key == "products" && p.Amount != 22500) || (p.Key == "counter" && p.Amount != 7500) {
+			t.Fatalf("parts: %+v", s.Income.Parts)
+		}
+	}
+}
