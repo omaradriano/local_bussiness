@@ -185,3 +185,60 @@ func TestIntegrationSummary(t *testing.T) {
 		t.Fatalf("extras on account: %+v %v", s.Income, err)
 	}
 }
+
+func TestIntegrationCashClosing(t *testing.T) {
+	url := os.Getenv("TEST_DATABASE_URL")
+	if url == "" {
+		t.Skip("TEST_DATABASE_URL not set")
+	}
+	ctx := context.Background()
+	conn, err := pgx.Connect(ctx, url)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer conn.Close(ctx)
+	tx, err := conn.Begin(ctx)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer tx.Rollback(ctx)
+	const biz, cust, booking = "00000000-0000-0000-0000-0000000000f1", "00000000-0000-0000-0000-0000000000f4", "00000000-0000-0000-0000-0000000000f5"
+	exec := func(q string, args ...any) {
+		t.Helper()
+		if _, err := tx.Exec(ctx, q, args...); err != nil {
+			t.Fatal(err)
+		}
+	}
+	// Chihuahua (UTC-6). On 10 Nov local: an advance of 500 in cash, 300 by card, a refund of 100 in
+	// cash, a quick sale of 120 in cash and one left on the order's account (not money yet).
+	// A cash payment at 23:30 local on 9 Nov (05:30Z on the 10th) belongs to the 9th.
+	exec(`insert into public.businesses (id, slug, name, vertical) values ($1, 'cash-a', 'A', 'flowers')`, biz)
+	exec(`insert into public.customers (id, business_id, name, phone) values ($1, $2, 'Ana', '+526140000001')`, cust, biz)
+	exec(`insert into public.bookings (id, business_id, customer_id, kind, status, starts_at, total, source)
+		values ($1, $2, $3, 'product', 'confirmed', '2026-11-12T17:00:00Z', 80000, 'admin')`, booking, biz, cust)
+	exec(`insert into public.payments (business_id, booking_id, type, method, amount, paid_at) values
+		($1, $2, 'advance', 'cash', 50000, '2026-11-10T16:00:00Z'),
+		($1, $2, 'balance', 'card', 30000, '2026-11-10T17:00:00Z'),
+		($1, $2, 'payment_refund', 'cash', 10000, '2026-11-10T18:00:00Z'),
+		($1, $2, 'advance', 'cash', 99900, '2026-11-10T05:30:00Z')`, biz, booking)
+	exec(`insert into public.sales (business_id, sold_at, method, total, cost_total) values ($1, '2026-11-10T19:00:00Z', 'cash', 12000, 0)`, biz)
+	exec(`insert into public.sales (business_id, booking_id, sold_at, method, total, cost_total) values ($1, $2, '2026-11-10T19:00:00Z', 'on_account', 7000, 0)`, biz, booking)
+
+	r := Repo{DB: tx}
+	rep, err := r.Cash(ctx, biz, d("2026-11-10"))
+	if err != nil || rep.ExpectedCash != 50000+12000-10000 || rep.Total != 52000+30000 || len(rep.Lines) != 2 || rep.Closing != nil {
+		t.Fatalf("report: %+v %v", rep, err)
+	}
+	now := time.Date(2026, 11, 11, 3, 0, 0, 0, time.UTC) // 21:00 local on the 10th
+	if _, err := r.CloseCash(ctx, biz, d("2026-11-11"), 0, "", "", now); err == nil {
+		t.Fatal("a day that hasn't come can't be closed")
+	}
+	// 500 counted against 520 expected: 20 missing. Counting again replaces it.
+	if _, err := r.CloseCash(ctx, biz, d("2026-11-10"), 50000, "", "", now); err != nil {
+		t.Fatal(err)
+	}
+	rep, err = r.CloseCash(ctx, biz, d("2026-11-10"), 51000, " faltó cambio ", "", now)
+	if err != nil || rep.Closing == nil || rep.Closing.Counted != 51000 || rep.Closing.Expected != 52000 || rep.Closing.Difference != -1000 || *rep.Closing.Note != "faltó cambio" {
+		t.Fatalf("closing: %+v %v", rep.Closing, err)
+	}
+}

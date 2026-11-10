@@ -111,6 +111,7 @@ export default function Finances() {
           )}
 
           <Group separatorInset={58}>
+            <Cell icon="cash" tint={ui.success} label={t.sections.cash} sublabel={t.sectionHints.cash} onPress={go('cash')} />
             <Cell icon="receipt" tint={ui.warning} label={t.sections.expenses} sublabel={t.sectionHints.expenses} onPress={go('expenses')} />
             {can('payroll') && has('staff') && <Cell icon="people" tint={ui.indigo} label={t.sections.pay} sublabel={t.sectionHints.pay} onPress={go('pay')} />}
           </Group>

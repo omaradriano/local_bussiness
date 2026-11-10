@@ -1163,6 +1163,16 @@ type fakeFinances struct{}
 func (fakeFinances) Today(context.Context, string, time.Time) (finances.Day, error) {
 	return time.Date(2026, 11, 15, 0, 0, 0, 0, time.UTC), nil
 }
+func (fakeFinances) Cash(_ context.Context, _ string, day finances.Day) (finances.CashReport, error) {
+	return finances.CashReport{Day: day, Lines: []finances.CashLine{}, ExpectedCash: 52000}, nil
+}
+func (fakeFinances) CloseCash(_ context.Context, _ string, day finances.Day, counted int64, _, _ string, _ time.Time) (finances.CashReport, error) {
+	if counted < 0 {
+		return finances.CashReport{}, finances.Invalid{"counted": "Escribe el efectivo contado."}
+	}
+	return finances.CashReport{Day: day, Lines: []finances.CashLine{}, ExpectedCash: 52000,
+		Closing: &finances.CashClosing{Counted: counted, Expected: 52000, Difference: counted - 52000}}, nil
+}
 func (fakeFinances) Summary(_ context.Context, _ string, from, to finances.Day, _ time.Time) (finances.Summary, error) {
 	return finances.Summary{From: from, To: to, Profit: 1000}, nil
 }
@@ -1226,6 +1236,12 @@ func TestFinanceRoutes(t *testing.T) {
 		want                            string
 	}{
 		{"empleado no ve finanzas", http.MethodGet, base + "/summary", "staff", "", http.StatusForbidden, `"forbidden"`},
+		{"empleado no ve el corte", http.MethodGet, base + "/cash", "staff", "", http.StatusForbidden, `"forbidden"`},
+		{"corte de hoy por defecto", http.MethodGet, base + "/cash", "ok", "", http.StatusOK, `"day":"2026-11-15T00:00:00Z"`},
+		{"corte de un día", http.MethodGet, base + "/cash?day=2026-11-10", "ok", "", http.StatusOK, `"expected_cash":52000`},
+		{"corte con día inválido", http.MethodGet, base + "/cash?day=ayer", "ok", "", http.StatusUnprocessableEntity, `"day"`},
+		{"contar la caja", http.MethodPost, base + "/cash", "ok", `{"day":"2026-11-10","counted":51000}`, http.StatusOK, `"difference":-1000`},
+		{"conteo negativo", http.MethodPost, base + "/cash", "ok", `{"day":"2026-11-10","counted":-1}`, http.StatusUnprocessableEntity, `"counted"`},
 		{"mes actual por defecto", http.MethodGet, base + "/summary", "ok", "", http.StatusOK, `"from":"2026-11-01T00:00:00Z","to":"2026-11-30T00:00:00Z"`},
 		{"rango", http.MethodGet, base + "/summary?from=2026-01-01&to=2026-12-31", "ok", "", http.StatusOK, `"profit":1000`},
 		{"rango al revés", http.MethodGet, base + "/summary?from=2026-12-01&to=2026-01-01", "ok", "", http.StatusUnprocessableEntity, `"from"`},

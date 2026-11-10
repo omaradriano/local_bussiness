@@ -745,6 +745,26 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/v1/b/{businessId}/finances/cash": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                businessId: components["parameters"]["BusinessId"];
+            };
+            cookie?: never;
+        };
+        /** Corte de caja de un día por método de pago y el conteo del efectivo, si se hizo (solo dueño) */
+        get: operations["cashReport"];
+        put?: never;
+        /** Registra el efectivo contado de un día contra lo esperado; contar otra vez lo reemplaza */
+        post: operations["closeCash"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/v1/b/{businessId}/finances/expenses": {
         parameters: {
             query?: never;
@@ -1827,6 +1847,36 @@ export interface components {
         FinanceSide: {
             total: number;
             parts: components["schemas"]["FinancePart"][];
+        };
+        CashReport: {
+            /** Format: date-time */
+            day: string;
+            lines: {
+                /** @enum {string} */
+                method: "cash" | "transfer" | "card";
+                /** @description Anticipos, saldos y recargos de reservas */
+                orders: number;
+                /** @description Ventas (sin las que quedaron a cuenta de un pedido) */
+                sales: number;
+                /** @description Depósitos de garantía recibidos */
+                deposits: number;
+                /** @description Devoluciones */
+                refunds: number;
+                net: number;
+            }[];
+            total: number;
+            /** @description Lo que debe haber en caja del día (efectivo neto) */
+            expected_cash: number;
+            closing: null | {
+                counted: number;
+                expected: number;
+                /** @description contado − esperado; negativo = falta */
+                difference: number;
+                note: string | null;
+                closed_by: string | null;
+                /** Format: date-time */
+                closed_at: string;
+            };
         };
         FinanceSummary: {
             from: string;
@@ -3842,6 +3892,70 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["FinanceSummary"];
+                };
+            };
+            403: components["responses"]["Error"];
+            422: components["responses"]["Error"];
+        };
+    };
+    cashReport: {
+        parameters: {
+            query?: {
+                /** @description Por defecto, hoy en la zona del negocio */
+                day?: string;
+            };
+            header?: never;
+            path: {
+                businessId: components["parameters"]["BusinessId"];
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["CashReport"];
+                };
+            };
+            403: components["responses"]["Error"];
+            422: components["responses"]["Error"];
+        };
+    };
+    closeCash: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                businessId: components["parameters"]["BusinessId"];
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": {
+                    /**
+                     * Format: date
+                     * @description Por defecto, hoy
+                     */
+                    day?: string;
+                    /** @description centavos */
+                    counted: number;
+                    note?: string;
+                };
+            };
+        };
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["CashReport"];
                 };
             };
             403: components["responses"]["Error"];
