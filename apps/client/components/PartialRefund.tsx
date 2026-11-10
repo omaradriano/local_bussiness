@@ -15,7 +15,10 @@ export function PartialRefund({ businessId, booking, onDone }: { businessId: str
   const toast = useToast();
   const [open, setOpen] = useState(false);
   const [amount, setAmount] = useState('');
-  const [method, setMethod] = useState<Method>('cash');
+  // Money goes back the way it came in (the API checks each method): start on the method that took the most.
+  const paidIn = (m: Method) => booking.payments.reduce((n, p) => n + (p.method !== m ? 0 : p.type === 'payment_refund' ? -p.amount : p.type === 'advance' || p.type === 'balance' ? p.amount : 0), 0);
+  const [method, setMethod] = useState<Method>(() => (['cash', 'transfer', 'card'] as const).reduce((a, m) => (paidIn(m) > paidIn(a) ? m : a)));
+  const max = Math.min(booking.total, booking.balance.paid); // the arrangement only: extras go back by cancelling their sale
   const [reason, setReason] = useState('');
   const [errors, setErrors] = useState<Record<string, string>>({});
   const [busy, setBusy] = useState(false);
@@ -40,7 +43,7 @@ export function PartialRefund({ businessId, booking, onDone }: { businessId: str
   return (
     <>
       <Button icon="arrow-undo" onPress={() => setOpen(true)}>{t.action}</Button>
-      <ConfirmDialog open={open} primary busy={busy} title={t.title} body={t.body(formatMXN(booking.balance.paid))}
+      <ConfirmDialog open={open} primary busy={busy} title={t.title} body={t.body(formatMXN(max))}
         confirmLabel={cents ? t.confirm(formatMXN(cents)) : t.action} onConfirm={save} onClose={close}>
         <Field label={t.amount} value={amount} onChangeText={(v) => { setAmount(v); setErrors({}); }} keyboardType="decimal-pad" error={errors.amount} />
         <Segmented options={(['cash', 'transfer', 'card'] as const).map((m) => ({ value: m, label: strings.bookings.methods[m] }))} value={method} onChange={setMethod} />

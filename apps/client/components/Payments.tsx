@@ -127,7 +127,7 @@ export function PaymentList({ businessId, booking }: { businessId: string; booki
           <View style={{ flexDirection: 'row', alignItems: 'baseline', gap: 8 }}>
             <View style={{ flex: 1 }}>
               <Text>{t.paymentTypes[p.type]} · {t.methods[p.method]}</Text>
-              <Text variant="footnote" color="labelSecondary">{when(p.paid_at)}</Text>
+              <Text variant="footnote" color="labelSecondary">{p.type === 'payment_refund' && p.notes ? `${when(p.paid_at)} · ${p.notes}` : when(p.paid_at)}</Text>
             </View>
             <Text style={{ fontVariant: ['tabular-nums'], color: p.type === 'refund' || p.type === 'payment_refund' ? ui.danger : ui.label }}>
               {p.type === 'refund' || p.type === 'payment_refund' ? '−' : ''}{formatMXN(p.amount)}

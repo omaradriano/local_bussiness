@@ -738,7 +738,7 @@ func (fakeBookings) PartialRefund(_ context.Context, _, id string, in bookings.P
 	if id != bookingID {
 		return bookings.Booking{}, bookings.ErrNotFound
 	}
-	if err := in.Validate(75000, 75000); err != nil {
+	if err := in.Validate(75000, []bookings.Payment{{Method: "cash", Amount: 75000}}); err != nil {
 		return bookings.Booking{}, err
 	}
 	return bookings.Booking{ID: id, Total: 75000 - in.Amount}, nil

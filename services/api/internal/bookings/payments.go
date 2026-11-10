@@ -60,6 +60,19 @@ func PaidByMethod(payments []Payment) []Payment {
 			by[p.Method] -= p.Amount
 		}
 	}
+	// A method given back more than it took (a partial refund in another method) comes off the others,
+	// so the sum is always what was paid.
+	for _, m := range paymentMethods {
+		for _, o := range paymentMethods {
+			if by[m] >= 0 {
+				break
+			}
+			if take := min(by[o], -by[m]); o != m && take > 0 {
+				by[o] -= take
+				by[m] += take
+			}
+		}
+	}
 	var out []Payment
 	for _, m := range paymentMethods {
 		if by[m] > 0 {
