@@ -13,6 +13,8 @@ describe('agendaGroups', () => {
     { id: 'e', kind: 'rental' as const, status: 'confirmed', starts_at: iso(2, 9), ends_at: iso(4, 9) },
     { id: 'f', kind: 'rental' as const, status: 'checked_out', starts_at: iso(1, 9), ends_at: iso(2, 17) },
     { id: 'g', kind: 'rental' as const, status: 'overdue', starts_at: iso(1, 9), ends_at: iso(1, 17) },
+    { id: 'h', kind: 'product' as const, status: 'ready', starts_at: iso(1, 12), ends_at: null }, // yesterday, never handed over
+    { id: 'i', kind: 'product' as const, status: 'pending_deposit', starts_at: iso(1, 12), ends_at: null },
   ];
   const g = agendaGroups(rows, today);
   const ids = (k: keyof typeof g) => g[k].map((r) => r.id);
@@ -27,5 +29,9 @@ describe('agendaGroups', () => {
     expect(ids('overdue')).toEqual(['g']);
     expect(ids('comingBack')).not.toContain('g');
   });
-  it('flags holds awaiting the advance', () => expect(ids('awaitingDeposit')).toEqual(['b']));
+  it('flags holds awaiting the advance', () => expect(ids('awaitingDeposit')).toEqual(['i', 'b']));
+  it('keeps orders of past days not handed over as late', () => {
+    expect(ids('late')).toEqual(['h']);
+    expect(ids('deliveries')).not.toContain('h');
+  });
 });

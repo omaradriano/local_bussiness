@@ -4,6 +4,7 @@ import { Ionicons } from '@expo/vector-icons';
 import { router, Stack, useFocusEffect, useLocalSearchParams } from 'expo-router';
 import { useCallback, useState } from 'react';
 import { ActivityIndicator, Pressable, StyleSheet, View } from 'react-native';
+import { ConfirmDialog } from '../../../../../components/ConfirmDialog';
 import { Donut } from '../../../../../components/Donut';
 import { currentMonth, PeriodPicker, type Period } from '../../../../../components/PeriodPicker';
 import { api } from '../../../../../lib/api';
@@ -28,6 +29,7 @@ function Sell({ businessId, isOwner, products, reload }: { businessId: string; i
   const [method, setMethod] = useState<Method>('cash');
   const [busy, setBusy] = useState(false);
   const [sales, setSales] = useState<Sale[] | null>(null);
+  const [removing, setRemoving] = useState<Sale | null>(null); // asks before deleting
   const today = todayISO();
 
   const loadSales = useCallback(() => {
@@ -55,6 +57,7 @@ function Sell({ businessId, isOwner, products, reload }: { businessId: string; i
 
   async function cancel(id: string) {
     const { error, response } = await api.DELETE('/v1/b/{businessId}/sales/{saleId}', { params: { path: { businessId, saleId: id } } });
+    setRemoving(null);
     if (!response.ok) return toast(errorText(error, response.status), 'error');
     toast(t.saleCancelled);
     reload();
@@ -102,13 +105,16 @@ function Sell({ businessId, isOwner, products, reload }: { businessId: string; i
         {(sales ?? []).map((s) => (
           <Cell key={s.id} label={s.lines.map((l) => `${l.quantity} × ${l.name}`).join(', ')} sublabel={`${hour(s.sold_at)} · ${strings.bookings.methods[s.method]}`}
             value={formatMXN(s.total)}
-            accessory={isOwner ? (
-              <Pressable accessibilityRole="button" accessibilityLabel={t.cancelSale} hitSlop={10} onPress={() => cancel(s.id)}>
+            accessory={isOwner && !s.locked ? (
+              <Pressable accessibilityRole="button" accessibilityLabel={t.cancelSale} hitSlop={10} onPress={() => setRemoving(s)}>
                 <Ionicons name="trash-outline" size={18} color={ui.danger} />
               </Pressable>
             ) : undefined} />
         ))}
       </Group>
+      <ConfirmDialog open={!!removing} title={t.cancelSale} confirmLabel={strings.quickSale.cancelConfirm} onClose={() => setRemoving(null)}
+        body={removing ? strings.quickSale.cancelBody(removing.lines.map((l) => `${l.quantity} × ${l.name}`).join(', '), formatMXN(removing.total)) : ''}
+        onConfirm={() => removing && cancel(removing.id)} />
     </View>
   );
 }

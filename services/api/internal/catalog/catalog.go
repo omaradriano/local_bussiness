@@ -3,6 +3,7 @@ package catalog
 
 import (
 	"context"
+	"encoding/json"
 	"errors"
 	"slices"
 	"strings"
@@ -49,20 +50,36 @@ func (v Values) orEmpty() Values {
 
 // Patch: nil fields are left as they are. Kind cannot change.
 type Patch struct {
-	Name            *string `json:"name"`
-	Description     *string `json:"description"`
-	Price           *int64  `json:"price"`
-	Active          *bool   `json:"active"`
-	Sort            *int    `json:"sort"`
-	DurationMinutes *int    `json:"duration_minutes"`
-	BufferMinutes   *int    `json:"buffer_minutes"`
-	PrepHours       *int    `json:"prep_hours"`
-	DailyCapacity   *int    `json:"daily_capacity"`
-	PriceUnit       *string `json:"price_unit"`
-	SecurityDeposit *int64  `json:"security_deposit"`
-	LateFeePerDay   *int64  `json:"late_fee_per_day"`
-	CustomPrice     *bool   `json:"custom_price"`
-	CustomValues    *Values `json:"custom_values"`
+	Name            *string       `json:"name"`
+	Description     *string       `json:"description"`
+	Price           *int64        `json:"price"`
+	Active          *bool         `json:"active"`
+	Sort            *int          `json:"sort"`
+	DurationMinutes *int          `json:"duration_minutes"`
+	BufferMinutes   *int          `json:"buffer_minutes"`
+	PrepHours       *int          `json:"prep_hours"`
+	DailyCapacity   Nullable[int] `json:"daily_capacity"` // null clears it (no cap)
+	PriceUnit       *string       `json:"price_unit"`
+	SecurityDeposit *int64        `json:"security_deposit"`
+	LateFeePerDay   *int64        `json:"late_fee_per_day"`
+	CustomPrice     *bool         `json:"custom_price"`
+	CustomValues    *Values       `json:"custom_values"`
+}
+
+// Nullable tells a missing key (leave as is) from an explicit null (clear).
+type Nullable[T any] struct {
+	Set   bool
+	Value *T
+}
+
+func (n *Nullable[T]) UnmarshalJSON(b []byte) error {
+	n.Set = true
+	if string(b) == "null" {
+		n.Value = nil
+		return nil
+	}
+	n.Value = new(T)
+	return json.Unmarshal(b, n.Value)
 }
 
 func (it Item) Apply(p Patch) Item {
@@ -93,8 +110,8 @@ func (it Item) Apply(p Patch) Item {
 	if p.PrepHours != nil {
 		it.PrepHours = p.PrepHours
 	}
-	if p.DailyCapacity != nil {
-		it.DailyCapacity = p.DailyCapacity
+	if p.DailyCapacity.Set {
+		it.DailyCapacity = p.DailyCapacity.Value
 	}
 	if p.PriceUnit != nil {
 		it.PriceUnit = p.PriceUnit

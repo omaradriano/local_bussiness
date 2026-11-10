@@ -204,6 +204,7 @@ export default function NewBooking() {
     const startsAt = isSlot ? slot?.starts_at : outISO;
     if (!startsAt) return toast(isRange ? t.pickRange : t.pickDay, 'error');
     if (isRange && !backISO) return toast(t.pickReturn, 'error');
+    if (!/^\d+$/.test(quantity.trim()) || Number(quantity) < 1 || Number(quantity) > 100) return setErrors({ quantity: t.badQuantity });
     if (!customer) return toast(strings.customers.pick, 'error');
     if (discount === undefined) return setErrors({ discount: t.discount.invalid });
     if (isCustom && !customPrice) return setErrors({ custom_price: t.invalidAmount });

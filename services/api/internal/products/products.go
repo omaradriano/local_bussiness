@@ -235,6 +235,7 @@ type Sale struct {
 	CustomerName  *string   `json:"customer_name"`
 	CustomerPhone *string   `json:"customer_phone"`
 	Lines         []Line    `json:"lines"`
+	Locked        bool      `json:"locked"` // extra of a closed order: can't be cancelled
 }
 
 type Repo struct{ DB store.DB }
@@ -507,10 +508,11 @@ func (r Repo) CancelSale(ctx context.Context, businessID, saleID string) error {
 func (r Repo) Sales(ctx context.Context, businessID string, start, end time.Time) ([]Sale, error) {
 	rows, err := r.DB.Query(ctx, `select s.id::text, s.booking_id::text, s.sold_at, s.method, s.total, s.customer_name, s.customer_phone,
 		coalesce(jsonb_agg(jsonb_build_object('product_id', l.product_id, 'item_id', l.item_id, 'name', coalesce(l.name, p.name),
-		         'quantity', l.quantity, 'unit_price', l.unit_price) order by coalesce(l.name, p.name)) filter (where l.id is not null), '[]')
+		         'quantity', l.quantity, 'unit_price', l.unit_price) order by coalesce(l.name, p.name)) filter (where l.id is not null), '[]'),
+		exists (select 1 from public.bookings b where b.id = s.booking_id and b.status = any($4))
 		from public.sales s left join public.sale_lines l on l.sale_id = s.id left join public.retail_products p on p.id = l.product_id
 		where s.business_id = $1 and s.sold_at >= $2 and s.sold_at < $3
-		group by s.id order by s.sold_at desc limit 500`, businessID, start, end)
+		group by s.id order by s.sold_at desc limit 500`, businessID, start, end, closedOrder)
 	if err != nil {
 		return nil, err
 	}
@@ -518,7 +520,7 @@ func (r Repo) Sales(ctx context.Context, businessID string, start, end time.Time
 	out := []Sale{}
 	for rows.Next() {
 		var s Sale
-		if err := rows.Scan(&s.ID, &s.BookingID, &s.SoldAt, &s.Method, &s.Total, &s.CustomerName, &s.CustomerPhone, &s.Lines); err != nil {
+		if err := rows.Scan(&s.ID, &s.BookingID, &s.SoldAt, &s.Method, &s.Total, &s.CustomerName, &s.CustomerPhone, &s.Lines, &s.Locked); err != nil {
 			return nil, err
 		}
 		out = append(out, s)

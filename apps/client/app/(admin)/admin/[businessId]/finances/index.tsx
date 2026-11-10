@@ -54,7 +54,7 @@ export default function Finances() {
             </Text>
             <Row label={t.income} value={formatMXN(s.income.total)} />
             <Row label={t.expenses} value={formatMXN(s.expenses.total)} />
-            <Text variant="footnote" color="labelSecondary">{t.incomeHint}</Text>
+            <Text variant="footnote" color="labelSecondary">{engineFor(kind).custody ? `${t.incomeHint} ${t.depositsHint}` : t.incomeHint}</Text>
           </View>
 
           {s.pending_recurring > 0 && (

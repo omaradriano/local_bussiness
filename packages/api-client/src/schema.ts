@@ -1702,6 +1702,8 @@ export interface components {
             total: number;
             customer_name: string | null;
             customer_phone: string | null;
+            /** @description Extra de un pedido ya entregado o cancelado: no se puede borrar */
+            locked: boolean;
             lines: {
                 /** Format: uuid */
                 product_id: string | null;

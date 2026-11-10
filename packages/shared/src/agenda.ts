@@ -1,20 +1,22 @@
 import { bookingDays } from './datetime';
+import { isLateOrder } from './board';
 import { engineFor } from './engines';
 import type { ItemKind } from './verticals/types';
 
 type Row = { kind: ItemKind; status: string; starts_at: string; ends_at: string | null };
 
-export type AgendaGroup = 'overdue' | 'awaitingDeposit' | 'appointments' | 'deliveries' | 'goingOut' | 'comingBack';
+export type AgendaGroup = 'overdue' | 'late' | 'awaitingDeposit' | 'appointments' | 'deliveries' | 'goingOut' | 'comingBack';
 
 /**
  * Splits active bookings into the day's to-do groups (a booking may appear in more than one,
  * e.g. a same-day rental goes out and comes back). Dates are local "YYYY-MM-DD".
  */
 export function agendaGroups<T extends Row>(rows: T[], today: string): Record<AgendaGroup, T[]> {
-  const g: Record<AgendaGroup, T[]> = { overdue: [], awaitingDeposit: [], appointments: [], deliveries: [], goingOut: [], comingBack: [] };
+  const g: Record<AgendaGroup, T[]> = { overdue: [], late: [], awaitingDeposit: [], appointments: [], deliveries: [], goingOut: [], comingBack: [] };
   const day = (iso: string) => bookingDays(iso, null)[0];
   for (const b of rows) {
     if (b.status === 'overdue') { g.overdue.push(b); continue; }
+    if (isLateOrder(b, today)) { g.late.push(b); continue; }
     if (b.status === 'pending_deposit') g.awaitingDeposit.push(b);
     const e = engineFor(b.kind);
     if (e.timing === 'slot' && day(b.starts_at) === today) g.appointments.push(b);

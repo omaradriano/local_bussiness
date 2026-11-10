@@ -10,9 +10,10 @@ import { useBusiness } from '../../../../lib/useMe';
 import { Button, EmptyState, Group, Notice, Screen, Text } from '../../../../ui';
 
 type Summary = components['schemas']['BookingSummary'];
-const order: AgendaGroup[] = ['overdue', 'awaitingDeposit', 'appointments', 'deliveries', 'goingOut', 'comingBack'];
+const order: AgendaGroup[] = ['overdue', 'late', 'awaitingDeposit', 'appointments', 'deliveries', 'goingOut', 'comingBack'];
 
 const hour = (iso: string) => new Date(iso).toLocaleTimeString('es-MX', { hour: '2-digit', minute: '2-digit', hourCycle: 'h23' });
+const dayHour = (iso: string) => `${new Date(iso).toLocaleDateString('es-MX', { day: 'numeric', month: 'short' })} ${hour(iso)}`;
 
 /** Today's to-do list: overdue rentals, holds to collect, appointments, deliveries, rentals going out and coming back. */
 export default function Today() {
@@ -53,7 +54,7 @@ export default function Today() {
       {groups && order.filter((k) => groups[k].length).map((k) => (
         <Group key={k} label={`${strings.today.groups[k]} (${groups[k].length})`}>
           {groups[k].map((b) => (
-            <BookingCell key={`${k}-${b.id}`} businessId={businessId} b={b} time={k === 'comingBack' && b.ends_at ? hour(b.ends_at) : hour(b.starts_at)} />
+            <BookingCell key={`${k}-${b.id}`} businessId={businessId} b={b} time={k === 'comingBack' && b.ends_at ? hour(b.ends_at) : k === 'late' ? dayHour(b.starts_at) : hour(b.starts_at)} />
           ))}
         </Group>
       ))}

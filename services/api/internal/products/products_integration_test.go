@@ -142,4 +142,14 @@ func TestIntegrationProductsFlow(t *testing.T) {
 	if p, _ := r.Product(ctx, biz, cera.ID); p.Stock != 6 {
 		t.Fatalf("stock must not come back: %d", p.Stock)
 	}
+	// The list says so, so the app hides the delete button.
+	list, err = r.Sales(ctx, biz, now.Add(-time.Hour), now.Add(time.Hour))
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, s := range list {
+		if s.ID == kept.ID && !s.Locked {
+			t.Fatal("extra of a delivered order must be locked")
+		}
+	}
 }
