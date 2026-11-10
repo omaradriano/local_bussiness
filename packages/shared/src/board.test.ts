@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { boardColumns, forwardMove, paymentAlert } from './board';
+import { boardColumns, forwardMove, isLateOrder, paymentAlert } from './board';
 
 const row = (id: string, status: string, starts_at: string, next: string[] = []) => ({ id, status, starts_at, next });
 
@@ -43,5 +43,15 @@ describe('paymentAlert', () => {
     expect(paymentAlert({ status: 'confirmed', due: 69000 })).toBe('balance');
     expect(paymentAlert({ status: 'in_progress', due: 1 })).toBe('balance');
     expect(paymentAlert({ status: 'completed', due: 100 })).toBeNull();
+  });
+});
+
+describe('isLateOrder', () => {
+  const at = (d: number) => new Date(2026, 10, d, 12).toISOString();
+  it('is an order of a past day still to hand over', () => {
+    expect(isLateOrder({ kind: 'product', status: 'ready', starts_at: at(1) }, '2026-11-02')).toBe(true);
+    expect(isLateOrder({ kind: 'product', status: 'ready', starts_at: at(2) }, '2026-11-02')).toBe(false);
+    expect(isLateOrder({ kind: 'product', status: 'completed', starts_at: at(1) }, '2026-11-02')).toBe(false);
+    expect(isLateOrder({ kind: 'service', status: 'confirmed', starts_at: at(1) }, '2026-11-02')).toBe(false);
   });
 });

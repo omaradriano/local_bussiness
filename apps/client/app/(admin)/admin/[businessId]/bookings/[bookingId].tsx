@@ -129,7 +129,7 @@ export default function BookingDetail() {
       {onAccount > 0 && <Row label={t.onAccount} value={`+ ${formatMXN(onAccount)}`} />}
       {onAccount > 0 && <Row label={t.totalToPay} value={formatMXN(b.total + onAccount)} />}
       <Row label={t.paid} value={formatMXN(b.balance.paid)} />
-      {b.deposit_required > 0 && <Row label={t.advance} value={formatMXN(b.deposit_required)} />}
+      {b.deposit_required > 0 && b.balance.due > 0 && <Row label={t.advance} value={formatMXN(b.deposit_required)} />}
       {(security > 0 || b.balance.deposit_held > 0) && <Row label={t.depositHeld} value={`${formatMXN(b.balance.deposit_held)} / ${formatMXN(security)}`} />}
       {b.balance.extra_charges > 0 && <Row label={t.extraCharges} value={formatMXN(b.balance.extra_charges)} />}
       <Row label={t.due} value={formatMXN(b.balance.due)} strong />

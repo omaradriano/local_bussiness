@@ -4,6 +4,7 @@ import { Ionicons } from '@expo/vector-icons';
 import { router, Stack, useFocusEffect, useLocalSearchParams } from 'expo-router';
 import { useCallback, useState } from 'react';
 import { ActivityIndicator, Pressable, StyleSheet, View } from 'react-native';
+import { ConfirmDialog } from '../../../../../components/ConfirmDialog';
 import { api } from '../../../../../lib/api';
 import { errorText, fieldErrors } from '../../../../../lib/errors';
 import { useBusiness } from '../../../../../lib/useMe';
@@ -37,6 +38,7 @@ export default function QuickSale() {
   const [errors, setErrors] = useState<Record<string, string>>({});
   const [busy, setBusy] = useState(false);
   const [sales, setSales] = useState<Sale[] | null>(null);
+  const [removing, setRemoving] = useState<Sale | null>(null); // asks before deleting
   const [loadError, setLoadError] = useState<string | null>(null); // shown with a retry, never as an empty catalog
   const today = todayISO();
   const retail = has('productSales');
@@ -62,7 +64,8 @@ export default function QuickSale() {
 
   function addFree() {
     const price = parsePesos(freePrice);
-    if (!freeName.trim() || !price) return setErrors({ free: t.missing });
+    if (!freeName.trim() || !freePrice.trim()) return setErrors({ free: t.missing });
+    if (!price || price <= 0) return setErrors({ free: t.badPrice });
     setErrors({});
     setCart((c) => addToCart(c, custom
       ? { key: freeKey(), name: `${custom.name} · ${freeName.trim()}`, price, itemId: custom.id, detail: freeName.trim() }
@@ -86,6 +89,7 @@ export default function QuickSale() {
 
   async function cancel(id: string) {
     const { error, response } = await api.DELETE('/v1/b/{businessId}/sales/{saleId}', { params: { path: { businessId, saleId: id } } });
+    setRemoving(null);
     if (!response.ok) return toast(errorText(error, response.status), 'error');
     toast(t.cancelled);
     load();
@@ -181,14 +185,17 @@ export default function QuickSale() {
             <Cell key={s.id} label={s.lines.map((l) => `${l.quantity} × ${l.name}`).join(', ')}
               sublabel={`${hour(s.sold_at)} · ${strings.bookings.methods[s.method]}${s.customer_name ? ` · ${s.customer_name}` : ''}`}
               value={formatMXN(s.total)}
-              accessory={business.role === 'owner' ? (
-                <Pressable accessibilityRole="button" accessibilityLabel={t.cancel} hitSlop={10} onPress={() => cancel(s.id)}>
+              accessory={business.role === 'owner' && !s.locked ? (
+                <Pressable accessibilityRole="button" accessibilityLabel={t.cancel} hitSlop={10} onPress={() => setRemoving(s)}>
                   <Ionicons name="trash-outline" size={18} color={ui.danger} />
                 </Pressable>
               ) : undefined} />
           ))}
         </Group>
       </View>
+      <ConfirmDialog open={!!removing} title={t.cancel} confirmLabel={t.cancelConfirm} onClose={() => setRemoving(null)}
+        body={removing ? t.cancelBody(removing.lines.map((l) => `${l.quantity} × ${l.name}`).join(', '), formatMXN(removing.total)) : ''}
+        onConfirm={() => removing && cancel(removing.id)} />
     </Screen>
   );
 }

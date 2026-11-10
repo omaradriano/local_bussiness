@@ -41,6 +41,8 @@ export function Segmented<T extends string>({
             {
               width: segment,
               backgroundColor: ui.surfaceRaised,
+              borderWidth: StyleSheet.hairlineWidth,
+              borderColor: ui.separator, // visible on a white panel too (dialogs)
               transform: [{ translateX: segment * index }],
               transitionProperty: 'transform',
               transitionDuration: reduced ? 0 : 220,
@@ -58,7 +60,7 @@ export function Segmented<T extends string>({
             accessibilityState={{ selected }}
             onPress={() => onChange(o.value)}
             style={styles.option}>
-            <Text variant="footnote" numberOfLines={1} style={[styles.label, selected && styles.selected]}>
+            <Text variant="footnote" numberOfLines={1} style={[styles.label, selected && [styles.selected, { color: ui.accent }]]}>
               {o.label}
             </Text>
             {o.count !== undefined && (

@@ -189,7 +189,7 @@ export default function CatalogItemForm() {
         )}
         {!(has('customOrder') && form.customPrice) && field('price', 'price', e.pricing === 'perPeriod' ? t.pricePerDay : t.price, true, e.pricing === 'perPeriod' ? t.perDayNote(settings?.rentals.late_fee_multiplier ?? 1) : undefined)}
         {e.timing === 'slot' && field('duration', 'duration_minutes', t.duration, true, t.bufferInSettings)}
-        {e.timing === 'day' && (<>{field('prepHours', 'prep_hours', t.prepHours, true)}{field('dailyCapacity', 'daily_capacity', t.dailyCapacity, true)}</>)}
+        {e.timing === 'day' && (<>{field('prepHours', 'prep_hours', t.prepHours, true)}{field('dailyCapacity', 'daily_capacity', t.dailyCapacity, true, t.dailyCapacityHint)}</>)}
         {e.custody && depositEnabled && field('deposit', 'security_deposit', t.deposit, true, t.depositHint)}
         {e.resource === 'units' && isNew && (
           <Field label={t.unitsToCreate} value={units} onChangeText={setUnits} keyboardType="numeric" error={errors.units} hint={t.unitsToCreateHint} />

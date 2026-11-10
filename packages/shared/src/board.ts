@@ -1,3 +1,7 @@
+import { bookingDays } from './datetime';
+import { engineFor } from './engines';
+import type { ItemKind } from './verticals/types';
+
 // Day board (feature dayBoard): the day's orders in columns by status, each moved ahead with one tap.
 // Which moves exist comes from the API (`next`, from the state machine in Go); this only orders them.
 
@@ -30,4 +34,9 @@ export function paymentAlert(b: { status: string; due: number }): 'advance' | 'b
   if (b.status === 'pending_deposit') return 'advance';
   if (TO_HAND_OVER.has(b.status) && b.due > 0) return 'balance';
   return null;
+}
+
+/** An order of a past day that was never handed over (N3): it stays on Hoy and the board until it's closed. */
+export function isLateOrder(b: { kind: ItemKind; status: string; starts_at: string }, today: string): boolean {
+  return engineFor(b.kind).timing === 'day' && TO_HAND_OVER.has(b.status) && bookingDays(b.starts_at, null)[0] < today;
 }

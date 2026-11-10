@@ -1,5 +1,5 @@
 import type { components } from '@lb/api-client';
-import { addDays, boardColumns, dayStartISO, formatMXN, forwardMove, hhmm, paymentAlert, strings, todayISO, type BoardStatus } from '@lb/shared';
+import { addDays, boardColumns, dayStartISO, formatMXN, forwardMove, hhmm, isLateOrder, paymentAlert, strings, todayISO, type BoardStatus } from '@lb/shared';
 import { Ionicons } from '@expo/vector-icons';
 import { router, Stack, useFocusEffect, useLocalSearchParams } from 'expo-router';
 import { useCallback, useState } from 'react';
@@ -35,8 +35,13 @@ export default function Board() {
     setError(null);
     const from = dayStartISO(day, tz);
     const to = dayStartISO(addDays(day, 1), tz);
-    const { data, error, response } = await api.GET('/v1/b/{businessId}/bookings', { params: { path: { businessId }, query: { from, to, status: 'all' } } });
-    if (data) setRows(data.bookings);
+    const today = todayISO();
+    // Today's board also carries the orders of past days never handed over (N3), first.
+    const [{ data, error, response }, late] = await Promise.all([
+      api.GET('/v1/b/{businessId}/bookings', { params: { path: { businessId }, query: { from, to, status: 'all' } } }),
+      day === today ? api.GET('/v1/b/{businessId}/bookings', { params: { path: { businessId }, query: { from: dayStartISO(addDays(today, -60), tz), to: from } } }) : null,
+    ]);
+    if (data) setRows([...(late?.data?.bookings.filter((b) => isLateOrder(b, today)) ?? []), ...data.bookings]);
     else setError(errorText(error, response.status));
   }, [businessId, day, tz]);
 
@@ -130,7 +135,8 @@ function OrderCard({ businessId, b, busy, statusText, onAdvance }: {
 }) {
   const ui = useUI();
   const to = forwardMove(b.next, b.fulfillment);
-  const time = `${hhmm(b.starts_at)}${b.ends_at ? `–${hhmm(b.ends_at)}` : ''}`;
+  const late = isLateOrder(b, todayISO());
+  const time = `${late ? `${new Date(b.starts_at).toLocaleDateString('es-MX', { day: 'numeric', month: 'short' })} · ` : ''}${hhmm(b.starts_at)}${b.ends_at ? `–${hhmm(b.ends_at)}` : ''}`;
   const alert = paymentAlert(b);
   return (
     <View style={{ backgroundColor: ui.surface, borderRadius: radius.lg, padding: 12, gap: 6 }}>
@@ -144,6 +150,7 @@ function OrderCard({ businessId, b, busy, statusText, onAdvance }: {
           </View>
           <Text>{b.items}</Text>
           {!!b.details && <Text variant="footnote" color="labelSecondary">{b.details}</Text>}
+          {!!b.extras && <Text variant="footnote" color="labelSecondary">{strings.production.extras(b.extras)}</Text>}
           <Text variant="footnote" color="labelSecondary">{b.recipient_name ? `${b.customer_name} · ${t.for(b.recipient_name)}` : b.customer_name}</Text>
           {!!b.card_message && <Text variant="footnote" numberOfLines={2} style={{ fontStyle: 'italic' }}>«{b.card_message}»</Text>}
           {alert && (

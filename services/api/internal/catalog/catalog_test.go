@@ -1,6 +1,7 @@
 package catalog
 
 import (
+	"encoding/json"
 	"strings"
 	"testing"
 )
@@ -67,5 +68,22 @@ func TestApplyPatchKeepsUntouchedFields(t *testing.T) {
 	got := it.Apply(Patch{Price: ptr(int64(27000)), Active: ptr(false)})
 	if got.Price != 27000 || got.Active || got.Name != "Gelish" || *got.DurationMinutes != 60 || got.Kind != "service" {
 		t.Fatalf("got %+v", got)
+	}
+}
+
+func TestPatchClearsDailyCapacityOnNull(t *testing.T) {
+	it := Item{Kind: "product", DailyCapacity: ptr(2)}
+	var keep, clear Patch
+	if err := json.Unmarshal([]byte(`{"name":"Caja"}`), &keep); err != nil {
+		t.Fatal(err)
+	}
+	if err := json.Unmarshal([]byte(`{"daily_capacity":null}`), &clear); err != nil {
+		t.Fatal(err)
+	}
+	if got := it.Apply(keep); got.DailyCapacity == nil || *got.DailyCapacity != 2 {
+		t.Fatalf("missing key must keep the cap, got %v", got.DailyCapacity)
+	}
+	if got := it.Apply(clear); got.DailyCapacity != nil {
+		t.Fatalf("null must clear the cap, got %v", *got.DailyCapacity)
 	}
 }
