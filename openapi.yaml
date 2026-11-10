@@ -1704,7 +1704,7 @@ paths:
               required: [to]
               properties:
                 to: { $ref: "#/components/schemas/BookingStatus" }
-                paid: { type: string, enum: [refund, keep], description: "Al cancelar con pagos: devolver lo cobrado o retenerlo (obligatorio si hay pagos)" }
+                paid: { type: string, enum: [refund, keep, credit], description: "Al cancelar con pagos: devolver lo cobrado o retenerlo (obligatorio si hay pagos). credit: entregar con saldo a un cliente con crédito" }
                 note: { type: string, maxLength: 500 }
       responses:
         "200":
@@ -2274,12 +2274,13 @@ components:
         guarantor_name: { type: string, maxLength: 80 }
         guarantor_phone: { type: string }
         trusted: { type: boolean }
+        credit: { type: boolean, description: "Puede pagar después (solo el dueño lo cambia)" }
         notes: { type: string }
         privacy_accepted: { type: boolean, description: "true registra que aceptó el aviso vigente; false no borra lo registrado" }
 
     Customer:
       type: object
-      required: [id, name, phone, email, address, guarantor_name, guarantor_phone, trusted, notes, privacy_accepted_at, privacy_version, documents, created_at]
+      required: [id, name, phone, email, address, guarantor_name, guarantor_phone, trusted, credit, notes, privacy_accepted_at, privacy_version, documents, created_at]
       properties:
         id: { type: string, format: uuid }
         name: { type: string }
@@ -2289,6 +2290,7 @@ components:
         guarantor_name: { type: [string, "null"] }
         guarantor_phone: { type: [string, "null"] }
         trusted: { type: boolean, description: "No se le exigen documentos" }
+        credit: { type: boolean, description: "Puede pagar después: se le entrega con saldo pendiente" }
         notes: { type: [string, "null"] }
         privacy_accepted_at: { type: [string, "null"], format: date-time, description: "Cuándo aceptó el aviso de privacidad del negocio" }
         privacy_version: { type: [string, "null"], description: "Versión del aviso que aceptó" }
@@ -2733,12 +2735,13 @@ components:
         ends_at: { type: [string, "null"], format: date-time }
         customer:
           type: object
-          required: [id, name, phone, walk_in]
+          required: [id, name, phone, walk_in, credit]
           properties:
             id: { type: string, format: uuid }
             name: { type: string }
             phone: { type: string }
             walk_in: { type: boolean, description: "Cliente casual del negocio (sin ficha ni WhatsApp)" }
+            credit: { type: boolean, description: "Se le puede entregar con saldo (paid: credit)" }
         items:
           type: array
           items:
@@ -2864,7 +2867,7 @@ components:
 
     BookingSummary:
       type: object
-      required: [id, kind, status, starts_at, ends_at, customer_name, customer_phone, items, units, staff, total, deposit_required, fulfillment, recipient_name, card_message, details, delivery_address, delivery_zone, recipient_phone, due, extras, next]
+      required: [id, kind, status, starts_at, ends_at, customer_name, customer_phone, items, units, staff, total, deposit_required, fulfillment, recipient_name, card_message, details, delivery_address, delivery_zone, recipient_phone, due, extras, credit, next]
       properties:
         id: { type: string, format: uuid }
         kind: { $ref: "#/components/schemas/ItemKind" }
@@ -2887,6 +2890,7 @@ components:
         recipient_phone: { type: [string, "null"] }
         due: { type: integer, format: int64, description: "Saldo por cobrar, con extras a cuenta; 0 si se canceló" }
         extras: { type: string, description: "Productos vendidos con el pedido («1 × Chocolates»); vacío si no hay" }
+        credit: { type: boolean, description: "El cliente puede llevárselo con saldo pendiente" }
         next: { type: array, items: { $ref: "#/components/schemas/BookingStatus" }, description: "Movimientos de estado posibles desde el panel" }
 
     Ref:

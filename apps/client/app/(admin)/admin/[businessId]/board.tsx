@@ -67,6 +67,20 @@ export default function Board() {
     load();
   }
 
+  // A customer with credit may take it owing the rest (B3).
+  async function deliverOnCredit() {
+    const b = collect!;
+    setBusyId(b.id);
+    const { data, error, response } = await api.POST('/v1/b/{businessId}/bookings/{bookingId}/transition', {
+      params: { path: { businessId, bookingId: b.id } }, body: { to: 'completed', paid: 'credit' },
+    });
+    setBusyId(null);
+    setCollect(null);
+    if (!data) { toast(error?.message ?? errorText(error, response.status), 'error'); return load(); }
+    toast(t.deliveredOnCredit);
+    load();
+  }
+
   async function advance(b: Summary, to: string) {
     if (to === 'completed' && b.due > 0) { setMethod('cash'); return setCollect(b); }
     setBusyId(b.id);
@@ -125,6 +139,7 @@ export default function Board() {
         confirmLabel={collect ? t.collectAndDeliver(formatMXN(collect.due)) : ''} busy={!!collect && busyId === collect.id}
         onConfirm={collectAndDeliver} onClose={() => setCollect(null)}>
         <Segmented options={(['cash', 'transfer', 'card'] as const).map((m) => ({ value: m, label: strings.bookings.methods[m] }))} value={method} onChange={setMethod} />
+        {collect?.credit && <Button icon="time" busy={busyId === collect.id} onPress={deliverOnCredit}>{t.onCredit(formatMXN(collect.due))}</Button>}
       </ConfirmDialog>
     </Screen>
   );

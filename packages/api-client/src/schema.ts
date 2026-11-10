@@ -1665,6 +1665,8 @@ export interface components {
             guarantor_name?: string;
             guarantor_phone?: string;
             trusted?: boolean;
+            /** @description Puede pagar después (solo el dueño lo cambia) */
+            credit?: boolean;
             notes?: string;
             /** @description true registra que aceptó el aviso vigente; false no borra lo registrado */
             privacy_accepted?: boolean;
@@ -1680,6 +1682,8 @@ export interface components {
             guarantor_phone: string | null;
             /** @description No se le exigen documentos */
             trusted: boolean;
+            /** @description Puede pagar después: se le entrega con saldo pendiente */
+            credit: boolean;
             notes: string | null;
             /**
              * Format: date-time
@@ -2119,6 +2123,8 @@ export interface components {
                 phone: string;
                 /** @description Cliente casual del negocio (sin ficha ni WhatsApp) */
                 walk_in: boolean;
+                /** @description Se le puede entregar con saldo (paid: credit) */
+                credit: boolean;
             };
             items: {
                 /** Format: uuid */
@@ -2288,6 +2294,8 @@ export interface components {
             due: number;
             /** @description Productos vendidos con el pedido («1 × Chocolates»); vacío si no hay */
             extras: string;
+            /** @description El cliente puede llevárselo con saldo pendiente */
+            credit: boolean;
             /** @description Movimientos de estado posibles desde el panel */
             next: components["schemas"]["BookingStatus"][];
         };
@@ -4853,10 +4861,10 @@ export interface operations {
                 "application/json": {
                     to: components["schemas"]["BookingStatus"];
                     /**
-                     * @description Al cancelar con pagos: devolver lo cobrado o retenerlo (obligatorio si hay pagos)
+                     * @description Al cancelar con pagos: devolver lo cobrado o retenerlo (obligatorio si hay pagos). credit: entregar con saldo a un cliente con crédito
                      * @enum {string}
                      */
-                    paid?: "refund" | "keep";
+                    paid?: "refund" | "keep" | "credit";
                     note?: string;
                 };
             };

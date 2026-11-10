@@ -42,6 +42,7 @@ type Summary struct {
 	RecipientPhone  *string    `json:"recipient_phone"` // giftOrder
 	Due             int64      `json:"due"`             // left to collect, extras on account included; 0 once cancelled
 	Extras          string     `json:"extras"`          // products sold with it («1 × Chocolates»): the route takes them along
+	Credit          bool       `json:"credit"`          // the customer may take it owing the rest
 	Next            []string   `json:"next" db:"-"`     // status moves available from the panel
 }
 
@@ -63,7 +64,8 @@ var summaryColumns = `b.id::text, b.kind, b.status, b.starts_at, b.ends_at, coal
 	              where p.booking_id = b.id and p.type in ('advance', 'balance', 'payment_refund')), 0)) end::bigint,
 	coalesce((select string_agg(l.quantity || ' × ' || coalesce(l.name, rp.name), ', ' order by coalesce(l.name, rp.name))
 	          from public.sales s join public.sale_lines l on l.sale_id = s.id left join public.retail_products rp on rp.id = l.product_id
-	          where s.booking_id = b.id), '')`
+	          where s.booking_id = b.id), ''),
+	c.credit`
 
 func collectSummaries(rows pgx.Rows) ([]Summary, error) {
 	out, err := pgx.CollectRows(rows, pgx.RowToStructByPos[Summary])

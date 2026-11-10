@@ -455,3 +455,44 @@ func TestIntegrationPartialRefund(t *testing.T) {
 		t.Fatalf("refund of a cancelled order: %v", err)
 	}
 }
+
+func TestIntegrationDeliverOnCredit(t *testing.T) {
+	p := pool(t)
+	ctx := context.Background()
+	f := setup(t, p, "flowers", `{"deposit_percent": 50}`)
+	order := func(phone string) Booking {
+		b, _, err := Create(ctx, p, f.business, CreateInput{Customer: cust(phone), ItemID: f.item, StartsAt: at("2026-11-02T18:00:00Z"),
+			Options: map[string]string{"Color": "Rojo"}, Source: "admin", InitialPayment: &Payment{Method: "cash", Amount: 10000}}, now)
+		if err != nil {
+			t.Fatal(err)
+		}
+		for _, to := range []string{"in_progress", "ready"} {
+			if b, err = Transition(ctx, p, f.business, b.ID, to, "", ""); err != nil {
+				t.Fatal(err)
+			}
+		}
+		return b
+	}
+	var inv Invalid
+	// A customer without credit can't take it with a balance, not even asking for credit.
+	a := order("6148880007")
+	if _, err := TransitionPaid(ctx, p, f.business, a.ID, "completed", PaidCredit, "", ""); !errors.As(err, &inv) || inv.Field != "status" {
+		t.Fatalf("credit without permission: %v", err)
+	}
+	// With credit: handed over owing the rest, noted; it's paid later with a normal payment.
+	b := order("6148880008")
+	if _, err := p.Exec(ctx, `update public.customers set credit = true where id = $1`, b.Customer.ID); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := Transition(ctx, p, f.business, b.ID, "completed", "", ""); !errors.As(err, &inv) {
+		t.Fatalf("completing with a balance still asks: %v", err)
+	}
+	got, err := TransitionPaid(ctx, p, f.business, b.ID, "completed", PaidCredit, "", "")
+	if err != nil || got.Status != "completed" || got.Balance.Due != b.Total-10000 || !strings.Contains(deref(got.Events[len(got.Events)-1].Note), "crédito") {
+		t.Fatalf("on credit: %+v %v", got.Balance, err)
+	}
+	got, err = AddPayment(ctx, p, f.business, b.ID, Payment{Type: "balance", Method: "transfer", Amount: got.Balance.Due}, "", now, noFiles)
+	if err != nil || got.Balance.Due != 0 {
+		t.Fatalf("paid later: %+v %v", got.Balance, err)
+	}
+}

@@ -41,7 +41,7 @@ export default function Customers() {
             return (
               <Cell key={c.id} icon={trusted(c) ? 'shield-checkmark' : 'person'} tint={trusted(c) ? ui.success : ui.indigo}
                 label={c.name}
-                sublabel={`${formatPhone(c.phone)}${trusted(c) ? ` · ${t.trustedBadge}` : missing.length ? ` · ${t.missingDocs(missing.join(', '))}` : ''}`}
+                sublabel={`${formatPhone(c.phone)}${c.credit ? ` · ${t.creditBadge}` : ''}${trusted(c) ? ` · ${t.trustedBadge}` : missing.length ? ` · ${t.missingDocs(missing.join(', '))}` : ''}`}
                 onPress={() => router.push({ pathname: '/admin/[businessId]/customers/[customerId]', params: { businessId, customerId: c.id } })} />
             );
           })}

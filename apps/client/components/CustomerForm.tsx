@@ -32,7 +32,7 @@ export function CustomerForm({ businessId, customer, isOwner, onSaved, onExistin
   const g = splitE164(customer?.guarantor_phone);
   const [f, setF] = useState({
     name: customer?.name ?? '', code: p.code, national: p.national, email: customer?.email ?? '', address: customer?.address ?? '',
-    guarantorName: customer?.guarantor_name ?? '', gCode: g.code, gNational: g.national, trusted: customer?.trusted ?? false, notes: customer?.notes ?? '',
+    guarantorName: customer?.guarantor_name ?? '', gCode: g.code, gNational: g.national, trusted: customer?.trusted ?? false, credit: customer?.credit ?? false, notes: customer?.notes ?? '',
     privacy: false,
   });
   // Already accepted this version: show when, instead of asking again.
@@ -58,6 +58,7 @@ export function CustomerForm({ businessId, customer, isOwner, onSaved, onExistin
     const body = {
       name: f.name, phone: phone!, email: f.email, address: f.address, guarantor_name: f.guarantorName, guarantor_phone: gPhone ?? '', notes: f.notes,
       ...(isOwner && has('trustedCustomers') ? { trusted: f.trusted } : {}),
+      ...(isOwner ? { credit: f.credit } : {}),
       ...(f.privacy ? { privacy_accepted: true } : {}),
     };
     const res = customer
@@ -89,6 +90,11 @@ export function CustomerForm({ businessId, customer, isOwner, onSaved, onExistin
       {isOwner && has('trustedCustomers') && (
         <Group footer={t.trustedHint}>
           <Cell label={t.trustedShort} accessory={<Switch accessibilityLabel={t.trusted} value={f.trusted} onValueChange={(trusted) => set({ trusted })} />} />
+        </Group>
+      )}
+      {isOwner && (
+        <Group footer={t.creditHint}>
+          <Cell label={t.credit} accessory={<Switch accessibilityLabel={t.credit} value={f.credit} onValueChange={(credit) => set({ credit })} />} />
         </Group>
       )}
       <Group footer={accepted ? undefined : errors.privacy_accepted ?? strings.privacy.customerHint}>
