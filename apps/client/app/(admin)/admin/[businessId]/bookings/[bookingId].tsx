@@ -158,7 +158,6 @@ export default function BookingDetail() {
   // Cancelling an order already made is for the owner (bookings.OwnerOnly in Go answers 403 otherwise).
   const ownerOnly = (st: Booking['status']) => st === 'cancelled' && (b.status === 'ready' || b.status === 'out_for_delivery') && business?.role !== 'owner';
   const otherActions = actions.filter((st) => isOther(st) && !ownerOnly(st));
-  const extrasTotal = b.extras.reduce((n, x) => n + x.total, 0);
   const extrasPaid = b.extras.reduce((n, x) => n + (x.method === 'on_account' ? 0 : x.total), 0); // on account: owed, not paid
   const paid = b.balance.paid + extrasPaid; // cancelling gives back (or keeps) the extras too
 
@@ -286,7 +285,6 @@ export default function BookingDetail() {
               <Group label={qs.extras} footer={b.extras.length ? undefined : qs.addToOrderHint} padded>
                 <View style={{ gap: 8 }}>
                   {b.extras.map((x) => <Row key={x.id} label={`${x.items} · ${t.methods[x.method]}`} value={formatMXN(x.total)} />)}
-                  {b.extras.length > 0 && <Row label={qs.totalWithExtras} value={formatMXN(b.total + extrasTotal)} strong />}
                   {has('quickSale') && editable && (
                     <Button icon="add-circle" onPress={() => router.push({ pathname: '/admin/[businessId]/sales/new', params: { businessId, booking: b.id, who: b.customer.name } })}>
                       {qs.addToOrder}
@@ -327,7 +325,10 @@ export default function BookingDetail() {
         )}
 
         <Group label={t.history}>
-          {b.events.map((e, i) => (
+          {b.events.map((e, i) => e.from_status && e.from_status === e.to_status && e.note ? (
+            // Same status (a discount, a partial refund): the note says what happened.
+            <Cell key={i} label={e.note} sublabel={when(e.at)} />
+          ) : (
             <Cell key={i} label={`${e.from_status ? `${texts.bookings.status[e.from_status as Booking['status']] ?? e.from_status} → ` : `${t.created}: `}${texts.bookings.status[e.to_status as Booking['status']] ?? e.to_status}`}
               sublabel={`${when(e.at)}${e.note ? ` — ${e.note}` : ''}`} />
           ))}

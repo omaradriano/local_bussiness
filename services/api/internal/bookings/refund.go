@@ -17,17 +17,29 @@ type PartialRefundInput struct {
 	Reason string `json:"reason"`
 }
 
-// Validate against the order's total and what's been paid toward it (net of what was given back).
-func (r PartialRefundInput) Validate(total, paid int64) error {
+// Validate against the order's total and what's been paid toward it per method (PaidByMethod): money
+// goes back the way it came in, so a cancellation later never gives back more than was paid.
+func (r PartialRefundInput) Validate(total int64, byMethod []Payment) error {
+	var paid, inMethod int64
+	for _, p := range byMethod {
+		paid += p.Amount
+		if p.Method == r.Method {
+			inMethod = p.Amount
+		}
+	}
 	switch {
 	case !slices.Contains(paymentMethods, r.Method):
 		return Invalid{"method", "Elige efectivo, transferencia o tarjeta."}
+	case inMethod == 0:
+		return Invalid{"method", "Con ese método no se cobró nada en este pedido; devuélvelo como se pagó."}
 	case r.Amount <= 0:
 		return Invalid{"amount", "Escribe un monto mayor a cero."}
 	case r.Amount > total:
 		return Invalid{"amount", fmt.Sprintf("No puede ser mayor que el total del pedido (%s).", mxn(total))}
 	case r.Amount > paid:
 		return Invalid{"amount", fmt.Sprintf("No se puede devolver más de lo cobrado (%s).", mxn(paid))}
+	case r.Amount > inMethod:
+		return Invalid{"amount", fmt.Sprintf("Con ese método solo se cobraron %s.", mxn(inMethod))}
 	}
 	if n := utf8.RuneCountInString(strings.TrimSpace(r.Reason)); n == 0 || n > 200 {
 		return Invalid{"reason", "Escribe el motivo (máximo 200 caracteres)."}
@@ -54,7 +66,7 @@ func PartialRefund(ctx context.Context, db store.DB, businessID, id string, in P
 	if err != nil {
 		return Booking{}, err
 	}
-	if err := in.Validate(b.total, ComputeBalance(b.total+b.onAccount, ps).Paid); err != nil {
+	if err := in.Validate(b.total, PaidByMethod(ps)); err != nil {
 		return Booking{}, err
 	}
 	reason := strings.TrimSpace(in.Reason)

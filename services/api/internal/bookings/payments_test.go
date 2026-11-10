@@ -116,4 +116,10 @@ func TestPaidByMethod(t *testing.T) {
 	if got := PaidByMethod([]Payment{{Type: "advance", Method: "card", Amount: 100}, {Type: "payment_refund", Method: "card", Amount: 100}}); len(got) != 0 {
 		t.Fatalf("all given back: %+v", got)
 	}
+	// A refund in a method that took nothing (P1) comes off the others: cancelling never gives back more than Paid.
+	ps = []Payment{{Type: "balance", Method: "cash", Amount: 65000}, {Type: "payment_refund", Method: "card", Amount: 10000}}
+	got = PaidByMethod(ps)
+	if !reflect.DeepEqual(got, []Payment{{Method: "cash", Amount: 55000}}) || ComputeBalance(65000, ps).Paid != 55000 {
+		t.Fatalf("refund in another method: %+v", got)
+	}
 }

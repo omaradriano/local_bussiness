@@ -265,7 +265,7 @@ export const strings = {
     partialRefund: {
       action: 'Devolver dinero',
       title: 'Devolver parte de lo cobrado',
-      body: (paid: string) => `Por ejemplo, si unas flores llegaron maltratadas. El total del pedido baja lo mismo y sale de los ingresos. Cobrado: ${paid}.`,
+      body: (max: string) => `Por ejemplo, si unas flores llegaron maltratadas. El total del pedido baja lo mismo y sale de los ingresos. Puedes devolver hasta ${max} (el arreglo; los extras no entran).`,
       amount: 'Monto a devolver (pesos)',
       reason: 'Motivo',
       reasonPlaceholder: 'Rosas maltratadas',
@@ -349,7 +349,7 @@ export const strings = {
     addPayment: 'Registrar pago',
     amount: 'Monto (pesos)',
     paymentTypes: {
-      advance: 'Anticipo', balance: 'Saldo', security_deposit: 'Depósito de garantía', refund: 'Devolución de depósito', payment_refund: 'Devolución al cancelar',
+      advance: 'Anticipo', balance: 'Saldo', security_deposit: 'Depósito de garantía', refund: 'Devolución de depósito', payment_refund: 'Devolución',
       late_fee: 'Recargo por retraso', damage_fee: 'Cargo por daño',
     } as Record<string, string>,
     methods: { cash: 'Efectivo', transfer: 'Transferencia', card: 'Tarjeta', on_account: 'A cuenta del pedido' } as Record<string, string>,
@@ -419,7 +419,6 @@ export const strings = {
     addToOrderHint: 'Chocolates, globos… se cobran en el momento o se suman al saldo del pedido.',
     extras: 'Extras',
     extrasPaid: 'Extras (pagados)',
-    totalWithExtras: 'Total con extras',
   },
   production: {
     title: 'Hoja de producción',
@@ -547,7 +546,7 @@ export const strings = {
     confirm: 'Eliminar para siempre',
     done: 'Negocio eliminado.',
   },
-  confirm: { cancel: 'Cancelar' },
+  confirm: { cancel: 'Volver' },
   welcome: {
     title: `Bienvenido a ${APP_NAME}`,
     open: `¿Qué es ${APP_NAME}?`,
