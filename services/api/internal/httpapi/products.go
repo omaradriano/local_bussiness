@@ -21,6 +21,7 @@ type ProductsRepo interface {
 	Create(ctx context.Context, businessID string, p products.Product) (products.Product, error)
 	Update(ctx context.Context, businessID string, p products.Product) (products.Product, error)
 	Purchase(ctx context.Context, businessID, productID string, quantity int, unitCost int64, on time.Time, actor string) (products.Product, error)
+	Movements(ctx context.Context, businessID, productID string) ([]products.Movement, error)
 	Sell(ctx context.Context, businessID string, in products.SaleInput, actor string, now time.Time) (products.Sale, error)
 	CancelSale(ctx context.Context, businessID, saleID string) error
 	Sales(ctx context.Context, businessID string, start, end time.Time) ([]products.Sale, error)
@@ -139,6 +140,11 @@ func mountProducts(r chi.Router, d Deps) {
 			}
 			p, err := d.Products.Purchase(r.Context(), m.BusinessID, chi.URLParam(r, "productId"), body.Quantity, body.UnitCost, on, m.UserID)
 			writeProducts(w, r, http.StatusOK, p, err)
+		})
+		r.With(auth.RequireRole("owner"), requireUUIDParam("productId", "El producto no existe.")).Get("/products/{productId}/movements", func(w http.ResponseWriter, r *http.Request) {
+			m, _ := auth.MemberFrom(r.Context())
+			list, err := d.Products.Movements(r.Context(), m.BusinessID, chi.URLParam(r, "productId"))
+			writeProducts(w, r, http.StatusOK, map[string]any{"movements": list}, err)
 		})
 		r.With(auth.RequireRole("owner")).Get("/products/stats", func(w http.ResponseWriter, r *http.Request) {
 			m, _ := auth.MemberFrom(r.Context())
