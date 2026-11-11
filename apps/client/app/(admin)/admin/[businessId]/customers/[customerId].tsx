@@ -4,6 +4,7 @@ import { router, Stack, useLocalSearchParams } from 'expo-router';
 import { useEffect, useState } from 'react';
 import { ActivityIndicator, View } from 'react-native';
 import { BookingHistory } from '../../../../../components/BookingHistory';
+import { CustomerSummary } from '../../../../../components/CustomerSummary';
 import { CustomerDocuments, CustomerForm } from '../../../../../components/CustomerForm';
 import { api } from '../../../../../lib/api';
 import { useBusiness } from '../../../../../lib/useMe';
@@ -36,6 +37,7 @@ export default function CustomerScreen() {
     <Screen>
       <Stack.Screen options={{ title: customer?.name ?? t.new }} />
       <Text variant="largeTitle" accessibilityRole="header" style={{ marginBottom: 20 }}>{customer?.name ?? t.new}</Text>
+      {customer && <CustomerSummary businessId={businessId} customerId={customer.id} />}
       <CustomerForm key={customer?.id ?? 'new'} businessId={businessId} customer={customer ?? undefined} isOwner={isOwner}
         onSaved={(c) => (isNew ? open(c.id) : setCustomer(c))} onExisting={open} />
       {customer && has('customerDocuments') && <View style={{ marginTop: 28 }}><CustomerDocuments businessId={businessId} customer={customer} isOwner={isOwner} onChange={setCustomer} /></View>}

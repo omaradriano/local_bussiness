@@ -1553,6 +1553,21 @@ paths:
         "409": { $ref: "#/components/responses/Error" }
         "422": { $ref: "#/components/responses/Error" }
 
+  /v1/b/{businessId}/customers/{customerId}/summary:
+    parameters:
+      - $ref: "#/components/parameters/BusinessId"
+      - { name: customerId, in: path, required: true, schema: { type: string, format: uuid } }
+    get:
+      operationId: customerSummary
+      summary: Lo que el cliente ha gastado y debe, sus pedidos y destinatarios frecuentes (sin cancelados)
+      responses:
+        "200":
+          description: OK
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/CustomerSummary" }
+        "404": { $ref: "#/components/responses/Error" }
+
   /v1/b/{businessId}/customers/{customerId}/uploads:
     parameters:
       - $ref: "#/components/parameters/BusinessId"
@@ -2341,6 +2356,26 @@ components:
     DocType:
       type: string
       enum: [ine, proof_of_address, guarantor_id]
+
+    CustomerSummary:
+      type: object
+      required: [orders, spent, due, first_at, last_at, recipients]
+      properties:
+        orders: { type: integer }
+        spent: { type: integer, description: "Cobrado neto más extras pagados con sus pedidos" }
+        due: { type: integer }
+        first_at: { type: [string, "null"], format: date-time }
+        last_at: { type: [string, "null"], format: date-time }
+        recipients:
+          type: array
+          items:
+            type: object
+            required: [name, phone, count, last_at]
+            properties:
+              name: { type: string }
+              phone: { type: [string, "null"] }
+              count: { type: integer }
+              last_at: { type: string, format: date-time }
 
     CustomerInput:
       type: object

@@ -1096,6 +1096,26 @@ export interface paths {
         patch: operations["updateCustomer"];
         trace?: never;
     };
+    "/v1/b/{businessId}/customers/{customerId}/summary": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                businessId: components["parameters"]["BusinessId"];
+                customerId: string;
+            };
+            cookie?: never;
+        };
+        /** Lo que el cliente ha gastado y debe, sus pedidos y destinatarios frecuentes (sin cancelados) */
+        get: operations["customerSummary"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/v1/b/{businessId}/customers/{customerId}/uploads": {
         parameters: {
             query?: never;
@@ -1716,6 +1736,23 @@ export interface components {
         };
         /** @enum {string} */
         DocType: "ine" | "proof_of_address" | "guarantor_id";
+        CustomerSummary: {
+            orders: number;
+            /** @description Cobrado neto más extras pagados con sus pedidos */
+            spent: number;
+            due: number;
+            /** Format: date-time */
+            first_at: string | null;
+            /** Format: date-time */
+            last_at: string | null;
+            recipients: {
+                name: string;
+                phone: string | null;
+                count: number;
+                /** Format: date-time */
+                last_at: string;
+            }[];
+        };
         CustomerInput: {
             name?: string;
             /** @description E.164 (+526141234567) */
@@ -4770,6 +4807,30 @@ export interface operations {
             404: components["responses"]["Error"];
             409: components["responses"]["Error"];
             422: components["responses"]["Error"];
+        };
+    };
+    customerSummary: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                businessId: components["parameters"]["BusinessId"];
+                customerId: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["CustomerSummary"];
+                };
+            };
+            404: components["responses"]["Error"];
         };
     };
     createCustomerUpload: {
