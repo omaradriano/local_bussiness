@@ -32,6 +32,7 @@ type FinancesRepo interface {
 	PayCharge(ctx context.Context, businessID string, r finances.Recurring, due, spentOn finances.Day, amount int64, actor string) (finances.Expense, error)
 	SkipCharge(ctx context.Context, businessID string, r finances.Recurring, due finances.Day) error
 	Cash(ctx context.Context, businessID string, day finances.Day) (finances.CashReport, error)
+	Receivables(ctx context.Context, businessID string) (finances.Receivables, error)
 	CloseCash(ctx context.Context, businessID string, day finances.Day, counted int64, note, actor string, now time.Time) (finances.CashReport, error)
 }
 
@@ -137,6 +138,13 @@ func mountFinances(r chi.Router, d Deps) {
 				rep, err := d.Finances.CloseCash(r.Context(), m.BusinessID, day, body.Counted, body.Note, m.UserID, d.now())
 				writeFinance(w, r, http.StatusOK, rep, err)
 			}
+		})
+
+		// Por cobrar: handed over on credit, active with a balance, and advances taken for what's not handed over.
+		r.Get("/receivables", func(w http.ResponseWriter, r *http.Request) {
+			m, _ := auth.MemberFrom(r.Context())
+			rec, err := d.Finances.Receivables(r.Context(), m.BusinessID)
+			writeFinance(w, r, http.StatusOK, rec, err)
 		})
 
 		r.Get("/expenses", func(w http.ResponseWriter, r *http.Request) {

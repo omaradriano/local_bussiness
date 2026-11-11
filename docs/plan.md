@@ -643,10 +643,10 @@ Lo que pidió la florería para trabajar sin Excel en temporada alta. Siguen las
 
 **Florería: dinero (tanda B, 2026-11-10)**
 
-- [ ] Venta rápida con descuento (cantidad o porcentaje, `sales.discount`) y «¿Con cuánto paga?» con el cambio (no se guarda). El descuento se reparte en proporción entre productos y mostrador en Finanzas.
-- [ ] Corte de caja del día por método (pagos de pedidos, ventas, depósitos y devoluciones), con conteo del efectivo guardado y su diferencia (`cash_closings`).
-- [ ] Crédito: la dueña marca al cliente «Puede pagar después» (`customers.credit`); cualquiera del equipo le entrega con saldo y se cobra después.
-- [ ] Por cobrar: entregados a crédito con saldo, pedidos activos con saldo y anticipos cobrados de pedidos futuros.
+- [x] Venta rápida con descuento (cantidad o porcentaje, `sales.discount`) y «¿Con cuánto paga?» con el cambio (no se guarda). El descuento se reparte en proporción entre productos y mostrador en Finanzas.
+- [x] Corte de caja del día por método (pagos de pedidos, ventas, depósitos y devoluciones), con conteo del efectivo guardado y su diferencia (`cash_closings`).
+- [x] Crédito: la dueña marca al cliente «Puede pagar después» (`customers.credit`); cualquiera del equipo le entrega con saldo y se cobra después.
+- [x] Por cobrar: entregados a crédito con saldo, pedidos activos con saldo y anticipos cobrados de pedidos futuros.
 
 **Fase 7 (posterior)** — WhatsApp Cloud API, pagos en línea del cliente, cobro de la suscripción, nuevos giros (lavado de autos, lavado de salas, tiendas, limosinas, salones, casas por noche) sobre el mapa por giro y editor para que cada dueño configure sus propios pasos.
 

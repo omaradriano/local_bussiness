@@ -765,6 +765,25 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/v1/b/{businessId}/finances/receivables": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                businessId: components["parameters"]["BusinessId"];
+            };
+            cookie?: never;
+        };
+        /** Por cobrar (entregados a crédito y pedidos activos con saldo) y anticipos de lo que no se ha entregado (solo dueño) */
+        get: operations["receivables"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/v1/b/{businessId}/finances/expenses": {
         parameters: {
             query?: never;
@@ -1851,6 +1870,28 @@ export interface components {
         FinanceSide: {
             total: number;
             parts: components["schemas"]["FinancePart"][];
+        };
+        Receivable: {
+            /** Format: uuid */
+            booking_id: string;
+            customer: string;
+            phone: string;
+            /** Format: date-time */
+            starts_at: string;
+            status: components["schemas"]["BookingStatus"];
+            /** @description Con los extras a cuenta */
+            total: number;
+            due: number;
+        };
+        Receivables: {
+            /** @description Entregados a crédito con saldo */
+            credit: components["schemas"]["Receivable"][];
+            /** @description Sin entregar con saldo, por fecha */
+            active: components["schemas"]["Receivable"][];
+            total_due: number;
+            /** @description Cobrado de lo que aún no se entrega */
+            advances: number;
+            advance_count: number;
         };
         CashReport: {
             /** Format: date-time */
@@ -3968,6 +4009,29 @@ export interface operations {
             };
             403: components["responses"]["Error"];
             422: components["responses"]["Error"];
+        };
+    };
+    receivables: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                businessId: components["parameters"]["BusinessId"];
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Receivables"];
+                };
+            };
+            403: components["responses"]["Error"];
         };
     };
     listExpenses: {
