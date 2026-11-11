@@ -7,6 +7,7 @@ import (
 	"slices"
 	"strconv"
 	"strings"
+	"time"
 
 	"github.com/go-chi/chi/v5"
 
@@ -27,6 +28,27 @@ type CustomersRepo interface {
 	AddDocuments(ctx context.Context, businessID, customerID, docType string, keys []string, actor string) (customers.Customer, error)
 	DeleteDocument(ctx context.Context, businessID, customerID, docID string) (string, error)
 	Summary(ctx context.Context, businessID, customerID string) (customers.Summary, error)
+	Dates(ctx context.Context, businessID, customerID string) ([]customers.Date, error)
+	AddDate(ctx context.Context, businessID, customerID string, d customers.Date) (customers.Date, error)
+	DeleteDate(ctx context.Context, businessID, customerID, id string) error
+	UpcomingDates(ctx context.Context, businessID string, today time.Time, days int) ([]customers.Upcoming, error)
+}
+
+// writeDates answers the important-dates routes.
+func writeDates(w http.ResponseWriter, r *http.Request, status int, v any, err error) {
+	var bad customers.Invalid
+	switch {
+	case errors.As(err, &bad):
+		invalid(w, "Revisa la fecha.", bad)
+	case errors.Is(err, customers.ErrNotFound):
+		notFound(w, "No existe.")
+	case err != nil:
+		internalError(w, r, "customer dates", err)
+	case v == nil:
+		w.WriteHeader(http.StatusNoContent)
+	default:
+		apierr.JSON(w, status, v)
+	}
 }
 
 func writeCustomer(w http.ResponseWriter, r *http.Request, status int, c customers.Customer, err error) {
@@ -43,6 +65,18 @@ func writeCustomer(w http.ResponseWriter, r *http.Request, status int, c custome
 // mountCustomers adds /customers routes inside a business group. Any member can register and
 // edit customers (counter work); only the owner marks them trusted or deletes documents.
 func mountCustomers(r chi.Router, d Deps) {
+	// Customers' dates in the next 7 days, for Hoy.
+	r.Get("/customer-dates/upcoming", func(w http.ResponseWriter, r *http.Request) {
+		m, _ := auth.MemberFrom(r.Context())
+		today, err := d.Finances.Today(r.Context(), m.BusinessID, d.now())
+		if err != nil {
+			internalError(w, r, "today", err)
+			return
+		}
+		list, err := d.Customers.UpcomingDates(r.Context(), m.BusinessID, today, 7)
+		writeDates(w, r, http.StatusOK, map[string]any{"dates": list}, err)
+	})
+
 	r.Get("/customers", func(w http.ResponseWriter, r *http.Request) {
 		m, _ := auth.MemberFrom(r.Context())
 		limit, _ := strconv.Atoi(r.URL.Query().Get("limit"))
@@ -125,6 +159,32 @@ func mountCustomers(r chi.Router, d Deps) {
 				return
 			}
 			apierr.JSON(w, http.StatusOK, s)
+		})
+
+		// Important dates (every year): birthdays, anniversaries.
+		r.Get("/dates", func(w http.ResponseWriter, r *http.Request) {
+			if c, ok := load(w, r); ok {
+				m, _ := auth.MemberFrom(r.Context())
+				list, err := d.Customers.Dates(r.Context(), m.BusinessID, c.ID)
+				writeDates(w, r, http.StatusOK, map[string]any{"dates": list}, err)
+			}
+		})
+		r.Post("/dates", func(w http.ResponseWriter, r *http.Request) {
+			c, ok := load(w, r)
+			if !ok {
+				return
+			}
+			var body customers.Date
+			if !decode(w, r, &body) {
+				return
+			}
+			m, _ := auth.MemberFrom(r.Context())
+			saved, err := d.Customers.AddDate(r.Context(), m.BusinessID, c.ID, body)
+			writeDates(w, r, http.StatusCreated, saved, err)
+		})
+		r.Delete("/dates/{dateId}", func(w http.ResponseWriter, r *http.Request) {
+			m, _ := auth.MemberFrom(r.Context())
+			writeDates(w, r, 0, nil, d.Customers.DeleteDate(r.Context(), m.BusinessID, chi.URLParam(r, "customerId"), chi.URLParam(r, "dateId")))
 		})
 
 		r.Patch("/", func(w http.ResponseWriter, r *http.Request) {

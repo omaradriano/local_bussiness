@@ -997,6 +997,25 @@ func (*fakeCustomers) Rules(context.Context, string) (customers.Rules, error) {
 func (*fakeCustomers) Search(_ context.Context, _, q string, _ int) ([]customers.Customer, error) {
 	return []customers.Customer{{ID: customerID, Name: "Ana " + q}}, nil
 }
+func (*fakeCustomers) Dates(context.Context, string, string) ([]customers.Date, error) {
+	return []customers.Date{{ID: "d1", Label: "Aniversario", Month: 6, Day: 2}}, nil
+}
+func (*fakeCustomers) AddDate(_ context.Context, _, _ string, d customers.Date) (customers.Date, error) {
+	if err := d.Validate(); err != nil {
+		return d, err
+	}
+	d.ID = "d2"
+	return d, nil
+}
+func (*fakeCustomers) DeleteDate(_ context.Context, _, _, id string) error {
+	if id != "d1" {
+		return customers.ErrNotFound
+	}
+	return nil
+}
+func (*fakeCustomers) UpcomingDates(_ context.Context, _ string, today time.Time, days int) ([]customers.Upcoming, error) {
+	return []customers.Upcoming{{Date: customers.Date{Label: "Cumpleaños"}, CustomerName: "Ana", On: today, DaysLeft: days - 4}}, nil
+}
 func (*fakeCustomers) Summary(context.Context, string, string) (customers.Summary, error) {
 	return customers.Summary{Orders: 4, Spent: 139000, Recipients: []customers.Recipient{{Name: "Mamá", Count: 3}}}, nil
 }
@@ -1046,6 +1065,12 @@ func TestCustomerRoutes(t *testing.T) {
 		{"teléfono repetido", http.MethodPost, base, "ok", strings.Replace(full, "614 123 4567", "6140000000", 1) + `}`, http.StatusConflict, `"customer_id":"` + customerID},
 		{"empleada no marca de confianza", http.MethodPatch, one + "/", "staff", `{"trusted":true}`, http.StatusOK, `"trusted":false`},
 		{"dueño marca de confianza", http.MethodPatch, one + "/", "ok", `{"trusted":true}`, http.StatusOK, `"trusted":true`},
+		{"fechas del cliente", http.MethodGet, one + "/dates", "staff", "", http.StatusOK, `"label":"Aniversario"`},
+		{"agregar fecha", http.MethodPost, one + "/dates", "staff", `{"label":"Cumpleaños","month":3,"day":14}`, http.StatusCreated, `"id":"d2"`},
+		{"fecha que no existe", http.MethodPost, one + "/dates", "staff", `{"label":"x","month":4,"day":31}`, http.StatusUnprocessableEntity, `"day"`},
+		{"borrar fecha", http.MethodDelete, one + "/dates/d1", "staff", "", http.StatusNoContent, ""},
+		{"borrar fecha inexistente", http.MethodDelete, one + "/dates/zz", "staff", "", http.StatusNotFound, `"not_found"`},
+		{"próximas fechas", http.MethodGet, "/v1/b/" + bizA + "/customer-dates/upcoming", "staff", "", http.StatusOK, `"days_left":3`},
 		{"resumen del cliente", http.MethodGet, one + "/summary", "staff", "", http.StatusOK, `"spent":139000`},
 		{"resumen de cliente inexistente", http.MethodGet, base + "/eeeeeeee-0000-0000-0000-000000000000/summary", "ok", "", http.StatusNotFound, `"not_found"`},
 		{"cliente inexistente", http.MethodGet, base + "/eeeeeeee-0000-0000-0000-000000000000/", "ok", "", http.StatusNotFound, `"not_found"`},

@@ -1116,6 +1116,65 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/v1/b/{businessId}/customers/{customerId}/dates": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                businessId: components["parameters"]["BusinessId"];
+                customerId: string;
+            };
+            cookie?: never;
+        };
+        /** Fechas importantes del cliente (cada año), por mes y día */
+        get: operations["customerDates"];
+        put?: never;
+        post: operations["addCustomerDate"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/b/{businessId}/customers/{customerId}/dates/{dateId}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                businessId: components["parameters"]["BusinessId"];
+                customerId: string;
+                dateId: string;
+            };
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post?: never;
+        delete: operations["deleteCustomerDate"];
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/b/{businessId}/customer-dates/upcoming": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                businessId: components["parameters"]["BusinessId"];
+            };
+            cookie?: never;
+        };
+        /** Fechas de clientes en los próximos 7 días (para Hoy), la más cercana primero */
+        get: operations["upcomingCustomerDates"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/v1/b/{businessId}/customers/{customerId}/uploads": {
         parameters: {
             query?: never;
@@ -1736,6 +1795,12 @@ export interface components {
         };
         /** @enum {string} */
         DocType: "ine" | "proof_of_address" | "guarantor_id";
+        CustomerDate: {
+            id: string;
+            label: string;
+            month: number;
+            day: number;
+        };
         CustomerSummary: {
             orders: number;
             /** @description Cobrado neto más extras pagados con sus pedidos */
@@ -4831,6 +4896,120 @@ export interface operations {
                 };
             };
             404: components["responses"]["Error"];
+        };
+    };
+    customerDates: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                businessId: components["parameters"]["BusinessId"];
+                customerId: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        dates: components["schemas"]["CustomerDate"][];
+                    };
+                };
+            };
+            404: components["responses"]["Error"];
+        };
+    };
+    addCustomerDate: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                businessId: components["parameters"]["BusinessId"];
+                customerId: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": {
+                    label: string;
+                    month: number;
+                    day: number;
+                };
+            };
+        };
+        responses: {
+            /** @description Creada */
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["CustomerDate"];
+                };
+            };
+            404: components["responses"]["Error"];
+            422: components["responses"]["Error"];
+        };
+    };
+    deleteCustomerDate: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                businessId: components["parameters"]["BusinessId"];
+                customerId: string;
+                dateId: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Borrada */
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            404: components["responses"]["Error"];
+        };
+    };
+    upcomingCustomerDates: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                businessId: components["parameters"]["BusinessId"];
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        dates: (components["schemas"]["CustomerDate"] & {
+                            /** Format: uuid */
+                            customer_id: string;
+                            customer_name: string;
+                            phone: string;
+                            /** Format: date-time */
+                            on: string;
+                            days_left: number;
+                        })[];
+                    };
+                };
+            };
         };
     };
     createCustomerUpload: {
