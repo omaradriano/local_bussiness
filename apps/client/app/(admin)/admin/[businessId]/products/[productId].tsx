@@ -1,13 +1,14 @@
 import type { components } from '@lb/api-client';
 import { centavosToInput, formatMXN, parsePesos, strings, todayISO } from '@lb/shared';
 import { router, Stack, useLocalSearchParams } from 'expo-router';
-import { useEffect, useState } from 'react';
+import { useCallback, useEffect, useState } from 'react';
 import { ActivityIndicator, Switch, View } from 'react-native';
 import { api } from '../../../../../lib/api';
 import { errorText, fieldErrors } from '../../../../../lib/errors';
 import { Button, Cell, Field, Group, Screen, Text, useToast } from '../../../../../ui';
 
 type Product = components['schemas']['RetailProduct'];
+type Movement = components['schemas']['Movement'];
 const t = strings.products;
 const ISO = /^\d{4}-\d{2}-\d{2}$/;
 
@@ -22,6 +23,13 @@ export default function ProductForm() {
   const [errors, setErrors] = useState<Record<string, string>>({});
   const [buyErrors, setBuyErrors] = useState<Record<string, string>>({});
   const [busy, setBusy] = useState<'save' | 'buy' | null>(null);
+  const [moves, setMoves] = useState<Movement[] | null>(null);
+  const loadMoves = useCallback(() => {
+    if (isNew) return;
+    api.GET('/v1/b/{businessId}/products/{productId}/movements', { params: { path: { businessId, productId } } })
+      .then(({ data }) => setMoves(data?.movements ?? []));
+  }, [businessId, productId, isNew]);
+  useEffect(loadMoves, [loadMoves]);
 
   useEffect(() => {
     if (isNew) return;
@@ -75,6 +83,7 @@ export default function ProductForm() {
     setProduct(data);
     setF((x) => ({ ...x, cost: data.cost !== null ? centavosToInput(data.cost) : x.cost, stock: String(data.stock) }));
     toast(t.purchased);
+    loadMoves();
   }
 
   const title = isNew ? t.add : product!.name;
@@ -105,6 +114,13 @@ export default function ProductForm() {
           </View>
           <Field label={t.purchasedOn} value={buy.on} onChangeText={(on) => setBuy({ ...buy, on })} error={buyErrors.purchased_on} />
           <Button icon="cart" busy={busy === 'buy'} onPress={purchase}>{t.purchase}</Button>
+        </Group>
+      )}
+      {!isNew && moves && (
+        <Group label={t.history}>
+          {moves.length === 0 ? <Cell label={t.noHistory} /> : moves.map((m, i) => (
+            <Cell key={i} label={t.moveLabel[m.kind](m.quantity)} sublabel={`${new Date(m.at).toLocaleDateString('es-MX', { day: 'numeric', month: 'short', year: 'numeric' })} · ${t.moveAmount[m.kind](formatMXN(m.amount))}`} />
+          ))}
         </Group>
       )}
     </Screen>

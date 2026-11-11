@@ -309,8 +309,8 @@ func (r Repo) Update(ctx context.Context, businessID string, p Product) (Product
 	return p, err
 }
 
-// Purchase adds stock (and updates the product's cost to the new unit cost); it counts as an
-// expense («Mercancía») on its date.
+// Purchase adds stock and averages the product's cost with what's on hand (weighted by quantity,
+// rounded to centavos); it counts as an expense («Mercancía») on its date.
 func (r Repo) Purchase(ctx context.Context, businessID, productID string, quantity int, unitCost int64, on time.Time, actor string) (Product, error) {
 	if quantity < 1 || quantity > 100000 {
 		return Product{}, Invalid{"quantity": "La cantidad debe ser de 1 a 100,000."}
@@ -331,7 +331,9 @@ func (r Repo) Purchase(ctx context.Context, businessID, productID string, quanti
 	if future {
 		return Product{}, Invalid{"purchased_on": "La fecha de compra no puede ser futura."}
 	}
-	tag, err := tx.Exec(ctx, `update public.retail_products set stock = stock + $3, cost = $4 where business_id = $1 and id = $2`,
+	tag, err := tx.Exec(ctx, `update public.retail_products
+		set cost = (stock::bigint * cost + $3::bigint * $4 + (stock + $3) / 2) / (stock + $3), stock = stock + $3
+		where business_id = $1 and id = $2`,
 		businessID, productID, quantity, unitCost)
 	if err != nil {
 		return Product{}, err
@@ -623,6 +625,39 @@ func (r Repo) StatsFor(ctx context.Context, businessID string, start, end, from,
 		}
 	}
 	return st, nil
+}
+
+// Movement: one line of a product's history.
+type Movement struct {
+	At       time.Time `json:"at"`
+	Kind     string    `json:"kind"`     // purchase | sale
+	Quantity int       `json:"quantity"` // signed: + came in, − went out
+	Amount   int64     `json:"amount"`   // unit cost (purchase) or unit price (sale)
+}
+
+// Movements: a product's purchases and sales, newest first (the last 200).
+func (r Repo) Movements(ctx context.Context, businessID, productID string) ([]Movement, error) {
+	rows, err := r.DB.Query(ctx, `
+		select purchased_on::timestamptz, 'purchase', quantity, unit_cost, created_at from public.stock_purchases
+		where business_id = $1 and product_id = $2
+		union all
+		select s.sold_at, 'sale', -l.quantity, l.unit_price, s.sold_at from public.sale_lines l join public.sales s on s.id = l.sale_id
+		where l.business_id = $1 and l.product_id = $2
+		order by 1 desc, 5 desc limit 200`, businessID, productID)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	out := []Movement{}
+	for rows.Next() {
+		var m Movement
+		var created time.Time
+		if err := rows.Scan(&m.At, &m.Kind, &m.Quantity, &m.Amount, &created); err != nil {
+			return nil, err
+		}
+		out = append(out, m)
+	}
+	return out, rows.Err()
 }
 
 // Bounds turns the local dates [from, to] into instants [start, end) in the business's time zone.

@@ -209,3 +209,49 @@ func TestIntegrationSaleDiscount(t *testing.T) {
 		}
 	}
 }
+
+func TestIntegrationAverageCostAndMovements(t *testing.T) {
+	url := os.Getenv("TEST_DATABASE_URL")
+	if url == "" {
+		t.Skip("TEST_DATABASE_URL not set")
+	}
+	ctx := context.Background()
+	conn, err := pgx.Connect(ctx, url)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer conn.Close(ctx)
+	tx, err := conn.Begin(ctx)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer tx.Rollback(ctx)
+	const biz = "00000000-0000-0000-0000-0000000000d4"
+	if _, err := tx.Exec(ctx, `insert into public.businesses (id, slug, name, vertical) values ($1, 'prod-avg', 'A', 'flowers')`, biz); err != nil {
+		t.Fatal(err)
+	}
+	r := Repo{DB: tx}
+	day := func(s string) time.Time { d, _ := time.Parse(time.DateOnly, s); return d }
+	cost := int64(6000)
+	p, err := r.Create(ctx, biz, Product{Name: "Chocolates", Price: 9000, Cost: &cost, Stock: 10})
+	if err != nil {
+		t.Fatal(err)
+	}
+	// 10 at 60 on hand + 10 bought at 30 = 20 at 45, not 30.
+	if p, err = r.Purchase(ctx, biz, p.ID, 10, 3000, day("2026-11-02"), ""); err != nil || *p.Cost != 4500 || p.Stock != 20 {
+		t.Fatalf("average: %+v %v", p, err)
+	}
+	// 20 at 45 + 1 at 50 = 45.24 → 45.24 rounded to centavos.
+	if p, err = r.Purchase(ctx, biz, p.ID, 1, 5000, day("2026-11-03"), ""); err != nil || *p.Cost != 4524 {
+		t.Fatalf("rounded average: %+v %v", *p.Cost, err)
+	}
+	if _, err := r.Sell(ctx, biz, SaleInput{Lines: []LineInput{{ProductID: p.ID, Quantity: 2}}, Method: "cash", Retail: true}, "", time.Date(2026, 11, 4, 18, 0, 0, 0, time.UTC)); err != nil {
+		t.Fatal(err)
+	}
+	// History, newest first: the sale (−2 at its price), then both purchases (+ at their cost).
+	moves, err := r.Movements(ctx, biz, p.ID)
+	if err != nil || len(moves) != 3 || moves[0].Kind != "sale" || moves[0].Quantity != -2 || moves[0].Amount != 9000 ||
+		moves[1].Kind != "purchase" || moves[1].Quantity != 1 || moves[1].Amount != 5000 || moves[2].Quantity != 10 {
+		t.Fatalf("movements: %+v %v", moves, err)
+	}
+}

@@ -915,6 +915,27 @@ paths:
         "404": { $ref: "#/components/responses/Error" }
         "422": { $ref: "#/components/responses/Error" }
 
+  /v1/b/{businessId}/products/{productId}/movements:
+    parameters:
+      - $ref: "#/components/parameters/BusinessId"
+      - { name: productId, in: path, required: true, schema: { type: string, format: uuid } }
+    get:
+      operationId: productMovements
+      summary: Historial del producto (compras y ventas, lo más reciente primero; solo dueño)
+      responses:
+        "200":
+          description: OK
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [movements]
+                properties:
+                  movements:
+                    type: array
+                    items: { $ref: "#/components/schemas/Movement" }
+        "403": { $ref: "#/components/responses/Error" }
+
   /v1/b/{businessId}/products/{productId}/purchases:
     parameters:
       - $ref: "#/components/parameters/BusinessId"
@@ -2496,6 +2517,15 @@ components:
         total_due: { type: integer }
         advances: { type: integer, description: "Cobrado de lo que aún no se entrega" }
         advance_count: { type: integer }
+
+    Movement:
+      type: object
+      required: [at, kind, quantity, amount]
+      properties:
+        at: { type: string, format: date-time }
+        kind: { type: string, enum: [purchase, sale] }
+        quantity: { type: integer, description: "+ entró, − salió" }
+        amount: { type: integer, description: "Costo unitario (compra) o precio unitario (venta)" }
 
     CashReport:
       type: object

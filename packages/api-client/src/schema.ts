@@ -649,6 +649,26 @@ export interface paths {
         patch: operations["updateProduct"];
         trace?: never;
     };
+    "/v1/b/{businessId}/products/{productId}/movements": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                businessId: components["parameters"]["BusinessId"];
+                productId: string;
+            };
+            cookie?: never;
+        };
+        /** Historial del producto (compras y ventas, lo más reciente primero; solo dueño) */
+        get: operations["productMovements"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/v1/b/{businessId}/products/{productId}/purchases": {
         parameters: {
             query?: never;
@@ -1892,6 +1912,16 @@ export interface components {
             /** @description Cobrado de lo que aún no se entrega */
             advances: number;
             advance_count: number;
+        };
+        Movement: {
+            /** Format: date-time */
+            at: string;
+            /** @enum {string} */
+            kind: "purchase" | "sale";
+            /** @description + entró, − salió */
+            quantity: number;
+            /** @description Costo unitario (compra) o precio unitario (venta) */
+            amount: number;
         };
         CashReport: {
             /** Format: date-time */
@@ -3757,6 +3787,32 @@ export interface operations {
             };
             404: components["responses"]["Error"];
             422: components["responses"]["Error"];
+        };
+    };
+    productMovements: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                businessId: components["parameters"]["BusinessId"];
+                productId: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        movements: components["schemas"]["Movement"][];
+                    };
+                };
+            };
+            403: components["responses"]["Error"];
         };
     };
     purchaseStock: {

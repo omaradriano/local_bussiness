@@ -1303,6 +1303,9 @@ func (fakeProducts) Create(_ context.Context, _ string, p products.Product) (pro
 func (fakeProducts) Update(_ context.Context, _ string, p products.Product) (products.Product, error) {
 	return p, nil
 }
+func (fakeProducts) Movements(context.Context, string, string) ([]products.Movement, error) {
+	return []products.Movement{{Kind: "purchase", Quantity: 10, Amount: 3000}}, nil
+}
 func (fakeProducts) Purchase(_ context.Context, _, id string, q int, _ int64, _ time.Time, _ string) (products.Product, error) {
 	return products.Product{ID: id, Stock: 3 + q}, nil
 }
@@ -1340,6 +1343,8 @@ func TestProductRoutes(t *testing.T) {
 		{"crear", http.MethodPost, base + "/products", "ok", `{"name":" Cera ","price":15000,"cost":7000,"stock":10}`, http.StatusCreated, `"name":"Cera"`},
 		{"sin nombre", http.MethodPost, base + "/products", "ok", `{"name":"","price":1}`, http.StatusUnprocessableEntity, `"name"`},
 		{"compra de mercancía", http.MethodPost, base + "/products/" + itemID + "/purchases", "ok", `{"quantity":5,"unit_cost":6500,"purchased_on":"2026-11-03"}`, http.StatusOK, `"stock":8`},
+		{"historial del producto", http.MethodGet, base + "/products/" + itemID + "/movements", "ok", "", http.StatusOK, `"kind":"purchase"`},
+		{"historial: solo el dueño", http.MethodGet, base + "/products/" + itemID + "/movements", "staff", "", http.StatusForbidden, `"forbidden"`},
 		{"compra sin fecha", http.MethodPost, base + "/products/" + itemID + "/purchases", "ok", `{"quantity":5,"unit_cost":6500}`, http.StatusUnprocessableEntity, `"purchased_on"`},
 		{"empleado vende", http.MethodPost, base + "/sales", "staff", `{"lines":[{"product_id":"` + itemID + `","quantity":1}],"method":"cash"}`, http.StatusCreated, `"total":15000`},
 		{"venta vacía", http.MethodPost, base + "/sales", "staff", `{"lines":[],"method":"cash"}`, http.StatusUnprocessableEntity, `"message":"Agrega productos."`},
