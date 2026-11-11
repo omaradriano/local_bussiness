@@ -572,6 +572,7 @@ type Stats struct {
 	ByProduct  []ProductStat `json:"by_product"`  // best sellers first
 	LowStock   []Product     `json:"low_stock"`   // active with 3 or fewer left
 	StockValue int64         `json:"stock_value"` // what the stock on hand cost
+	Waste      int64         `json:"waste"`       // merchandise lost in the period, at cost
 }
 
 // StatsFor [start, end) (instants) and the purchases between the local dates [from, to].
@@ -611,6 +612,10 @@ func (r Repo) StatsFor(ctx context.Context, businessID string, start, end, from,
 		where business_id = $1 and purchased_on between $2 and $3`, businessID, from, to).Scan(&st.Purchases); err != nil {
 		return st, err
 	}
+	if err := r.DB.QueryRow(ctx, `select coalesce(sum(-quantity * unit_cost), 0) from public.stock_adjustments
+		where business_id = $1 and reason = 'waste' and created_at >= $2 and created_at < $3`, businessID, start, end).Scan(&st.Waste); err != nil {
+		return st, err
+	}
 	if err := r.DB.QueryRow(ctx, `select coalesce(sum(stock * cost), 0) from public.retail_products where business_id = $1 and active`,
 		businessID).Scan(&st.StockValue); err != nil {
 		return st, err
@@ -627,23 +632,87 @@ func (r Repo) StatsFor(ctx context.Context, businessID string, start, end, from,
 	return st, nil
 }
 
+// Adjustment: stock that changes without a purchase or a sale. Waste takes Quantity pieces out;
+// a count sets the stock to what was Counted.
+type Adjustment struct {
+	Reason   string `json:"reason"` // waste | count
+	Quantity int    `json:"quantity"`
+	Counted  *int   `json:"counted"`
+	Note     string `json:"note"`
+}
+
+// Adjust records a waste or a count and moves the stock; the product's cost values it.
+func (r Repo) Adjust(ctx context.Context, businessID, productID string, a Adjustment, actor string) (Product, error) {
+	note := strings.TrimSpace(a.Note)
+	if utf8.RuneCountInString(note) > 200 {
+		return Product{}, Invalid{"note": "La nota es muy larga (máximo 200 caracteres)."}
+	}
+	tx, err := r.DB.Begin(ctx)
+	if err != nil {
+		return Product{}, err
+	}
+	defer tx.Rollback(ctx)
+	var stock int
+	var cost int64
+	err = tx.QueryRow(ctx, `select stock, cost from public.retail_products where business_id = $1 and id = $2 for update`, businessID, productID).Scan(&stock, &cost)
+	if errors.Is(err, pgx.ErrNoRows) {
+		return Product{}, ErrNotFound
+	}
+	if err != nil {
+		return Product{}, err
+	}
+	var delta int
+	switch a.Reason {
+	case "waste":
+		if a.Quantity < 1 || a.Quantity > stock {
+			return Product{}, Invalid{"quantity": fmt.Sprintf("La merma debe ser de 1 a %d (lo que hay).", stock)}
+		}
+		delta = -a.Quantity
+	case "count":
+		if a.Counted == nil || *a.Counted < 0 || *a.Counted > 100000 {
+			return Product{}, Invalid{"counted": "Escribe cuántas piezas contaste."}
+		}
+		if *a.Counted == stock {
+			return Product{}, Invalid{"counted": "El conteo es igual a lo que ya había; no hay nada que ajustar."}
+		}
+		delta = *a.Counted - stock
+	default:
+		return Product{}, Invalid{"reason": "Elige merma o conteo."}
+	}
+	if _, err := tx.Exec(ctx, `insert into public.stock_adjustments (business_id, product_id, reason, quantity, unit_cost, note, created_by)
+		values ($1, $2, $3, $4, $5, nullif($6, ''), nullif($7, '')::uuid)`, businessID, productID, a.Reason, delta, cost, note, actor); err != nil {
+		return Product{}, err
+	}
+	if _, err := tx.Exec(ctx, `update public.retail_products set stock = stock + $3 where business_id = $1 and id = $2`, businessID, productID, delta); err != nil {
+		return Product{}, err
+	}
+	if err := tx.Commit(ctx); err != nil {
+		return Product{}, err
+	}
+	return r.Product(ctx, businessID, productID)
+}
+
 // Movement: one line of a product's history.
 type Movement struct {
 	At       time.Time `json:"at"`
-	Kind     string    `json:"kind"`     // purchase | sale
+	Kind     string    `json:"kind"`     // purchase | sale | waste | count
 	Quantity int       `json:"quantity"` // signed: + came in, − went out
-	Amount   int64     `json:"amount"`   // unit cost (purchase) or unit price (sale)
+	Amount   int64     `json:"amount"`   // unit cost (purchase, adjustment) or unit price (sale)
+	Note     *string   `json:"note"`     // why it was adjusted
 }
 
-// Movements: a product's purchases and sales, newest first (the last 200).
+// Movements: a product's purchases, sales and adjustments, newest first (the last 200).
 func (r Repo) Movements(ctx context.Context, businessID, productID string) ([]Movement, error) {
 	rows, err := r.DB.Query(ctx, `
-		select purchased_on::timestamptz, 'purchase', quantity, unit_cost, created_at from public.stock_purchases
+		select purchased_on::timestamptz, 'purchase', quantity, unit_cost, null::text, created_at from public.stock_purchases
 		where business_id = $1 and product_id = $2
 		union all
-		select s.sold_at, 'sale', -l.quantity, l.unit_price, s.sold_at from public.sale_lines l join public.sales s on s.id = l.sale_id
+		select s.sold_at, 'sale', -l.quantity, l.unit_price, null, s.sold_at from public.sale_lines l join public.sales s on s.id = l.sale_id
 		where l.business_id = $1 and l.product_id = $2
-		order by 1 desc, 5 desc limit 200`, businessID, productID)
+		union all
+		select created_at, reason, quantity, unit_cost, note, created_at from public.stock_adjustments
+		where business_id = $1 and product_id = $2
+		order by 1 desc, 6 desc limit 200`, businessID, productID)
 	if err != nil {
 		return nil, err
 	}
@@ -652,7 +721,7 @@ func (r Repo) Movements(ctx context.Context, businessID, productID string) ([]Mo
 	for rows.Next() {
 		var m Movement
 		var created time.Time
-		if err := rows.Scan(&m.At, &m.Kind, &m.Quantity, &m.Amount, &created); err != nil {
+		if err := rows.Scan(&m.At, &m.Kind, &m.Quantity, &m.Amount, &m.Note, &created); err != nil {
 			return nil, err
 		}
 		out = append(out, m)

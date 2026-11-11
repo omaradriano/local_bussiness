@@ -1303,6 +1303,12 @@ func (fakeProducts) Create(_ context.Context, _ string, p products.Product) (pro
 func (fakeProducts) Update(_ context.Context, _ string, p products.Product) (products.Product, error) {
 	return p, nil
 }
+func (fakeProducts) Adjust(_ context.Context, _, id string, a products.Adjustment, _ string) (products.Product, error) {
+	if a.Reason != "waste" && a.Reason != "count" {
+		return products.Product{}, products.Invalid{"reason": "Elige merma o conteo."}
+	}
+	return products.Product{ID: id, Stock: 7}, nil
+}
 func (fakeProducts) Movements(context.Context, string, string) ([]products.Movement, error) {
 	return []products.Movement{{Kind: "purchase", Quantity: 10, Amount: 3000}}, nil
 }
@@ -1344,6 +1350,9 @@ func TestProductRoutes(t *testing.T) {
 		{"sin nombre", http.MethodPost, base + "/products", "ok", `{"name":"","price":1}`, http.StatusUnprocessableEntity, `"name"`},
 		{"compra de mercancía", http.MethodPost, base + "/products/" + itemID + "/purchases", "ok", `{"quantity":5,"unit_cost":6500,"purchased_on":"2026-11-03"}`, http.StatusOK, `"stock":8`},
 		{"historial del producto", http.MethodGet, base + "/products/" + itemID + "/movements", "ok", "", http.StatusOK, `"kind":"purchase"`},
+		{"merma", http.MethodPost, base + "/products/" + itemID + "/adjustments", "ok", `{"reason":"waste","quantity":3}`, http.StatusOK, `"stock":7`},
+		{"ajuste sin motivo", http.MethodPost, base + "/products/" + itemID + "/adjustments", "ok", `{"quantity":3}`, http.StatusUnprocessableEntity, `"reason"`},
+		{"merma: solo el dueño", http.MethodPost, base + "/products/" + itemID + "/adjustments", "staff", `{"reason":"waste","quantity":3}`, http.StatusForbidden, `"forbidden"`},
 		{"historial: solo el dueño", http.MethodGet, base + "/products/" + itemID + "/movements", "staff", "", http.StatusForbidden, `"forbidden"`},
 		{"compra sin fecha", http.MethodPost, base + "/products/" + itemID + "/purchases", "ok", `{"quantity":5,"unit_cost":6500}`, http.StatusUnprocessableEntity, `"purchased_on"`},
 		{"empleado vende", http.MethodPost, base + "/sales", "staff", `{"lines":[{"product_id":"` + itemID + `","quantity":1}],"method":"cash"}`, http.StatusCreated, `"total":15000`},

@@ -255,3 +255,57 @@ func TestIntegrationAverageCostAndMovements(t *testing.T) {
 		t.Fatalf("movements: %+v %v", moves, err)
 	}
 }
+
+func TestIntegrationStockAdjustments(t *testing.T) {
+	url := os.Getenv("TEST_DATABASE_URL")
+	if url == "" {
+		t.Skip("TEST_DATABASE_URL not set")
+	}
+	ctx := context.Background()
+	conn, err := pgx.Connect(ctx, url)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer conn.Close(ctx)
+	tx, err := conn.Begin(ctx)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer tx.Rollback(ctx)
+	const biz = "00000000-0000-0000-0000-0000000000d5"
+	if _, err := tx.Exec(ctx, `insert into public.businesses (id, slug, name, vertical) values ($1, 'prod-adj', 'A', 'flowers')`, biz); err != nil {
+		t.Fatal(err)
+	}
+	r := Repo{DB: tx}
+	cost := int64(4000)
+	p, err := r.Create(ctx, biz, Product{Name: "Globo", Price: 9000, Cost: &cost, Stock: 10})
+	if err != nil {
+		t.Fatal(err)
+	}
+	var bad Invalid
+	if _, err := r.Adjust(ctx, biz, p.ID, Adjustment{Reason: "waste", Quantity: 11}, ""); !errors.As(err, &bad) || bad["quantity"] == "" {
+		t.Fatalf("waste over the stock: %v", err)
+	}
+	if _, err := r.Adjust(ctx, biz, p.ID, Adjustment{Reason: "count", Counted: ptrInt(10)}, ""); !errors.As(err, &bad) || bad["counted"] == "" {
+		t.Fatalf("count that changes nothing: %v", err)
+	}
+	// 3 popped (waste), then counted 6 where 7 were left: −1.
+	if p, err = r.Adjust(ctx, biz, p.ID, Adjustment{Reason: "waste", Quantity: 3, Note: "Se reventaron"}, ""); err != nil || p.Stock != 7 {
+		t.Fatalf("waste: %+v %v", p, err)
+	}
+	if p, err = r.Adjust(ctx, biz, p.ID, Adjustment{Reason: "count", Counted: ptrInt(6)}, ""); err != nil || p.Stock != 6 {
+		t.Fatalf("count: %+v %v", p, err)
+	}
+	moves, err := r.Movements(ctx, biz, p.ID)
+	if err != nil || len(moves) != 2 || moves[0].Kind != "count" || moves[0].Quantity != -1 || moves[1].Kind != "waste" || moves[1].Quantity != -3 || moves[1].Note == nil {
+		t.Fatalf("movements: %+v %v", moves, err)
+	}
+	// Waste is valued at cost in the stats (3 × 40); a count difference isn't waste.
+	now := time.Now()
+	st, err := r.StatsFor(ctx, biz, now.Add(-time.Hour), now.Add(time.Hour), now, now)
+	if err != nil || st.Waste != 12000 {
+		t.Fatalf("waste in stats: %+v %v", st.Waste, err)
+	}
+}
+
+func ptrInt(n int) *int { return &n }
