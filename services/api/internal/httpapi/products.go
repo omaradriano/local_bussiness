@@ -23,6 +23,7 @@ type ProductsRepo interface {
 	Purchase(ctx context.Context, businessID, productID string, quantity int, unitCost int64, on time.Time, actor string) (products.Product, error)
 	Movements(ctx context.Context, businessID, productID string) ([]products.Movement, error)
 	Adjust(ctx context.Context, businessID, productID string, a products.Adjustment, actor string) (products.Product, error)
+	Delete(ctx context.Context, businessID, id string) (bool, error)
 	Sell(ctx context.Context, businessID string, in products.SaleInput, actor string, now time.Time) (products.Sale, error)
 	CancelSale(ctx context.Context, businessID, saleID string) error
 	Sales(ctx context.Context, businessID string, start, end time.Time) ([]products.Sale, error)
@@ -97,7 +98,7 @@ func mountProducts(r chi.Router, d Deps) {
 			if !decode(w, r, &in) {
 				return
 			}
-			p := products.Product{Active: true}.Apply(in, true)
+			p := products.Product{Active: true, MinStock: 3}.Apply(in, true)
 			if err := p.Validate(); err != nil {
 				writeProducts(w, r, 0, nil, err)
 				return
@@ -146,6 +147,12 @@ func mountProducts(r chi.Router, d Deps) {
 			m, _ := auth.MemberFrom(r.Context())
 			list, err := d.Products.Movements(r.Context(), m.BusinessID, chi.URLParam(r, "productId"))
 			writeProducts(w, r, http.StatusOK, map[string]any{"movements": list}, err)
+		})
+		// Without history it's deleted; with history it's archived (its sales and purchases stay).
+		r.With(auth.RequireRole("owner"), requireUUIDParam("productId", "El producto no existe.")).Delete("/products/{productId}", func(w http.ResponseWriter, r *http.Request) {
+			m, _ := auth.MemberFrom(r.Context())
+			archived, err := d.Products.Delete(r.Context(), m.BusinessID, chi.URLParam(r, "productId"))
+			writeProducts(w, r, http.StatusOK, map[string]bool{"archived": archived}, err)
 		})
 		// Waste (merma) or a count (ajuste de conteo).
 		r.With(auth.RequireRole("owner"), requireUUIDParam("productId", "El producto no existe.")).Post("/products/{productId}/adjustments", func(w http.ResponseWriter, r *http.Request) {

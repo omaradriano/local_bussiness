@@ -642,7 +642,8 @@ export interface paths {
         get?: never;
         put?: never;
         post?: never;
-        delete?: never;
+        /** Borra un producto sin historial; con ventas, compras o ajustes se archiva (desaparece de las listas y ya no se vende) */
+        delete: operations["deleteProduct"];
         options?: never;
         head?: never;
         /** Nombre, precio, costo o activo (las existencias solo cambian con ventas y compras) */
@@ -1781,6 +1782,8 @@ export interface components {
             /** @description Solo para el dueño */
             cost: number | null;
             stock: number;
+            /** @description Con esto o menos sale en pocas existencias */
+            min_stock: number;
             active: boolean;
         };
         RetailProductInput: {
@@ -1790,6 +1793,7 @@ export interface components {
             /** @description Solo al crear */
             stock?: number;
             active?: boolean;
+            min_stock?: number;
         };
         Sale: {
             /** Format: uuid */
@@ -3781,6 +3785,33 @@ export interface operations {
                 };
             };
             422: components["responses"]["Error"];
+        };
+    };
+    deleteProduct: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                businessId: components["parameters"]["BusinessId"];
+                productId: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        archived: boolean;
+                    };
+                };
+            };
+            403: components["responses"]["Error"];
+            404: components["responses"]["Error"];
         };
     };
     updateProduct: {

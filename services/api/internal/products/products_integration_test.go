@@ -309,3 +309,58 @@ func TestIntegrationStockAdjustments(t *testing.T) {
 }
 
 func ptrInt(n int) *int { return &n }
+
+func TestIntegrationMinStockAndDelete(t *testing.T) {
+	url := os.Getenv("TEST_DATABASE_URL")
+	if url == "" {
+		t.Skip("TEST_DATABASE_URL not set")
+	}
+	ctx := context.Background()
+	conn, err := pgx.Connect(ctx, url)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer conn.Close(ctx)
+	tx, err := conn.Begin(ctx)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer tx.Rollback(ctx)
+	const biz = "00000000-0000-0000-0000-0000000000d6"
+	if _, err := tx.Exec(ctx, `insert into public.businesses (id, slug, name, vertical) values ($1, 'prod-min', 'A', 'flowers')`, biz); err != nil {
+		t.Fatal(err)
+	}
+	r := Repo{DB: tx}
+	cost := int64(1000)
+	// Low stock follows each product's minimum: 8 with a minimum of 10 is low; 2 with 0 isn't.
+	globo, _ := r.Create(ctx, biz, Product{Name: "Globo", Price: 5000, Cost: &cost, Stock: 8, MinStock: 10})
+	tarjeta, _ := r.Create(ctx, biz, Product{Name: "Tarjeta", Price: 3000, Cost: &cost, Stock: 2, MinStock: 0})
+	now := time.Now()
+	st, err := r.StatsFor(ctx, biz, now.Add(-time.Hour), now.Add(time.Hour), now, now)
+	if err != nil || len(st.LowStock) != 1 || st.LowStock[0].ID != globo.ID {
+		t.Fatalf("low stock: %+v %v", st.LowStock, err)
+	}
+	// Without history it's gone; with a sale it's archived and its sale keeps its name.
+	if archived, err := r.Delete(ctx, biz, tarjeta.ID); err != nil || archived {
+		t.Fatalf("delete without history: %v %v", archived, err)
+	}
+	sale, err := r.Sell(ctx, biz, SaleInput{Lines: []LineInput{{ProductID: globo.ID, Quantity: 1}}, Method: "cash", Retail: true}, "", now)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if archived, err := r.Delete(ctx, biz, globo.ID); err != nil || !archived {
+		t.Fatalf("delete with a sale: %v %v", archived, err)
+	}
+	if list, _ := r.Products(ctx, biz, true); len(list) != 0 {
+		t.Fatalf("archived products are hidden: %+v", list)
+	}
+	if _, err := r.Product(ctx, biz, globo.ID); !errors.Is(err, ErrNotFound) {
+		t.Fatalf("archived product by id: %v", err)
+	}
+	if sales, _ := r.Sales(ctx, biz, now.Add(-time.Hour), now.Add(time.Hour)); len(sales) != 1 || sales[0].ID != sale.ID || sales[0].Lines[0].Name != "Globo" {
+		t.Fatalf("the sale keeps the product: %+v", sales)
+	}
+	if _, err := r.Sell(ctx, biz, SaleInput{Lines: []LineInput{{ProductID: globo.ID, Quantity: 1}}, Method: "cash", Retail: true}, "", now); err == nil {
+		t.Fatal("an archived product can't be sold")
+	}
+}
