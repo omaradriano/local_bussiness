@@ -29,20 +29,22 @@ func (e Invalid) Error() string { return "invalid" }
 const maxMoney = 100_000_000_00
 
 type Product struct {
-	ID     string `json:"id"`
-	Name   string `json:"name"`
-	Price  int64  `json:"price"`
-	Cost   *int64 `json:"cost"` // owner only (nil for staff)
-	Stock  int    `json:"stock"`
-	Active bool   `json:"active"`
+	ID       string `json:"id"`
+	Name     string `json:"name"`
+	Price    int64  `json:"price"`
+	Cost     *int64 `json:"cost"` // owner only (nil for staff)
+	Stock    int    `json:"stock"`
+	MinStock int    `json:"min_stock"` // at or below it, it shows as low stock
+	Active   bool   `json:"active"`
 }
 
 type ProductInput struct {
-	Name   *string `json:"name"`
-	Price  *int64  `json:"price"`
-	Cost   *int64  `json:"cost"`
-	Stock  *int    `json:"stock"` // only when creating (afterwards stock moves with sales and purchases)
-	Active *bool   `json:"active"`
+	Name     *string `json:"name"`
+	Price    *int64  `json:"price"`
+	Cost     *int64  `json:"cost"`
+	Stock    *int    `json:"stock"` // only when creating (afterwards stock moves with sales and purchases)
+	MinStock *int    `json:"min_stock"`
+	Active   *bool   `json:"active"`
 }
 
 func (p Product) Apply(in ProductInput, creating bool) Product {
@@ -62,6 +64,9 @@ func (p Product) Apply(in ProductInput, creating bool) Product {
 	if in.Active != nil {
 		p.Active = *in.Active
 	}
+	if in.MinStock != nil {
+		p.MinStock = *in.MinStock
+	}
 	return p
 }
 
@@ -75,6 +80,9 @@ func (p Product) Validate() error {
 	}
 	if p.Cost != nil && (*p.Cost < 0 || *p.Cost > maxMoney) {
 		errs["cost"] = "El costo no es válido."
+	}
+	if p.MinStock < 0 || p.MinStock > 100000 {
+		errs["min_stock"] = "El mínimo debe ser de 0 a 100,000."
 	}
 	if p.Stock < 0 || p.Stock > 1_000_000 {
 		errs["stock"] = "Las existencias no son válidas."
@@ -249,7 +257,7 @@ func scanProducts(rows pgx.Rows, withCost bool) ([]Product, map[string]int64, er
 	for rows.Next() {
 		var p Product
 		var cost int64
-		if err := rows.Scan(&p.ID, &p.Name, &p.Price, &cost, &p.Stock, &p.Active); err != nil {
+		if err := rows.Scan(&p.ID, &p.Name, &p.Price, &cost, &p.Stock, &p.Active, &p.MinStock); err != nil {
 			return nil, nil, err
 		}
 		costs[p.ID] = cost
@@ -262,11 +270,11 @@ func scanProducts(rows pgx.Rows, withCost bool) ([]Product, map[string]int64, er
 	return out, costs, rows.Err()
 }
 
-const productCols = `id::text, name, price, cost, stock, active`
+const productCols = `id::text, name, price, cost, stock, active, min_stock`
 
 // Products lists the business's products; the cost only for the owner.
 func (r Repo) Products(ctx context.Context, businessID string, withCost bool) ([]Product, error) {
-	rows, err := r.DB.Query(ctx, `select `+productCols+` from public.retail_products where business_id = $1 order by active desc, name`, businessID)
+	rows, err := r.DB.Query(ctx, `select `+productCols+` from public.retail_products where business_id = $1 and deleted_at is null order by active desc, name`, businessID)
 	if err != nil {
 		return nil, err
 	}
@@ -275,7 +283,7 @@ func (r Repo) Products(ctx context.Context, businessID string, withCost bool) ([
 }
 
 func (r Repo) Product(ctx context.Context, businessID, id string) (Product, error) {
-	rows, err := r.DB.Query(ctx, `select `+productCols+` from public.retail_products where business_id = $1 and id = $2`, businessID, id)
+	rows, err := r.DB.Query(ctx, `select `+productCols+` from public.retail_products where business_id = $1 and id = $2 and deleted_at is null`, businessID, id)
 	if err != nil {
 		return Product{}, err
 	}
@@ -294,15 +302,15 @@ func (r Repo) Create(ctx context.Context, businessID string, p Product) (Product
 	if p.Cost != nil {
 		cost = *p.Cost
 	}
-	err := r.DB.QueryRow(ctx, `insert into public.retail_products (business_id, name, price, cost, stock, active)
-		values ($1, $2, $3, $4, $5, true) returning id::text, active`, businessID, p.Name, p.Price, cost, p.Stock).Scan(&p.ID, &p.Active)
+	err := r.DB.QueryRow(ctx, `insert into public.retail_products (business_id, name, price, cost, stock, active, min_stock)
+		values ($1, $2, $3, $4, $5, true, $6) returning id::text, active`, businessID, p.Name, p.Price, cost, p.Stock, p.MinStock).Scan(&p.ID, &p.Active)
 	p.Cost = &cost
 	return p, err
 }
 
 func (r Repo) Update(ctx context.Context, businessID string, p Product) (Product, error) {
-	tag, err := r.DB.Exec(ctx, `update public.retail_products set name = $3, price = $4, cost = $5, active = $6
-		where business_id = $1 and id = $2`, businessID, p.ID, p.Name, p.Price, *p.Cost, p.Active)
+	tag, err := r.DB.Exec(ctx, `update public.retail_products set name = $3, price = $4, cost = $5, active = $6, min_stock = $7
+		where business_id = $1 and id = $2 and deleted_at is null`, businessID, p.ID, p.Name, p.Price, *p.Cost, p.Active, p.MinStock)
 	if err == nil && tag.RowsAffected() == 0 {
 		return p, ErrNotFound
 	}
@@ -405,7 +413,7 @@ func (r Repo) Sell(ctx context.Context, businessID string, in SaleInput, actor s
 		}
 	}
 	// Lock the products sold so two sales can't take the same last piece.
-	rows, err := tx.Query(ctx, `select `+productCols+` from public.retail_products where business_id = $1 and id::text = any($2) for update`, businessID, productIDs)
+	rows, err := tx.Query(ctx, `select `+productCols+` from public.retail_products where business_id = $1 and id::text = any($2) and deleted_at is null for update`, businessID, productIDs)
 	if err != nil {
 		return Sale{}, err
 	}
@@ -625,11 +633,31 @@ func (r Repo) StatsFor(ctx context.Context, businessID string, start, end, from,
 		return st, err
 	}
 	for _, p := range all {
-		if p.Active && p.Stock <= 3 {
+		if p.Active && p.Stock <= p.MinStock {
 			st.LowStock = append(st.LowStock, p)
 		}
 	}
 	return st, nil
+}
+
+// Delete removes a product without history; one with sales, purchases or adjustments is archived
+// (hidden and no longer sold) so its history and stats stay whole. Reports whether it was archived.
+func (r Repo) Delete(ctx context.Context, businessID, id string) (bool, error) {
+	var used bool
+	if err := r.DB.QueryRow(ctx, `select exists (select 1 from public.sale_lines where product_id = $2 and business_id = $1)
+		or exists (select 1 from public.stock_purchases where product_id = $2 and business_id = $1)
+		or exists (select 1 from public.stock_adjustments where product_id = $2 and business_id = $1)`, businessID, id).Scan(&used); err != nil {
+		return false, err
+	}
+	q := `delete from public.retail_products where business_id = $1 and id = $2 and deleted_at is null`
+	if used {
+		q = `update public.retail_products set deleted_at = now(), active = false where business_id = $1 and id = $2 and deleted_at is null`
+	}
+	tag, err := r.DB.Exec(ctx, q, businessID, id)
+	if err == nil && tag.RowsAffected() == 0 {
+		return false, ErrNotFound
+	}
+	return used, err
 }
 
 // Adjustment: stock that changes without a purchase or a sale. Waste takes Quantity pieces out;

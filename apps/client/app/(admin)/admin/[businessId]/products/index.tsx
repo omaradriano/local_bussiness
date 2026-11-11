@@ -128,7 +128,7 @@ function Inventory({ businessId, isOwner, products }: { businessId: string; isOw
       {products.length === 0 ? <EmptyState icon="pricetags-outline" title={t.empty} /> : (
         <Group separatorInset={58}>
           {products.map((p) => (
-            <Cell key={p.id} icon="pricetag" tint={!p.active ? ui.gray : p.stock <= 3 ? ui.warning : ui.success} label={p.name}
+            <Cell key={p.id} icon="pricetag" tint={!p.active ? ui.gray : p.stock <= p.min_stock ? ui.warning : ui.success} label={p.name}
               sublabel={`${p.stock ? t.stockLeft(p.stock) : t.noStock}${p.cost !== null ? ` · ${strings.products.cost.split(' (')[0]} ${formatMXN(p.cost)}` : ''}`}
               value={formatMXN(p.price)} onPress={isOwner ? () => open(p.id) : undefined} />
           ))}

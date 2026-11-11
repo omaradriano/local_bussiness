@@ -914,6 +914,21 @@ paths:
               schema: { $ref: "#/components/schemas/RetailProduct" }
         "404": { $ref: "#/components/responses/Error" }
         "422": { $ref: "#/components/responses/Error" }
+    delete:
+      operationId: deleteProduct
+      summary: Borra un producto sin historial; con ventas, compras o ajustes se archiva (desaparece de las listas y ya no se vende)
+      responses:
+        "200":
+          description: OK
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [archived]
+                properties:
+                  archived: { type: boolean }
+        "403": { $ref: "#/components/responses/Error" }
+        "404": { $ref: "#/components/responses/Error" }
 
   /v1/b/{businessId}/products/{productId}/movements:
     parameters:
@@ -2382,13 +2397,14 @@ components:
 
     RetailProduct:
       type: object
-      required: [id, name, price, cost, stock, active]
+      required: [id, name, price, cost, stock, min_stock, active]
       properties:
         id: { type: string, format: uuid }
         name: { type: string }
         price: { type: integer }
         cost: { type: [integer, "null"], description: "Solo para el dueño" }
         stock: { type: integer }
+        min_stock: { type: integer, description: "Con esto o menos sale en pocas existencias" }
         active: { type: boolean }
 
     RetailProductInput:
@@ -2399,6 +2415,7 @@ components:
         cost: { type: integer, minimum: 0 }
         stock: { type: integer, minimum: 0, description: "Solo al crear" }
         active: { type: boolean }
+        min_stock: { type: integer, minimum: 0, maximum: 100000 }
 
     Sale:
       type: object

@@ -3,6 +3,7 @@ import { centavosToInput, formatMXN, parsePesos, strings, todayISO } from '@lb/s
 import { router, Stack, useLocalSearchParams } from 'expo-router';
 import { useCallback, useEffect, useState } from 'react';
 import { ActivityIndicator, Switch, View } from 'react-native';
+import { ConfirmDialog } from '../../../../../components/ConfirmDialog';
 import { api } from '../../../../../lib/api';
 import { errorText, fieldErrors } from '../../../../../lib/errors';
 import { Button, Cell, Field, Group, Screen, Segmented, Text, useToast } from '../../../../../ui';
@@ -18,7 +19,8 @@ export default function ProductForm() {
   const toast = useToast();
   const isNew = productId === 'new';
   const [product, setProduct] = useState<Product | null>(null);
-  const [f, setF] = useState({ name: '', price: '', cost: '', stock: '0', active: true });
+  const [f, setF] = useState({ name: '', price: '', cost: '', stock: '0', minStock: '3', active: true });
+  const [removing, setRemoving] = useState(false);
   const [buy, setBuy] = useState({ quantity: '', unitCost: '', on: todayISO() });
   const [errors, setErrors] = useState<Record<string, string>>({});
   const [buyErrors, setBuyErrors] = useState<Record<string, string>>({});
@@ -40,7 +42,7 @@ export default function ProductForm() {
       const p = data?.products.find((x) => x.id === productId);
       if (!p) return;
       setProduct(p);
-      setF({ name: p.name, price: centavosToInput(p.price), cost: p.cost !== null ? centavosToInput(p.cost) : '', stock: String(p.stock), active: p.active });
+      setF({ name: p.name, price: centavosToInput(p.price), cost: p.cost !== null ? centavosToInput(p.cost) : '', stock: String(p.stock), minStock: String(p.min_stock), active: p.active });
       setBuy((b) => ({ ...b, unitCost: p.cost ? centavosToInput(p.cost) : '' }));
     });
   }, [businessId, productId, isNew]);
@@ -54,9 +56,10 @@ export default function ProductForm() {
     if (price === null) local.price = strings.catalog.invalidMoney;
     if (cost === null) local.cost = strings.catalog.invalidMoney;
     if (isNew && !/^\d+$/.test(f.stock.trim())) local.stock = strings.catalog.invalidNumber;
+    if (!/^\d+$/.test(f.minStock.trim())) local.min_stock = strings.catalog.invalidNumber;
     if (Object.keys(local).length) return setErrors(local);
     setBusy('save');
-    const body = { name: f.name, price: price!, cost: cost!, active: f.active, ...(isNew ? { stock: Number(f.stock) } : {}) };
+    const body = { name: f.name, price: price!, cost: cost!, active: f.active, min_stock: Number(f.minStock), ...(isNew ? { stock: Number(f.stock) } : {}) };
     const res = isNew
       ? await api.POST('/v1/b/{businessId}/products', { params: { path: { businessId } }, body })
       : await api.PATCH('/v1/b/{businessId}/products/{productId}', { params: { path: { businessId, productId } }, body });
@@ -107,6 +110,14 @@ export default function ProductForm() {
     loadMoves();
   }
 
+  async function remove() {
+    const { data, error, response } = await api.DELETE('/v1/b/{businessId}/products/{productId}', { params: { path: { businessId, productId } } });
+    setRemoving(false);
+    if (!data) return toast(errorText(error, response.status), 'error');
+    toast(data.archived ? t.archived : t.deleted);
+    router.back();
+  }
+
   const title = isNew ? t.add : product!.name;
   return (
     <Screen>
@@ -120,6 +131,7 @@ export default function ProductForm() {
         {isNew
           ? <Field label={t.initialStock} value={f.stock} onChangeText={(stock) => setF({ ...f, stock })} keyboardType="numeric" hint={t.stockHint} error={errors.stock} />
           : <Text variant="subhead" color="labelSecondary" style={{ marginBottom: 12 }}>{t.stockLeft(product!.stock)} · {formatMXN(product!.price)}</Text>}
+        <Field label={t.minStock} value={f.minStock} onChangeText={(minStock) => setF({ ...f, minStock })} keyboardType="numeric" hint={t.minStockHint} error={errors.min_stock} />
       </Group>
       {!isNew && (
         <Group>
@@ -154,6 +166,8 @@ export default function ProductForm() {
           ))}
         </Group>
       )}
+      {!isNew && <Button variant="destructive" icon="trash" onPress={() => setRemoving(true)} style={{ marginTop: 12 }}>{t.remove}</Button>}
+      <ConfirmDialog open={removing} title={t.removeTitle} body={t.removeBody} confirmLabel={t.remove} onConfirm={remove} onClose={() => setRemoving(false)} />
     </Screen>
   );
 }

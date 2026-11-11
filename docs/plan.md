@@ -650,9 +650,9 @@ Lo que pidió la florería para trabajar sin Excel en temporada alta. Siguen las
 
 **Florería: inventario (tanda C, 2026-11-11)**
 
-- [ ] Costo promedio ponderado al comprar e historial del producto (compras, ventas y ajustes).
-- [ ] Mermas y ajustes de conteo con motivo (`stock_adjustments`); en estadísticas, mermas al costo.
-- [ ] Stock mínimo por producto (`min_stock`) y borrar producto (se archiva si tiene historial).
+- [x] Costo promedio ponderado al comprar e historial del producto (compras, ventas y ajustes).
+- [x] Mermas y ajustes de conteo con motivo (`stock_adjustments`); en estadísticas, mermas al costo.
+- [x] Stock mínimo por producto (`min_stock`) y borrar producto (se archiva si tiene historial).
 - Insumos y recetas por arreglo: descartado por ahora (la dueña prefiere no llevar inventario de insumos).
 
 **Fase 7 (posterior)** — WhatsApp Cloud API, pagos en línea del cliente, cobro de la suscripción, nuevos giros (lavado de autos, lavado de salas, tiendas, limosinas, salones, casas por noche) sobre el mapa por giro y editor para que cada dueño configure sus propios pasos.
