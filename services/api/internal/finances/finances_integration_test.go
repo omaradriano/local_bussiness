@@ -242,3 +242,59 @@ func TestIntegrationCashClosing(t *testing.T) {
 		t.Fatalf("closing: %+v %v", rep.Closing, err)
 	}
 }
+
+func TestIntegrationReceivables(t *testing.T) {
+	url := os.Getenv("TEST_DATABASE_URL")
+	if url == "" {
+		t.Skip("TEST_DATABASE_URL not set")
+	}
+	ctx := context.Background()
+	conn, err := pgx.Connect(ctx, url)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer conn.Close(ctx)
+	tx, err := conn.Begin(ctx)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer tx.Rollback(ctx)
+	const biz, cust = "00000000-0000-0000-0000-0000000000f6", "00000000-0000-0000-0000-0000000000f7"
+	exec := func(q string, args ...any) {
+		t.Helper()
+		if _, err := tx.Exec(ctx, q, args...); err != nil {
+			t.Fatal(err)
+		}
+	}
+	exec(`insert into public.businesses (id, slug, name, vertical) values ($1, 'recv-a', 'A', 'flowers')`, biz)
+	exec(`insert into public.customers (id, business_id, name, phone) values ($1, $2, 'Ana', '+526140000001')`, cust, biz)
+	order := func(status, starts string, total int64, paid int64) string {
+		t.Helper()
+		var id string
+		if err := tx.QueryRow(ctx, `insert into public.bookings (business_id, customer_id, kind, status, starts_at, total, source)
+			values ($1, $2, 'product', $3, $4, $5, 'admin') returning id::text`, biz, cust, status, starts, total).Scan(&id); err != nil {
+			t.Fatal(err)
+		}
+		if paid > 0 {
+			exec(`insert into public.payments (business_id, booking_id, type, method, amount) values ($1, $2, 'advance', 'cash', $3)`, biz, id, paid)
+		}
+		return id
+	}
+	credit := order("completed", "2026-11-05T18:00:00Z", 80000, 30000) // handed over owing 500
+	order("completed", "2026-11-04T18:00:00Z", 50000, 50000)           // settled: not listed
+	later := order("confirmed", "2026-11-20T18:00:00Z", 60000, 20000)  // advance 200, owes 400
+	order("ready", "2026-11-12T18:00:00Z", 40000, 40000)               // paid in full, not handed over
+	order("cancelled", "2026-11-12T18:00:00Z", 40000, 0)               // fell through
+	// An extra on the later order's account adds to what it owes.
+	exec(`insert into public.sales (business_id, booking_id, method, total, cost_total) values ($1, $2, 'on_account', 5000, 0)`, biz, later)
+
+	got, err := Repo{DB: tx}.Receivables(ctx, biz)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(got.Credit) != 1 || got.Credit[0].BookingID != credit || got.Credit[0].Due != 50000 ||
+		len(got.Active) != 1 || got.Active[0].BookingID != later || got.Active[0].Due != 45000 || got.TotalDue != 95000 ||
+		got.Advances != 20000+40000 || got.AdvanceCount != 2 {
+		t.Fatalf("receivables: %+v", got)
+	}
+}

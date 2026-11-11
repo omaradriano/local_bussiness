@@ -1081,6 +1081,20 @@ paths:
         "403": { $ref: "#/components/responses/Error" }
         "422": { $ref: "#/components/responses/Error" }
 
+  /v1/b/{businessId}/finances/receivables:
+    parameters:
+      - $ref: "#/components/parameters/BusinessId"
+    get:
+      operationId: receivables
+      summary: Por cobrar (entregados a crédito y pedidos activos con saldo) y anticipos de lo que no se ha entregado (solo dueño)
+      responses:
+        "200":
+          description: OK
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Receivables" }
+        "403": { $ref: "#/components/responses/Error" }
+
   /v1/b/{businessId}/finances/expenses:
     parameters:
       - $ref: "#/components/parameters/BusinessId"
@@ -2460,6 +2474,28 @@ components:
       properties:
         total: { type: integer }
         parts: { type: array, items: { $ref: "#/components/schemas/FinancePart" } }
+
+    Receivable:
+      type: object
+      required: [booking_id, customer, phone, starts_at, status, total, due]
+      properties:
+        booking_id: { type: string, format: uuid }
+        customer: { type: string }
+        phone: { type: string }
+        starts_at: { type: string, format: date-time }
+        status: { $ref: "#/components/schemas/BookingStatus" }
+        total: { type: integer, description: "Con los extras a cuenta" }
+        due: { type: integer }
+
+    Receivables:
+      type: object
+      required: [credit, active, total_due, advances, advance_count]
+      properties:
+        credit: { type: array, items: { $ref: "#/components/schemas/Receivable" }, description: "Entregados a crédito con saldo" }
+        active: { type: array, items: { $ref: "#/components/schemas/Receivable" }, description: "Sin entregar con saldo, por fecha" }
+        total_due: { type: integer }
+        advances: { type: integer, description: "Cobrado de lo que aún no se entrega" }
+        advance_count: { type: integer }
 
     CashReport:
       type: object

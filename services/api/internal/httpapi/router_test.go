@@ -1173,6 +1173,9 @@ func (fakeFinances) CloseCash(_ context.Context, _ string, day finances.Day, cou
 	return finances.CashReport{Day: day, Lines: []finances.CashLine{}, ExpectedCash: 52000,
 		Closing: &finances.CashClosing{Counted: counted, Expected: 52000, Difference: counted - 52000}}, nil
 }
+func (fakeFinances) Receivables(context.Context, string) (finances.Receivables, error) {
+	return finances.Receivables{Credit: []finances.Receivable{}, Active: []finances.Receivable{}, TotalDue: 95000}, nil
+}
 func (fakeFinances) Summary(_ context.Context, _ string, from, to finances.Day, _ time.Time) (finances.Summary, error) {
 	return finances.Summary{From: from, To: to, Profit: 1000}, nil
 }
@@ -1237,6 +1240,8 @@ func TestFinanceRoutes(t *testing.T) {
 	}{
 		{"empleado no ve finanzas", http.MethodGet, base + "/summary", "staff", "", http.StatusForbidden, `"forbidden"`},
 		{"empleado no ve el corte", http.MethodGet, base + "/cash", "staff", "", http.StatusForbidden, `"forbidden"`},
+		{"por cobrar", http.MethodGet, base + "/receivables", "ok", "", http.StatusOK, `"total_due":95000`},
+		{"empleado no ve por cobrar", http.MethodGet, base + "/receivables", "staff", "", http.StatusForbidden, `"forbidden"`},
 		{"corte de hoy por defecto", http.MethodGet, base + "/cash", "ok", "", http.StatusOK, `"day":"2026-11-15T00:00:00Z"`},
 		{"corte de un día", http.MethodGet, base + "/cash?day=2026-11-10", "ok", "", http.StatusOK, `"expected_cash":52000`},
 		{"corte con día inválido", http.MethodGet, base + "/cash?day=ayer", "ok", "", http.StatusUnprocessableEntity, `"day"`},
