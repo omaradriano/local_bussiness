@@ -669,6 +669,26 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/v1/b/{businessId}/products/{productId}/adjustments": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                businessId: components["parameters"]["BusinessId"];
+                productId: string;
+            };
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Merma (waste: quantity piezas salen) o ajuste de conteo (count: las existencias quedan en counted); solo dueño */
+        post: operations["adjustStock"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/v1/b/{businessId}/products/{productId}/purchases": {
         parameters: {
             query?: never;
@@ -1811,6 +1831,8 @@ export interface components {
             sales: number;
             /** @description Lo que costó la mercancía en existencia */
             stock_value: number;
+            /** @description Mermas del periodo, al costo */
+            waste: number;
             low_stock: components["schemas"]["RetailProduct"][];
             by_product: {
                 /** Format: uuid */
@@ -1917,11 +1939,12 @@ export interface components {
             /** Format: date-time */
             at: string;
             /** @enum {string} */
-            kind: "purchase" | "sale";
+            kind: "purchase" | "sale" | "waste" | "count";
             /** @description + entró, − salió */
             quantity: number;
-            /** @description Costo unitario (compra) o precio unitario (venta) */
+            /** @description Costo unitario (compra, ajuste) o precio unitario (venta) */
             amount: number;
+            note: string | null;
         };
         CashReport: {
             /** Format: date-time */
@@ -3813,6 +3836,41 @@ export interface operations {
                 };
             };
             403: components["responses"]["Error"];
+        };
+    };
+    adjustStock: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                businessId: components["parameters"]["BusinessId"];
+                productId: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": {
+                    /** @enum {string} */
+                    reason: "waste" | "count";
+                    quantity?: number;
+                    counted?: number;
+                    note?: string;
+                };
+            };
+        };
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["RetailProduct"];
+                };
+            };
+            403: components["responses"]["Error"];
+            422: components["responses"]["Error"];
         };
     };
     purchaseStock: {

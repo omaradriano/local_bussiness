@@ -5,7 +5,7 @@ import { useCallback, useEffect, useState } from 'react';
 import { ActivityIndicator, Switch, View } from 'react-native';
 import { api } from '../../../../../lib/api';
 import { errorText, fieldErrors } from '../../../../../lib/errors';
-import { Button, Cell, Field, Group, Screen, Text, useToast } from '../../../../../ui';
+import { Button, Cell, Field, Group, Screen, Segmented, Text, useToast } from '../../../../../ui';
 
 type Product = components['schemas']['RetailProduct'];
 type Movement = components['schemas']['Movement'];
@@ -24,6 +24,9 @@ export default function ProductForm() {
   const [buyErrors, setBuyErrors] = useState<Record<string, string>>({});
   const [busy, setBusy] = useState<'save' | 'buy' | null>(null);
   const [moves, setMoves] = useState<Movement[] | null>(null);
+  const [adj, setAdj] = useState<{ reason: 'waste' | 'count'; amount: string; note: string }>({ reason: 'waste', amount: '', note: '' });
+  const [adjErrors, setAdjErrors] = useState<Record<string, string>>({});
+  const [adjusting, setAdjusting] = useState(false);
   const loadMoves = useCallback(() => {
     if (isNew) return;
     api.GET('/v1/b/{businessId}/products/{productId}/movements', { params: { path: { businessId, productId } } })
@@ -86,6 +89,24 @@ export default function ProductForm() {
     loadMoves();
   }
 
+  // Waste takes pieces out; a count leaves the stock at what was counted.
+  async function adjust() {
+    const n = adj.amount.trim();
+    const key = adj.reason === 'waste' ? 'quantity' : 'counted';
+    if (!/^\d+$/.test(n)) return setAdjErrors({ [key]: strings.catalog.invalidNumber });
+    setAdjusting(true);
+    const { data, error, response } = await api.POST('/v1/b/{businessId}/products/{productId}/adjustments', {
+      params: { path: { businessId, productId } }, body: { reason: adj.reason, [key]: Number(n), note: adj.note },
+    });
+    setAdjusting(false);
+    if (!data) { setAdjErrors(fieldErrors(error)); return toast(errorText(error, response.status), 'error'); }
+    setAdjErrors({});
+    setAdj({ ...adj, amount: '', note: '' });
+    setProduct(data);
+    toast(t.adjusted);
+    loadMoves();
+  }
+
   const title = isNew ? t.add : product!.name;
   return (
     <Screen>
@@ -116,10 +137,20 @@ export default function ProductForm() {
           <Button icon="cart" busy={busy === 'buy'} onPress={purchase}>{t.purchase}</Button>
         </Group>
       )}
+      {!isNew && (
+        <Group label={t.adjust} padded footer={adj.reason === 'waste' ? t.wasteHint : t.countHint}>
+          <Segmented options={(['waste', 'count'] as const).map((r) => ({ value: r, label: t.adjustReasons[r] }))} value={adj.reason}
+            onChange={(reason) => { setAdj({ ...adj, reason }); setAdjErrors({}); }} />
+          <Field label={adj.reason === 'waste' ? t.wasteQuantity : t.counted} value={adj.amount} onChangeText={(amount) => setAdj({ ...adj, amount })}
+            keyboardType="numeric" error={adjErrors.quantity ?? adjErrors.counted} />
+          <Field label={t.adjustNote} value={adj.note} onChangeText={(note) => setAdj({ ...adj, note })} maxLength={200} error={adjErrors.note} />
+          <Button icon="create" busy={adjusting} disabled={!adj.amount.trim()} onPress={adjust}>{t.adjustSave}</Button>
+        </Group>
+      )}
       {!isNew && moves && (
         <Group label={t.history}>
           {moves.length === 0 ? <Cell label={t.noHistory} /> : moves.map((m, i) => (
-            <Cell key={i} label={t.moveLabel[m.kind](m.quantity)} sublabel={`${new Date(m.at).toLocaleDateString('es-MX', { day: 'numeric', month: 'short', year: 'numeric' })} · ${t.moveAmount[m.kind](formatMXN(m.amount))}`} />
+            <Cell key={i} label={t.moveLabel[m.kind](m.quantity)} sublabel={`${new Date(m.at).toLocaleDateString('es-MX', { day: 'numeric', month: 'short', year: 'numeric' })} · ${t.moveAmount[m.kind](formatMXN(m.amount))}${m.note ? ` · ${m.note}` : ''}`} />
           ))}
         </Group>
       )}

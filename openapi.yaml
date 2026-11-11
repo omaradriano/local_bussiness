@@ -936,6 +936,34 @@ paths:
                     items: { $ref: "#/components/schemas/Movement" }
         "403": { $ref: "#/components/responses/Error" }
 
+  /v1/b/{businessId}/products/{productId}/adjustments:
+    parameters:
+      - $ref: "#/components/parameters/BusinessId"
+      - { name: productId, in: path, required: true, schema: { type: string, format: uuid } }
+    post:
+      operationId: adjustStock
+      summary: "Merma (waste: quantity piezas salen) o ajuste de conteo (count: las existencias quedan en counted); solo dueño"
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [reason]
+              properties:
+                reason: { type: string, enum: [waste, count] }
+                quantity: { type: integer, minimum: 1 }
+                counted: { type: integer, minimum: 0 }
+                note: { type: string, maxLength: 200 }
+      responses:
+        "200":
+          description: OK
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/RetailProduct" }
+        "403": { $ref: "#/components/responses/Error" }
+        "422": { $ref: "#/components/responses/Error" }
+
   /v1/b/{businessId}/products/{productId}/purchases:
     parameters:
       - $ref: "#/components/parameters/BusinessId"
@@ -2399,7 +2427,7 @@ components:
 
     ProductStats:
       type: object
-      required: [revenue, cost, profit, purchases, units, sales, by_product, low_stock, stock_value]
+      required: [revenue, cost, profit, purchases, units, sales, by_product, low_stock, stock_value, waste]
       properties:
         revenue: { type: integer }
         cost: { type: integer, description: "Costo de lo vendido" }
@@ -2408,6 +2436,7 @@ components:
         units: { type: integer }
         sales: { type: integer }
         stock_value: { type: integer, description: "Lo que costó la mercancía en existencia" }
+        waste: { type: integer, description: "Mermas del periodo, al costo" }
         low_stock: { type: array, items: { $ref: "#/components/schemas/RetailProduct" } }
         by_product:
           type: array
@@ -2520,12 +2549,13 @@ components:
 
     Movement:
       type: object
-      required: [at, kind, quantity, amount]
+      required: [at, kind, quantity, amount, note]
       properties:
         at: { type: string, format: date-time }
-        kind: { type: string, enum: [purchase, sale] }
+        kind: { type: string, enum: [purchase, sale, waste, count] }
         quantity: { type: integer, description: "+ entró, − salió" }
-        amount: { type: integer, description: "Costo unitario (compra) o precio unitario (venta)" }
+        amount: { type: integer, description: "Costo unitario (compra, ajuste) o precio unitario (venta)" }
+        note: { type: [string, "null"] }
 
     CashReport:
       type: object

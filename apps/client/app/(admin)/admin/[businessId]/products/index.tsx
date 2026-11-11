@@ -182,6 +182,7 @@ function StatsView({ businessId }: { businessId: string }) {
           <Group>
             <Cell label={t.purchasesInPeriod} value={formatMXN(st.purchases)} />
             <Cell label={t.stockValue} value={formatMXN(st.stock_value)} />
+            {st.waste > 0 && <Cell label={t.waste} value={formatMXN(st.waste)} />}
           </Group>
         </>
       )}
