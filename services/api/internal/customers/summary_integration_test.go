@@ -4,6 +4,7 @@ import (
 	"context"
 	"os"
 	"testing"
+	"time"
 
 	"github.com/jackc/pgx/v5"
 )
@@ -64,5 +65,54 @@ func TestIntegrationCustomerSummary(t *testing.T) {
 	}
 	if len(s.Recipients) != 2 || s.Recipients[0].Name != "Mamá" || s.Recipients[0].Count != 3 || s.Recipients[1].Name != "Lucía" || s.Recipients[1].Count != 1 {
 		t.Fatalf("recipients: %+v", s.Recipients)
+	}
+}
+
+func TestIntegrationCustomerDates(t *testing.T) {
+	url := os.Getenv("TEST_DATABASE_URL")
+	if url == "" {
+		t.Skip("TEST_DATABASE_URL not set")
+	}
+	ctx := context.Background()
+	conn, err := pgx.Connect(ctx, url)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer conn.Close(ctx)
+	tx, err := conn.Begin(ctx)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer tx.Rollback(ctx)
+	const biz, ana = "00000000-0000-0000-0000-0000000000c3", "00000000-0000-0000-0000-0000000000c4"
+	if _, err := tx.Exec(ctx, `insert into public.businesses (id, slug, name, vertical) values ($1, 'dates-a', 'A', 'flowers')`, biz); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := tx.Exec(ctx, `insert into public.customers (id, business_id, name, phone) values ($1, $2, 'Ana', '+526140000001')`, ana, biz); err != nil {
+		t.Fatal(err)
+	}
+	r := Repo{DB: tx}
+	if _, err := r.AddDate(ctx, biz, ana, Date{Label: "x", Month: 4, Day: 31}); err == nil {
+		t.Fatal("31 April")
+	}
+	soon, err := r.AddDate(ctx, biz, ana, Date{Label: "  Cumpleaños   de su esposa ", Month: 11, Day: 14})
+	if err != nil || soon.Label != "Cumpleaños de su esposa" {
+		t.Fatalf("add: %+v %v", soon, err)
+	}
+	if _, err := r.AddDate(ctx, biz, ana, Date{Label: "Aniversario", Month: 6, Day: 2}); err != nil {
+		t.Fatal(err)
+	}
+	if list, err := r.Dates(ctx, biz, ana); err != nil || len(list) != 2 || list[0].Label != "Aniversario" {
+		t.Fatalf("dates by month: %+v %v", list, err)
+	}
+	up, err := r.UpcomingDates(ctx, biz, time.Date(2026, 11, 11, 0, 0, 0, 0, time.UTC), 7)
+	if err != nil || len(up) != 1 || up[0].ID != soon.ID || up[0].DaysLeft != 3 || up[0].CustomerName != "Ana" {
+		t.Fatalf("upcoming: %+v %v", up, err)
+	}
+	if err := r.DeleteDate(ctx, biz, ana, soon.ID); err != nil {
+		t.Fatal(err)
+	}
+	if err := r.DeleteDate(ctx, biz, ana, soon.ID); err != ErrNotFound {
+		t.Fatalf("delete twice: %v", err)
 	}
 }

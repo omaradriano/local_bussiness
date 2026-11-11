@@ -1,15 +1,18 @@
 import type { components } from '@lb/api-client';
 import { addDays, agendaGroups, dayStartISO, type AgendaGroup, strings, todayISO, capFirst } from '@lb/shared';
-import { Stack, useFocusEffect, useLocalSearchParams } from 'expo-router';
+import { Ionicons } from '@expo/vector-icons';
+import { router, Stack, useFocusEffect, useLocalSearchParams } from 'expo-router';
 import { useCallback, useState } from 'react';
-import { ActivityIndicator } from 'react-native';
+import { ActivityIndicator, Linking, Pressable } from 'react-native';
 import { BookingCell } from '../../../../components/BookingCell';
+import { monthDay } from '../../../../components/CustomerDates';
 import { api } from '../../../../lib/api';
 import { errorText } from '../../../../lib/errors';
 import { useBusiness } from '../../../../lib/useMe';
-import { Button, EmptyState, Group, Notice, Screen, Text } from '../../../../ui';
+import { Button, Cell, EmptyState, Group, Notice, Screen, Text, useUI } from '../../../../ui';
 
 type Summary = components['schemas']['BookingSummary'];
+type DateSoon = components['schemas']['CustomerDate'] & { customer_id: string; customer_name: string; phone: string; days_left: number };
 const order: AgendaGroup[] = ['overdue', 'late', 'awaitingDeposit', 'appointments', 'deliveries', 'goingOut', 'comingBack'];
 
 const hour = (iso: string) => new Date(iso).toLocaleTimeString('es-MX', { hour: '2-digit', minute: '2-digit', hourCycle: 'h23' });
@@ -19,7 +22,9 @@ const dayHour = (iso: string) => `${new Date(iso).toLocaleDateString('es-MX', { 
 export default function Today() {
   const { businessId } = useLocalSearchParams<{ businessId: string }>();
   const { business } = useBusiness(businessId);
+  const ui = useUI();
   const [rows, setRows] = useState<Summary[] | null>(null);
+  const [dates, setDates] = useState<DateSoon[]>([]);
   const [error, setError] = useState<string | null>(null);
   const today = todayISO();
 
@@ -33,13 +38,14 @@ export default function Today() {
     const { data, error, response } = await api.GET('/v1/b/{businessId}/bookings', { params: { path: { businessId }, query: { from, to } } });
     if (data) setRows(data.bookings);
     else setError(errorText(error, response.status));
+    api.GET('/v1/b/{businessId}/customer-dates/upcoming', { params: { path: { businessId } } }).then(({ data: d }) => setDates(d?.dates ?? []));
   }, [businessId, today, tz]);
 
   useFocusEffect(useCallback(() => { load(); }, [load]));
 
   if (!business) return <ActivityIndicator style={{ marginTop: 24 }} />;
   const groups = rows ? agendaGroups(rows, today) : null;
-  const empty = groups && order.every((k) => groups[k].length === 0);
+  const empty = groups && order.every((k) => groups[k].length === 0) && dates.length === 0;
 
   return (
     <Screen>
@@ -58,6 +64,19 @@ export default function Today() {
           ))}
         </Group>
       ))}
+      {dates.length > 0 && (
+        <Group label={`${strings.today.dates} (${dates.length})`} footer={strings.today.datesHint}>
+          {dates.map((x) => (
+            <Cell key={x.id} icon="gift" tint={ui.purple} label={`${x.label} · ${x.customer_name}`}
+              sublabel={`${strings.today.inDays(x.days_left)} · ${monthDay(x.month, x.day)}`}
+              onPress={() => router.push({ pathname: '/admin/[businessId]/customers/[customerId]', params: { businessId, customerId: x.customer_id } })}
+              accessory={<Pressable accessibilityRole="button" accessibilityLabel={strings.today.whatsapp(x.customer_name)} hitSlop={10}
+                onPress={() => Linking.openURL(`https://wa.me/${x.phone.replace(/\D/g, '')}?text=${encodeURIComponent(strings.today.dateMessage(x.customer_name, x.label))}`)}>
+                <Ionicons name="logo-whatsapp" size={22} color={ui.success} />
+              </Pressable>} />
+          ))}
+        </Group>
+      )}
     </Screen>
   );
 }

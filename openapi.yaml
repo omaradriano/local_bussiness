@@ -1568,6 +1568,86 @@ paths:
               schema: { $ref: "#/components/schemas/CustomerSummary" }
         "404": { $ref: "#/components/responses/Error" }
 
+  /v1/b/{businessId}/customers/{customerId}/dates:
+    parameters:
+      - $ref: "#/components/parameters/BusinessId"
+      - { name: customerId, in: path, required: true, schema: { type: string, format: uuid } }
+    get:
+      operationId: customerDates
+      summary: Fechas importantes del cliente (cada año), por mes y día
+      responses:
+        "200":
+          description: OK
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [dates]
+                properties:
+                  dates: { type: array, items: { $ref: "#/components/schemas/CustomerDate" } }
+        "404": { $ref: "#/components/responses/Error" }
+    post:
+      operationId: addCustomerDate
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [label, month, day]
+              properties:
+                label: { type: string, maxLength: 80 }
+                month: { type: integer, minimum: 1, maximum: 12 }
+                day: { type: integer, minimum: 1, maximum: 31 }
+      responses:
+        "201":
+          description: Creada
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/CustomerDate" }
+        "404": { $ref: "#/components/responses/Error" }
+        "422": { $ref: "#/components/responses/Error" }
+
+  /v1/b/{businessId}/customers/{customerId}/dates/{dateId}:
+    parameters:
+      - $ref: "#/components/parameters/BusinessId"
+      - { name: customerId, in: path, required: true, schema: { type: string, format: uuid } }
+      - { name: dateId, in: path, required: true, schema: { type: string } }
+    delete:
+      operationId: deleteCustomerDate
+      responses:
+        "204": { description: Borrada }
+        "404": { $ref: "#/components/responses/Error" }
+
+  /v1/b/{businessId}/customer-dates/upcoming:
+    parameters:
+      - $ref: "#/components/parameters/BusinessId"
+    get:
+      operationId: upcomingCustomerDates
+      summary: Fechas de clientes en los próximos 7 días (para Hoy), la más cercana primero
+      responses:
+        "200":
+          description: OK
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [dates]
+                properties:
+                  dates:
+                    type: array
+                    items:
+                      allOf:
+                        - $ref: "#/components/schemas/CustomerDate"
+                        - type: object
+                          required: [customer_id, customer_name, phone, on, days_left]
+                          properties:
+                            customer_id: { type: string, format: uuid }
+                            customer_name: { type: string }
+                            phone: { type: string }
+                            on: { type: string, format: date-time }
+                            days_left: { type: integer }
+
   /v1/b/{businessId}/customers/{customerId}/uploads:
     parameters:
       - $ref: "#/components/parameters/BusinessId"
@@ -2356,6 +2436,15 @@ components:
     DocType:
       type: string
       enum: [ine, proof_of_address, guarantor_id]
+
+    CustomerDate:
+      type: object
+      required: [id, label, month, day]
+      properties:
+        id: { type: string }
+        label: { type: string }
+        month: { type: integer }
+        day: { type: integer }
 
     CustomerSummary:
       type: object
