@@ -655,6 +655,11 @@ Lo que pidió la florería para trabajar sin Excel en temporada alta. Siguen las
 - [x] Stock mínimo por producto (`min_stock`) y borrar producto (se archiva si tiene historial).
 - Insumos y recetas por arreglo: descartado por ahora (la dueña prefiere no llevar inventario de insumos).
 
+**Florería: ficha de cliente (tanda D, 2026-11-11)**
+
+- [ ] Resumen en la ficha: gastado, pedidos, lo que debe, primera y última compra, y destinatarios frecuentes.
+- [ ] Fechas importantes por cliente (cada año, `customer_dates`), con aviso en Hoy 7 días antes y botón de WhatsApp.
+
 **Fase 7 (posterior)** — WhatsApp Cloud API, pagos en línea del cliente, cobro de la suscripción, nuevos giros (lavado de autos, lavado de salas, tiendas, limosinas, salones, casas por noche) sobre el mapa por giro y editor para que cada dueño configure sus propios pasos.
 
 ## Mapa por giro y superadministrador

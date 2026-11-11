@@ -997,6 +997,9 @@ func (*fakeCustomers) Rules(context.Context, string) (customers.Rules, error) {
 func (*fakeCustomers) Search(_ context.Context, _, q string, _ int) ([]customers.Customer, error) {
 	return []customers.Customer{{ID: customerID, Name: "Ana " + q}}, nil
 }
+func (*fakeCustomers) Summary(context.Context, string, string) (customers.Summary, error) {
+	return customers.Summary{Orders: 4, Spent: 139000, Recipients: []customers.Recipient{{Name: "Mamá", Count: 3}}}, nil
+}
 func (*fakeCustomers) Get(_ context.Context, _, id string) (customers.Customer, error) {
 	if id != customerID {
 		return customers.Customer{}, customers.ErrNotFound
@@ -1043,6 +1046,8 @@ func TestCustomerRoutes(t *testing.T) {
 		{"teléfono repetido", http.MethodPost, base, "ok", strings.Replace(full, "614 123 4567", "6140000000", 1) + `}`, http.StatusConflict, `"customer_id":"` + customerID},
 		{"empleada no marca de confianza", http.MethodPatch, one + "/", "staff", `{"trusted":true}`, http.StatusOK, `"trusted":false`},
 		{"dueño marca de confianza", http.MethodPatch, one + "/", "ok", `{"trusted":true}`, http.StatusOK, `"trusted":true`},
+		{"resumen del cliente", http.MethodGet, one + "/summary", "staff", "", http.StatusOK, `"spent":139000`},
+		{"resumen de cliente inexistente", http.MethodGet, base + "/eeeeeeee-0000-0000-0000-000000000000/summary", "ok", "", http.StatusNotFound, `"not_found"`},
 		{"cliente inexistente", http.MethodGet, base + "/eeeeeeee-0000-0000-0000-000000000000/", "ok", "", http.StatusNotFound, `"not_found"`},
 		{"subir INE", http.MethodPost, one + "/uploads", "staff", `{"doc_type":"ine","content_type":"image/jpeg","size":500000}`, http.StatusCreated, `"key":"` + prefix},
 		{"tipo de documento inválido", http.MethodPost, one + "/uploads", "staff", `{"doc_type":"pasaporte","content_type":"image/jpeg","size":1}`, http.StatusUnprocessableEntity, `"doc_type"`},

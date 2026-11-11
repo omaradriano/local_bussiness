@@ -26,6 +26,7 @@ type CustomersRepo interface {
 	Update(ctx context.Context, businessID string, c customers.Customer) (customers.Customer, error)
 	AddDocuments(ctx context.Context, businessID, customerID, docType string, keys []string, actor string) (customers.Customer, error)
 	DeleteDocument(ctx context.Context, businessID, customerID, docID string) (string, error)
+	Summary(ctx context.Context, businessID, customerID string) (customers.Summary, error)
 }
 
 func writeCustomer(w http.ResponseWriter, r *http.Request, status int, c customers.Customer, err error) {
@@ -109,6 +110,21 @@ func mountCustomers(r chi.Router, d Deps) {
 			if c, ok := load(w, r); ok {
 				apierr.JSON(w, http.StatusOK, c)
 			}
+		})
+
+		// What the customer has spent, owes and who they send orders to.
+		r.Get("/summary", func(w http.ResponseWriter, r *http.Request) {
+			c, ok := load(w, r)
+			if !ok {
+				return
+			}
+			m, _ := auth.MemberFrom(r.Context())
+			s, err := d.Customers.Summary(r.Context(), m.BusinessID, c.ID)
+			if err != nil {
+				internalError(w, r, "customer summary", err)
+				return
+			}
+			apierr.JSON(w, http.StatusOK, s)
 		})
 
 		r.Patch("/", func(w http.ResponseWriter, r *http.Request) {
