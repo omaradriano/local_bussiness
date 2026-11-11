@@ -679,8 +679,8 @@ func (r Repo) Adjust(ctx context.Context, businessID, productID string, a Adjust
 	default:
 		return Product{}, Invalid{"reason": "Elige merma o conteo."}
 	}
-	if _, err := tx.Exec(ctx, `insert into public.stock_adjustments (business_id, product_id, reason, quantity, unit_cost, note, created_by)
-		values ($1, $2, $3, $4, $5, nullif($6, ''), nullif($7, '')::uuid)`, businessID, productID, a.Reason, delta, cost, note, actor); err != nil {
+	if _, err := tx.Exec(ctx, `insert into public.stock_adjustments (business_id, product_id, reason, quantity, unit_cost, note, created_by, created_at)
+		values ($1, $2, $3, $4, $5, nullif($6, ''), nullif($7, '')::uuid, clock_timestamp())`, businessID, productID, a.Reason, delta, cost, note, actor); err != nil {
 		return Product{}, err
 	}
 	if _, err := tx.Exec(ctx, `update public.retail_products set stock = stock + $3 where business_id = $1 and id = $2`, businessID, productID, delta); err != nil {
